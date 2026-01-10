@@ -1,0 +1,10 @@
+
+{
+  "name": "Thetori Ai",
+  "description": "the ultimate destination for your story ideas and high-quality visual clips",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

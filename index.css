@@ -1,0 +1,140 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --sidebar-width: 350px;
+  --bg-sidebar: #0a0f1d;
+  --bg-workspace: #030712;
+  --box-border: rgba(255, 255, 255, 0.05);
+  --box-bg: rgba(255, 255, 255, 0.03);
+  --resolve-blue: #6366f1;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-workspace);
+  color: #f9fafb;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* Sidebar Box Styling */
+.sidebar-box {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1.25rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.sidebar-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #64748b;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  transition: all 0.2s ease;
+  color: #94a3b8;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: white;
+}
+
+.nav-item.active {
+  background: rgba(99, 102, 241, 0.08);
+  color: #818cf8;
+}
+
+.nav-item-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+/* TOUCH ACCESSIBILITY: THICK SCROLLBARS FOR PRO EDITING */
+.scrollbar-professional::-webkit-scrollbar {
+  height: 12px;
+  width: 12px;
+}
+
+.scrollbar-professional::-webkit-scrollbar-track {
+  background: #0a0f1d;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.scrollbar-professional::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 10px;
+  border: 2px solid #0a0f1d;
+  box-shadow: inset 0 0 6px rgba(0,0,0,0.3);
+}
+
+.scrollbar-professional::-webkit-scrollbar-thumb:hover {
+  background: #6366f1;
+}
+
+/* Default Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #6366f1; }
+
+@keyframes ken-burns {
+  0% { transform: scale(1.05); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1.05); }
+}
+
+.animate-ken-burns {
+  animation: ken-burns 40s ease-in-out infinite;
+}
+
+/* Credit Badge */
+.credit-badge {
+  @apply bg-indigo-600 text-white px-4 py-2 rounded-full font-black text-xs shadow-xl border border-white/10;
+}
+
+/* DO add comment: Pulsing Amber Warning for Safety Blocks. */
+@keyframes pulse-amber {
+  0% { border-color: rgba(245, 158, 11, 0.3); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.1); }
+  50% { border-color: rgba(245, 158, 11, 0.7); box-shadow: 0 0 20px 2px rgba(245, 158, 11, 0.2); }
+  100% { border-color: rgba(245, 158, 11, 0.3); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.1); }
+}
+
+.animate-pulse-amber {
+  animation: pulse-amber 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes fade-in-soft {
+  0% {
+    opacity: -1;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-soft {
+  animation: fade-in-soft 1.6s ease-out forwards;
+}
