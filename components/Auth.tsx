@@ -25,10 +25,19 @@ export const Auth: React.FC<AuthProps> = ({ onBack, isOverlay = false }) => {
 
         try {
             if (mode === 'signup') {
-                const { error: signUpError } = await supabase.auth.signUp({ email, password });
-                if (signUpError) throw signUpError;
-                await supabase.auth.signOut();
-                setMessage('Account created. Please login.');
+                const { data, error } = await supabase.auth.signUp({
+                  email,
+                  password,
+                  options: {
+                    emailRedirectTo: window.location.origin
+                  }
+                });
+
+                if (error) throw error;
+
+                setMessage("Check your email to confirm your account.");
+                setPassword("");
+
                 setPassword(''); 
             } else {
                 const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
@@ -38,7 +47,10 @@ export const Auth: React.FC<AuthProps> = ({ onBack, isOverlay = false }) => {
                     }
                     throw signInError;
                 }
-                if (!data?.session) throw new Error("Verification failed.");
+               if (data.session) {
+                 console.log("Logged in user:", data.user);
+               }
+
             }
         } catch (err: any) {
             setError(err.message || 'Identity Rejected.');
