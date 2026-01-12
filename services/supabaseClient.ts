@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Vite-compatible env access
 const url = import.meta.env.VITE_SUPABASE_URL || "";
@@ -35,6 +35,8 @@ class VirtualSupabase {
 }
 
 // IMPORTANT: the switch
-export const supabase = isConfigured
+const realSupabase = isConfigured
   ? createClient(url, key)
   : new VirtualSupabase();
+
+export const supabase = realSupabase as SupabaseClient;
