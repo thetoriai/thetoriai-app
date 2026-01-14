@@ -420,15 +420,28 @@ const App: React.FC = () => {
     [characterStyle]
   );
 
-  // Sync Credits back to database
-  useEffect(() => {
-    if (session?.user?.id && isDataLoaded) {
-      supabase
-        .from("profiles")
-        .update({ credits: creditSettings.creditBalance })
-        .eq("id", session.user.id);
+  //React sends user_id to Supabase function to consume credits
+  const consumeCredits = async (amount: number) => {
+    if (!session?.user?.id) {
+      throw new Error("Not authenticated");
     }
-  }, [creditSettings.creditBalance, session, isDataLoaded]);
+
+    const { data, error } = await supabase.rpc("consume_credits", {
+      p_user_id: session.user.id,
+      p_amount: amount
+    });
+
+    if (error) {
+      console.error("Credit consumption error:", error);
+      throw error;
+    }
+
+    if (data !== true) {
+      throw new Error("Insufficient credits");
+    }
+
+    return true;
+  };
 
   const ensureApiKey = async () => {
     if (
@@ -578,10 +591,20 @@ const App: React.FC = () => {
         const isSafetyBlock =
           error === "BLOCK_MINOR" || error === "BLOCK_SAFETY_GENERAL";
         if (src && !isSafetyBlock) {
-          setCreditSettings((p: any) => ({
-            ...p,
-            creditBalance: p.creditBalance - cost
-          }));
+          await consumeCredits(cost);
+
+          const { data } = await supabase
+            .from("profiles")
+            .select("credits")
+            .eq("id", session.user.id)
+            .single();
+
+          if (data) {
+            setCreditSettings((p) => ({
+              ...p,
+              creditBalance: data.credits
+            }));
+          }
         }
       }
     } catch (e: any) {
@@ -830,7 +853,41 @@ const App: React.FC = () => {
   ) => {
     const scene = storybook.scenes[index];
     if (!scene) return;
-    handleGenerate([scene.imageDescription], "storybook", undefined, model);
+
+    // 1️⃣ Check credit BEFORE generation
+    if (creditSettings.creditBalance < 1) {
+      console.warn("Not enough credits");
+      return;
+    }
+
+    try {
+      // 2️⃣ Generate image
+      await handleGenerate(
+        [scene.imageDescription],
+        "storybook",
+        undefined,
+        model
+      );
+
+      // 3️⃣ Deduct credit AFTER successful generation
+      await consumeCredits(1);
+
+      // 4️⃣ Sync balance from database
+      const { data } = await supabase
+        .from("profiles")
+        .select("credits")
+        .eq("id", session.user.id)
+        .single();
+
+      if (data) {
+        setCreditSettings((p) => ({
+          ...p,
+          creditBalance: data.credits
+        }));
+      }
+    } catch (err) {
+      console.error("Storybook single scene generation failed", err);
+    }
   };
 
   const masterHistory = useMemo(() => {
