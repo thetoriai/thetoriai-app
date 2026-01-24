@@ -1,6 +1,12 @@
 // Studio Re-architecture: Distinct rendering paths for PC (Integrated) and Mobile (Hub-and-Spoke).
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { Sidebar } from "./components/Sidebar";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef
+} from "react";
+import { Sidebar, VIEW_COLORS } from "./components/Sidebar";
 import { Auth } from "./components/Auth";
 import { Modals } from "./components/Modals";
 import { WelcomePage } from "./components/WelcomePage";
@@ -290,6 +296,47 @@ const App: React.FC = () => {
   const [timelineClips, setTimelineClips] = useState<any[]>([]);
   const [audioClips, setAudioClips] = useState<any[]>([]);
   const [textClips, setTextClips] = useState<any[]>([]);
+  // Persistent playhead position for timeline cross-tab stability
+  const [timelinePlaybackTime, setTimelinePlaybackTime] = useState(0);
+
+  // TIMELINE HISTORY ENGINE
+  const [timelineHistory, setTimelineHistory] = useState<string[]>([]);
+  const isUndoing = useRef(false);
+
+  useEffect(() => {
+    if (!isDataLoaded) return;
+    if (isUndoing.current) {
+      isUndoing.current = false;
+      return;
+    }
+    const state = JSON.stringify({
+      clips: timelineClips,
+      audio: audioClips,
+      text: textClips
+    });
+    setTimelineHistory((prev) => {
+      if (prev.length > 0 && prev[prev.length - 1] === state) return prev;
+      return [...prev, state].slice(-20);
+    });
+  }, [timelineClips, audioClips, textClips, isDataLoaded]);
+
+  const handleTimelineUndo = useCallback(() => {
+    if (timelineHistory.length <= 1) return;
+    isUndoing.current = true;
+    const newHistory = [...timelineHistory];
+    newHistory.pop(); // Remove current state
+    const prevStateStr = newHistory[newHistory.length - 1];
+    try {
+      const prevState = JSON.parse(prevStateStr);
+      setTimelineClips(prevState.clips || []);
+      setAudioClips(prevState.audio || []);
+      setTextClips(prevState.text || []);
+      setTimelineHistory(newHistory);
+    } catch (e) {
+      console.error("Undo parse error", e);
+      isUndoing.current = false;
+    }
+  }, [timelineHistory]);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [modalData, setModalData] = useState<any>({});
@@ -1263,6 +1310,129 @@ const App: React.FC = () => {
     );
   };
 
+  // SEQUENTIAL LINE ORDER LOGIC: New assets start where the previous track content ends.
+  const onAddTimelineClip = useCallback(
+    (
+      url: string,
+      type: "video" | "image",
+      duration?: number,
+      startTime?: number,
+      layer?: number,
+      videoObject?: any
+    ) => {
+      const actualDuration = Number(duration) || 5;
+      // FIX: DEFAULT TO LAYER 0 (V1) AS MAIN LINE
+      const l = layer !== undefined ? Number(layer) : 0;
+
+      setTimelineClips((prev) => {
+        let start = 0;
+        if (startTime !== undefined) {
+          start = Number(startTime);
+        } else {
+          // Find end of current layer to append
+          const sameLayerClips = prev.filter((c) => Number(c.layer) === l);
+          start = sameLayerClips.reduce(
+            (max, c) =>
+              Math.max(
+                max,
+                (Number(c.startTime) || 0) + (Number(c.duration) || 0)
+              ),
+            0
+          );
+        }
+
+        return [
+          ...prev,
+          {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+            url,
+            type,
+            duration: actualDuration,
+            startTime: start,
+            originalDuration: actualDuration,
+            layer: l,
+            isMuted: false,
+            volume: 1,
+            fadeInDuration: 0,
+            fadeOutDuration: 0,
+            videoObject
+          }
+        ];
+      });
+    },
+    []
+  );
+
+  const onAddAudioClip = useCallback(
+    (url: string, duration?: number, startTime?: number) => {
+      const actualDuration = Number(duration) || 10;
+      setAudioClips((p) => {
+        let start = 0;
+        if (startTime !== undefined) {
+          start = Number(startTime);
+        } else {
+          // Sequential append for audio
+          start = p.reduce(
+            (max, a) =>
+              Math.max(
+                max,
+                (Number(a.startTime) || 0) + (Number(a.duration) || 0)
+              ),
+            0
+          );
+        }
+        return [
+          ...p,
+          {
+            id: "audio-" + Date.now().toString(),
+            url,
+            duration: actualDuration,
+            startTime: start,
+            originalDuration: actualDuration,
+            isMuted: false,
+            volume: 1,
+            fadeInDuration: 0.5,
+            fadeOutDuration: 0.5
+          }
+        ];
+      });
+    },
+    []
+  );
+
+  const onAddTextClip = useCallback((text: string, startTime?: number) => {
+    setTextClips((p) => {
+      let start = 0;
+      if (startTime !== undefined) {
+        start = Number(startTime);
+      } else {
+        // Sequential append for text
+        start = p.reduce(
+          (max, t) =>
+            Math.max(
+              max,
+              (Number(t.startTime) || 0) + (Number(t.duration) || 0)
+            ),
+          0
+        );
+      }
+      return [
+        ...p,
+        {
+          id: "text-" + Date.now().toString(),
+          text,
+          startTime: start,
+          duration: 4,
+          bgColor: "#000000",
+          bgOpacity: 0.8,
+          fadeInDuration: 0.8,
+          fadeOutDuration: 0.5,
+          transition: "none"
+        }
+      ];
+    });
+  }, []);
+
   const handleGenerateVideo = async (
     genId: number,
     sceneId: string,
@@ -1302,6 +1472,21 @@ const App: React.FC = () => {
         characters
       );
       if (videoUrl) {
+        // SERVER-SIDE CREDIT DEDUCTION
+        await consumeCredits(cost);
+
+        const { data } = await supabase
+          .from("profiles")
+          .select("credits")
+          .eq("id", session.user.id)
+          .single();
+
+        if (data) {
+          setCreditSettings((p) => ({
+            ...p,
+            creditBalance: data.credits
+          }));
+        }
         setHistory((prev) =>
           prev.map((h) =>
             h.id === genId
@@ -1404,28 +1589,6 @@ const App: React.FC = () => {
       return filteredHistory;
     });
   }, [savedScenes, activeHistoryIndex]);
-
-  if (isPrivacyPage) return <PrivacyPolicy />;
-
-  const MobileViewWrapper: React.FC<{
-    children: React.ReactNode;
-    title: string;
-  }> = ({ children, title }) => (
-    <div className="fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-in slide-in-from-bottom duration-300">
-      <div className="p-4 border-b border-white/5 bg-[#0a0f1d] flex justify-between items-center shrink-0">
-        <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] ml-2">
-          {title}
-        </h2>
-        <button
-          onClick={() => setActiveView("menu")}
-          className="p-2.5 bg-gray-800 hover:bg-red-900/30 rounded-xl text-gray-400 hover:text-red-400 transition-all"
-        >
-          <XIcon className="w-6 h-6" />
-        </button>
-      </div>
-      <div className="flex-1 overflow-hidden">{children}</div>
-    </div>
-  );
 
   const renderRoster = () => (
     <div className="flex-1 overflow-y-auto p-4 md:p-8 scrollbar-thin scrollbar-thumb-gray-800">
@@ -1557,29 +1720,38 @@ const App: React.FC = () => {
   );
 
   const renderStorybook = () => (
-    <StorybookCreator
-      storybookContent={storybook}
-      setStorybookContent={setStorybook}
-      characters={characters}
-      characterStyle={characterStyle}
-      selectedCountry={selectedCountry}
-      creditBalance={creditSettings.creditBalance}
-      onClose={() => setActiveView(isMobile ? "menu" : "welcome")}
-      onGenerateFromStorybook={(s) => handleGenerate(s, "storybook")}
-      onGenerateSingleStorybookScene={handleGenerateSingleStorybookScene}
-      onResetStorybook={() =>
-        setStorybook({
-          title: "",
-          characters: [],
-          storyNarrative: "",
-          scenes: [],
-          includeDialogue: true
-        })
-      }
-      storySeed={storySeed}
-      setStorySeed={setStorySeed}
-    />
-  );
+      <StorybookCreator
+        storybookContent={storybook}
+        setStorybookContent={setStorybook}
+        characters={characters}
+        characterStyle={characterStyle}
+        selectedCountry={selectedCountry}
+        creditBalance={creditSettings.creditBalance}
+        onClose={() => setActiveView(isMobile ? "menu" : "welcome")}
+        onGenerateFromStorybook={(scenes) => handleGenerate(scenes, "storybook")}
+        onGenerateSingleStorybookScene={handleGenerateSingleStorybookScene}
+        onResetStorybook={() =>
+          setStorybook({
+            title: "",
+            characters: [],
+            storyNarrative: "",
+            scenes: [],
+            includeDialogue: true
+          })
+        }
+        storySeed={storySeed}
+        setStorySeed={setStorySeed}
+        onAddAudioToTimeline={onAddAudioClip}
+        onAddAudioClip={onAddAudioClip}
+        onDeductAudioCredit={() => {
+          if (creditSettings.creditBalance >= 1) {
+            consumeCredits(1);
+            return true;
+          }
+          return false;
+        }}
+      />
+    );
 
   const renderStoryboard = () => (
     <Storyboard
@@ -1695,9 +1867,9 @@ const App: React.FC = () => {
       clips={timelineClips}
       audioClips={audioClips}
       textClips={textClips}
+      onUpdateClips={setTimelineClips}
+      onUpdateAudioClips={setAudioClips}
       onUpdateTextClips={setTextClips}
-      onReorder={() => {}}
-      onReorderAudio={() => {}}
       onDelete={(id) => setTimelineClips((p) => p.filter((c) => c.id !== id))}
       onDeleteAudio={(id) => setAudioClips((p) => p.filter((c) => c.id !== id))}
       onUpdateClip={(id, u) =>
@@ -1708,63 +1880,17 @@ const App: React.FC = () => {
       onUpdateAudioClip={(id, u) =>
         setAudioClips((p) => p.map((c) => (c.id === id ? { ...c, ...u } : c)))
       }
-      onClear={() => {
-        setTimelineClips([]);
-        setAudioClips([]);
-        setTextClips([]);
-      }}
       onExport={() => {
         setModalData({ clips: timelineClips });
         setActiveModal("export-video");
       }}
-      isMinimized={false}
-      setIsMinimized={() => {}}
-      isTheaterMode={true}
-      setIsTheaterMode={() => {}}
-      onAddClip={(url, file, dur, start) =>
-        setTimelineClips((prev) => {
-          const end =
-            start !== undefined
-              ? start
-              : Math.max(
-                  0,
-                  ...prev.map((c) => (c.startTime || 0) + c.duration)
-                );
-          return [
-            ...prev,
-            {
-              id: Date.now().toString(),
-              url,
-              duration: dur || 8,
-              startTime: end,
-              originalDuration: dur || 8,
-              isMuted: false
-            }
-          ];
-        })
-      }
-      onAddAudioClip={(url, dur, start) =>
-        setAudioClips((prev) => {
-          const end =
-            start !== undefined
-              ? start
-              : Math.max(0, ...prev.map((ac) => ac.startTime + ac.duration));
-          return [
-            ...prev,
-            {
-              id: Date.now().toString(),
-              url,
-              duration: dur || 10,
-              startTime: end,
-              isMuted: false
-            }
-          ];
-        })
-      }
-      onExtend={() => {}}
-      onPlayAll={() => {}}
-      onCreateScene={() => {}}
+      onAddClip={onAddTimelineClip}
+      onAddAudioClip={onAddAudioClip}
+      onAddTextClip={onAddTextClip}
       onCaptureFrame={handleCaptureFrame}
+      onUndo={handleTimelineUndo}
+      playbackTime={timelinePlaybackTime}
+      onUpdatePlaybackTime={setTimelinePlaybackTime}
     />
   );
 
@@ -1788,22 +1914,8 @@ const App: React.FC = () => {
           item.videoClips?.[0]?.videoUrl ||
           (item.src ? `data:image/png;base64,${item.src}` : null);
         if (url) {
-          const currentEnd = Math.max(
-            0,
-            ...timelineClips.map((c) => (c.startTime || 0) + c.duration)
-          );
-          const defaultDur = 8;
-          setTimelineClips((prev) => [
-            ...prev,
-            {
-              id: Date.now().toString(),
-              url,
-              duration: defaultDur,
-              startTime: currentEnd,
-              originalDuration: defaultDur,
-              isMuted: false
-            }
-          ]);
+          const type = item.videoClips?.length > 0 ? "video" : "image";
+          onAddTimelineClip(url, type, 8, undefined, 0);
         }
       }}
       onAnimate={handleAnimateFootage}
@@ -1896,7 +2008,7 @@ const App: React.FC = () => {
               <span className="text-2xl font-black text-white tracking-tighter">
                 $25
               </span>
-              <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest italic">
+              <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest italic text-center">
                 Best Value
               </span>
             </div>
@@ -1961,11 +2073,31 @@ const App: React.FC = () => {
           </p>
           <div className="pt-2 border-t border-white/5 mt-2">
             <span className="text-[8px] font-black text-indigo-500 uppercase tracking-[0.4em]">
-              New Account Welcome Bonus: 1,000 Credits Applied Automatically
+              New Account Welcome Bonus: 5 Credits Applied Automatically
             </span>
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  const MobileViewWrapper: React.FC<{
+    children: React.ReactNode;
+    title: string;
+  }> = ({ children, title }) => (
+    <div className="fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-in slide-in-from-bottom duration-300">
+      <div className="p-4 border-b border-white/5 bg-[#0a0f1d] flex justify-between items-center shrink-0">
+        <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] ml-2">
+          {title}
+        </h2>
+        <button
+          onClick={() => setActiveView("menu")}
+          className="p-2.5 bg-gray-800 hover:bg-red-900/30 rounded-xl text-gray-400 hover:text-red-400 transition-all"
+        >
+          <XIcon className="w-6 h-6" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-hidden">{children}</div>
     </div>
   );
 
@@ -1975,6 +2107,8 @@ const App: React.FC = () => {
         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
+
+  const currentGlowColor = VIEW_COLORS[activeView] || "#6366f1";
 
   return (
     <div className="flex h-screen bg-gray-950 text-white font-sans overflow-hidden">
@@ -2000,7 +2134,7 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 h-full overflow-hidden relative flex flex-col bg-gray-950">
-        {activeView === "welcome" && (
+        {activeView === "welcome" ? (
           <WelcomePage
             session={session}
             onEnter={() => {
@@ -2008,8 +2142,11 @@ const App: React.FC = () => {
               else setActiveView(isMobile ? "menu" : "welcome");
             }}
           />
-        )}
-
+        ) : (
+          <div
+            className="flex-1 flex flex-col h-full workspace-artline neon-active-frame"
+            style={{ "--glow-color": currentGlowColor } as React.CSSProperties}
+          >
         {!isMobile && (
           <>
             {activeView === "roster" && renderRoster()}
@@ -2025,7 +2162,6 @@ const App: React.FC = () => {
             {activeView === "footage" && renderFootageDesk()}
           </>
         )}
-
         {isMobile && session && (
           <>
             {activeView === "menu" && (
@@ -2084,6 +2220,8 @@ const App: React.FC = () => {
               </MobileViewWrapper>
             )}
           </>
+            )}
+          </div>
         )}
       </main>
 
@@ -2125,6 +2263,8 @@ const App: React.FC = () => {
         timelineClips={timelineClips}
         audioClips={audioClips}
         textClips={textClips}
+        onUpdateClips={setTimelineClips}
+        onUpdateAudioClips={setAudioClips}
         onUpdateTextClips={setTextClips}
         onUpdateTimelineClip={(id, u) =>
           setTimelineClips((p) =>
@@ -2134,46 +2274,12 @@ const App: React.FC = () => {
         onDeleteTimelineClip={(id) =>
           setTimelineClips((p) => p.filter((c) => c.id !== id))
         }
-        onAddTimelineClip={(url, file, dur, start) =>
-          setTimelineClips((prev) => {
-            const end =
-              start !== undefined
-                ? start
-                : Math.max(
-                    0,
-                    ...prev.map((c) => (c.startTime || 0) + c.duration)
-                  );
-            return [
-              ...prev,
-              {
-                id: Date.now().toString(),
-                url,
-                duration: dur || 8,
-                startTime: end,
-                originalDuration: dur || 8,
-                isMuted: false
-              }
-            ];
-          })
+        onDeleteAudio={(id) =>
+          setAudioClips((p) => p.filter((ac) => ac.id !== id))
         }
-        onAddAudioClip={(url, dur, start) =>
-          setAudioClips((prev) => {
-            const end =
-              start !== undefined
-                ? start
-                : Math.max(0, ...prev.map((ac) => ac.startTime + ac.duration));
-            return [
-              ...prev,
-              {
-                id: Date.now().toString(),
-                url,
-                duration: dur || 10,
-                startTime: end,
-                isMuted: false
-              }
-            ];
-          })
-        }
+        onAddTimelineClip={onAddTimelineClip}
+        onAddAudioClip={onAddAudioClip}
+        onAddTextClip={onAddTextClip}
         onCaptureFrameFromTimeline={handleCaptureFrame}
         onExportTimeline={() => {
           setModalData({ clips: timelineClips });
@@ -2190,39 +2296,24 @@ const App: React.FC = () => {
           )
         }
         onGenerateVideo={handleGenerateVideo}
-        onAddToTimeline={(url, dur, obj) =>
-          setTimelineClips((prev) => {
-            const end = Math.max(
-              0,
-              ...prev.map((c) => (c.startTime || 0) + c.duration)
-            );
-            return [
-              ...prev,
-              {
-                id: Date.now().toString(),
-                url,
-                duration: dur || 8,
-                startTime: end,
-                originalDuration: dur || 8,
-                videoObject: obj,
-                isMuted: false
-              }
-            ];
-          })
+        onAddToTimeline={(url, duration, obj) =>
+          onAddTimelineClip(url, "video", duration, undefined, 0, obj)
         }
         videoModel={videoModel}
         setVideoModel={setVideoModel}
         setVideoResolution={setVideoResolution}
         onSwitchSession={handleLoadHistory}
         onNewSession={() => setActiveHistoryIndex(-1)}
-        onUpdateVideoDraft={(gid, sid, upd) =>
+        onUpdateVideoDraft={(gid, sid, updates) =>
           setHistory((prev) =>
             prev.map((h) =>
               h.id === gid
                 ? {
                     ...h,
-                    videoStates: h.videoStates.map((vs: any, idx: number) =>
-                      h.imageSet[idx].sceneId === sid ? { ...vs, ...upd } : vs
+                    videoStates: h.videoStates.map((vs, idx) =>
+                      h.imageSet[idx].sceneId === sid
+                        ? { ...vs, ...updates }
+                        : vs
                     )
                   }
                 : h
@@ -2371,6 +2462,14 @@ const App: React.FC = () => {
           setActiveModal("camera-angles");
         }}
         visualStyle={visualStyle}
+        onUpdateAudioClip={(id, updates) =>
+          setAudioClips((p) =>
+            p.map((c) => (c.id === id ? { ...c, ...updates } : c))
+          )
+        }
+        onUndo={handleTimelineUndo}
+        timelinePlaybackTime={timelinePlaybackTime}
+        onUpdateTimelinePlaybackTime={setTimelinePlaybackTime}
       />
     </div>
   );
