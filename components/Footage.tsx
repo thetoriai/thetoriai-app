@@ -21,7 +21,7 @@ const FootageCard: React.FC<FootageCardProps> = ({ item, onSave, onAddToTimeline
     const latestVideo = item.videoClips?.[item.videoClips.length - 1]?.videoUrl;
 
     return (
-        <div className="flex flex-col bg-[#0f172a]/60 border border-white/5 rounded-xl overflow-hidden shadow-2xl group animate-in zoom-in-95 duration-500 hover:border-indigo-500/30 transition-all">
+    <div className="flex flex-col bg-[#0f172a]/60 border border-white/5 rounded-xl overflow-hidden shadow-2xl group animate-in zoom-in-95 duration-500 hover:border-indigo-500/30 transition-all themed-artline">
             <div className="relative aspect-video bg-black overflow-hidden">
                 {item.status === 'pending' || item.status === 'generating' ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/50 backdrop-blur-sm">
@@ -57,7 +57,7 @@ const FootageCard: React.FC<FootageCardProps> = ({ item, onSave, onAddToTimeline
                     </button>
                     <button 
                         onClick={onDelete}
-                        className="p-2 bg-white/5 text-gray-500 hover:bg-red-900/30 hover:text-red-400 rounded-lg transition-all"
+            className="p-2 bg-white/5 text-gray-400 hover:bg-red-900/30 hover:text-red-400 rounded-lg transition-all"
                         title="Discard"
                     >
                         <TrashIcon className="w-3.5 h-3.5" />
@@ -211,30 +211,36 @@ export const Footage: React.FC<FootageProps> = ({
                                 Quick <span className="text-indigo-500">Footage</span> Desk
                             </h2>
                             <div className="flex items-center gap-2.5">
-                                <div className="w-1 h-1 rounded-full bg-red-600 animate-pulse"></div>
-                                <p className="text-[8px] font-black text-gray-600 uppercase tracking-[0.4em]">Rapid Terminal</p>
+                <div className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></div>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.4em] leading-none">
+                  Rapid Terminal Active
+                </p>
                             </div>
                         </div>
-                        <div className="flex gap-1.5">
-                            <div className={`px-2 py-0.5 border rounded-md text-[7px] font-black uppercase tracking-widest transition-all ${hasRefImages ? 'bg-gray-800/50 border-white/5 text-gray-500' : 'bg-indigo-600/10 border-indigo-500/20 text-indigo-400'}`}>
+            <div className="flex gap-2">
+              <div
+                className={`px-2.5 py-1 border rounded-lg text-[8px] font-black uppercase tracking-widest transition-all shadow-md ${hasRefImages ? "bg-gray-800/50 border-white/5 text-gray-500" : "bg-indigo-600/20 border-indigo-500/30 text-indigo-100"}`}
+              >
                                 {visualStyle}
                             </div>
-                            <div className={`px-2 py-0.5 border rounded-md text-[7px] font-black uppercase tracking-widest transition-all ${hasRefImages ? 'bg-gray-800/50 border-white/5 text-gray-500' : 'bg-indigo-600/10 border-indigo-500/20 text-indigo-400'}`}>
+              <div
+                className={`px-2.5 py-1 border rounded-lg text-[8px] font-black uppercase tracking-widest transition-all shadow-md ${hasRefImages ? "bg-gray-800/50 border-white/5 text-gray-500" : "bg-indigo-600/20 border-indigo-500/30 text-indigo-100"}`}
+              >
                                 {selectedCountry}
                             </div>
-                            <div className="px-2 py-0.5 bg-white/5 border border-white/10 rounded-md text-[7px] font-black text-gray-500 uppercase tracking-widest">
+              <div className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[8px] font-black text-gray-300 uppercase tracking-widest shadow-md">
                                 {aspectRatio}
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-[#030712] border border-white/10 rounded-xl overflow-hidden shadow-2xl flex flex-col relative group">
+          <div className="bg-[#030712] rounded-xl overflow-hidden shadow-2xl flex flex-col relative group themed-artline">
                         <div className="flex flex-col">
                             <textarea
                                 value={footagePrompt}
                                 onChange={(e) => setFootagePrompt(e.target.value)}
-                                placeholder="Describe footage blueprint..."
-                                className="w-full h-20 bg-transparent border-none p-5 text-sm font-bold text-white placeholder-gray-800 resize-none focus:outline-none leading-relaxed italic scrollbar-none"
+                placeholder="Describe footage blueprint... Identical characters will be synced automatically."
+                className="w-full h-24 bg-transparent border-none p-5 text-[15px] font-bold text-white placeholder-gray-600 resize-none focus:outline-none leading-relaxed italic scrollbar-none"
                             />
                             
                             <div className="px-5 pb-4 flex items-center gap-3">
@@ -404,26 +410,50 @@ export const Footage: React.FC<FootageProps> = ({
             </div>
 
             {showHistoryPicker && (
-                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowHistoryPicker(false)}>
-                    <div className="bg-gray-900 border border-white/10 rounded-xl w-full max-w-4xl h-[70vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-6"
+          onClick={() => setShowHistoryPicker(false)}
+        >
+          <div
+            className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-5xl h-[75vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
                         <div className="p-6 border-b border-white/5 flex justify-between items-center bg-[#0a0f1d]">
-                            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-2"><HistoryIcon className="w-5 h-5 text-indigo-500"/> Select Reference Asset</h3>
-                            <button onClick={() => setShowHistoryPicker(false)} className="p-2 bg-white/5 hover:bg-red-900/30 text-gray-500 hover:text-red-400 rounded-full transition-all"><XIcon className="w-6 h-6"/></button>
+              <h3 className="text-sm font-black text-gray-300 uppercase tracking-[0.3em] flex items-center gap-3">
+                <HistoryIcon className="w-6 h-6 text-indigo-500" /> Select
+                Reference Asset
+              </h3>
+              <button
+                onClick={() => setShowHistoryPicker(false)}
+                className="p-2.5 bg-white/5 hover:bg-red-900/30 text-gray-400 hover:text-red-400 rounded-full transition-all"
+              >
+                <XIcon className="w-7 h-7" />
+              </button>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 scrollbar-thin">
+            <div className="flex-1 overflow-y-auto p-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 scrollbar-thin scrollbar-thumb-gray-800">
                             {savedItems.length === 0 ? (
-                                <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-20">
-                                    <BookmarkIcon className="w-12 h-12 mb-4"/>
-                                    <p className="text-[10px] font-black uppercase tracking-widest">No saved assets found</p>
+                <div className="col-span-full flex flex-col items-center justify-center py-32 opacity-30">
+                  <BookmarkIcon className="w-16 h-16 mb-6" />
+                  <p className="text-[11px] font-black uppercase tracking-widest">
+                    No saved assets found
+                  </p>
                                 </div>
                             ) : (
                                 savedItems.map((item, idx) => (
                                     <div 
                                         key={idx} 
                                         onClick={() => selectFromHistory(item.src)}
-                                        className="aspect-video bg-black rounded-xl overflow-hidden cursor-pointer border border-white/5 hover:border-indigo-500 transition-all hover:scale-[1.02] shadow-lg"
+                    className="aspect-video bg-black rounded-xl overflow-hidden cursor-pointer border border-white/10 hover:border-indigo-500 transition-all hover:scale-[1.05] shadow-2xl relative group"
                                     >
-                                        <img src={item.src.startsWith('data') ? item.src : `data:image/png;base64,${item.src}`} className="w-full h-full object-cover" />
+                    <img
+                      src={
+                        item.src.startsWith("data")
+                          ? item.src
+                          : `data:image/png;base64,${item.src}`
+                      }
+                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                    />
+                    <div className="absolute inset-0 bg-indigo-600/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                     </div>
                                 ))
                             )}
@@ -432,7 +462,13 @@ export const Footage: React.FC<FootageProps> = ({
                 </div>
             )}
 
-            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept="image/*"
+        onChange={handleFileUpload}
+      />
         </div>
     );
 };

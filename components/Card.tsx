@@ -97,9 +97,9 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
         <div 
             draggable={!!scene.src && status === 'complete'}
             onDragStart={handleDragStart}
-            className={`bg-gray-800 rounded-t-2xl rounded-b-none shadow-xl overflow-hidden flex flex-col cursor-grab active:cursor-grabbing ${scene.isCameraAngleFor !== undefined ? 'ring-2 ring-indigo-500' : ''} ${isAnySafetyBlock ? 'border-2 border-amber-500/50 animate-pulse-amber' : ''}`}
+            className={`bg-[#1e293b] rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col cursor-grab active:cursor-grabbing themed-artline ${scene.isCameraAngleFor !== undefined ? 'ring-2 ring-indigo-500' : ''} ${isAnySafetyBlock ? 'border-2 border-amber-500/50 animate-pulse-amber' : ''}`}
         >
-            <div className="relative aspect-video bg-gray-900 flex items-center justify-center group overflow-hidden">
+      <div className="relative aspect-video bg-black rounded-t-[1rem] flex items-center justify-center group overflow-hidden">
                 {status === 'generating' ? <SceneProgressOverlay onStop={props.onStopScene} label="Producing visual..." /> : isVideoLoading ? <SceneProgressOverlay onStop={props.onStopScene} label={videoState?.loadingMessage || "Rendering clip..."} /> : status === 'pending' ? <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-800/50 backdrop-blur-sm m-2 rounded-lg border border-gray-700/50"><div className="relative z-10 flex flex-col items-center opacity-40"><div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center mb-2"><SparklesIcon className="w-5 h-5 text-gray-500" /></div><span className="px-2 py-0.5 rounded text-[9px] font-bold text-gray-400 tracking-widest">Queued</span></div></div> : (
                     <>
                         {showVideoPlayer && currentVideo ? (
@@ -112,6 +112,11 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                                 <div className="w-full h-full cursor-zoom-in" onClick={() => props.onPreviewImage(formatImageSrc(scene.src))}><img src={formatImageSrc(scene.src)} className="w-full h-full object-cover" draggable={false} /></div>
                                 {hasVariants && (<><button onClick={(e) => { e.stopPropagation(); props.onVariantChange('prev'); }} className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/60 text-white rounded-full hover:bg-indigo-600 transition-colors z-20"><ChevronLeftIcon className="w-4 h-4" /></button><button onClick={(e) => { e.stopPropagation(); props.onVariantChange('next'); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/60 text-white rounded-full hover:bg-indigo-600 transition-colors z-20"><ChevronRightIcon className="w-4 h-4" /></button><div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 px-2 py-0.5 rounded-full text-[9px] text-white font-bold pointer-events-none">{currentVariantIndex + 1} / {totalVariants}</div></>)}
                                 {scene.src && status === 'complete' && <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20"><a href={formatImageSrc(scene.src)} download={`scene_${index}.png`} className="p-1.5 bg-black/60 text-white rounded-lg hover:bg-indigo-600 pointer-events-auto shadow-lg"><DownloadIcon className="w-4 h-4" /></a></div>}
+                {scene.prompt && (
+                  <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none">
+                                        <p className="text-[9px] font-black text-white uppercase tracking-widest line-clamp-1 drop-shadow-md opacity-90">{scene.prompt}</p>
+                  </div>
+                )}
                             </div>
                         ) : isAnySafetyBlock ? (
                             // AMBER ADVISORY DISPLAY
@@ -139,24 +144,72 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                 )}
             </div>
 
-            <div className={`p-3 bg-gray-800 transition-all duration-300 ${isActive ? 'h-0 py-0 overflow-hidden opacity-0 invisible' : 'h-auto opacity-100'}`}>
+            <div className={`p-3 bg-[#111827] transition-all duration-300 rounded-b-[1rem] ${isActive ? 'h-0 py-0 overflow-hidden opacity-0 invisible' : 'h-auto opacity-100'}`}>
                  <div className="flex justify-between items-start">
-                    <span className="px-2.5 py-1 bg-indigo-600/20 text-indigo-400 rounded-lg text-[9px] font-bold tracking-wider border border-indigo-500/20">
-                        {isUploaded ? 'Uploaded Asset' : isFromStorybook ? `Scene ${index + 1}` : `Clip ${index + 1}`}{scene.angleName ? ` | ${scene.angleName}` : ''}
+                    <span className="px-2.5 py-1 bg-indigo-600/30 text-indigo-100 rounded-lg text-[10px] font-black tracking-wider border border-indigo-500/40">
+                        {isFromStorybook ? `SCENE ${index + 1}` : `CLIP ${index + 1}`}{scene.angleName ? ` | ${scene.angleName}` : ''}
                     </span>
                     <div className="flex gap-1">
-                        {(status === 'complete' || (status === 'error' && scene.src)) && (<>{scene.previousSrc && <button onClick={props.onUndo} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="Undo"><UndoIcon className="w-4 h-4" /></button>}<button onClick={props.onSave} className={`p-1.5 rounded-lg hover:bg-gray-700 transition-colors ${props.isSaved ? 'text-indigo-400' : 'text-gray-600 hover:text-gray-400'}`} title="Save"><BookmarkIcon className="w-4 h-4" solid={props.isSaved} /></button><button onClick={props.onAngle} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="Camera Angles"><CameraIcon className="w-4 h-4" /></button><button onClick={props.onEdit} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="Edit Canvas"><SparklesIcon className="w-4 h-4" /></button></>)}
-                        {/* DO add comment: Functional Recovery. Regeneration now works even if status is 'error' (lost signal). Restricted for safety blocks to prevent credit waste. */}
-                        {(status === 'complete' || status === 'error') && !isUploaded && !isAnySafetyBlock && <button onClick={() => props.onRegenerate(props.genId, scene.sceneId)} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors" title="Regenerate Image"><RefreshIcon className="w-4 h-4" /></button>}
-                        <button onClick={props.onDelete} className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-colors" title="Remove Card"><TrashIcon className="w-4 h-4" /></button>
+            {(status === "complete" || (status === "error" && scene.src)) && (
+              <>
+                {scene.previousSrc && (
+                  <button
+                    onClick={props.onUndo}
+                    className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                    title="Undo"
+                  >
+                    <UndoIcon className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  onClick={props.onSave}
+                  className={`p-1.5 rounded-lg hover:bg-gray-700 transition-colors ${props.isSaved ? "text-indigo-400" : "text-gray-100 hover:text-white"}`}
+                  title="Save"
+                >
+                  <BookmarkIcon className="w-4 h-4" solid={props.isSaved} />
+                </button>
+                <button
+                  onClick={props.onAngle}
+                  className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Camera Angles"
+                >
+                  <CameraIcon className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={props.onEdit}
+                  className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Edit Canvas"
+                >
+                  <SparklesIcon className="w-4 h-4" />
+                </button>
+              </>
+            )}
+            {(status === "complete" || status === "error") &&
+              !isUploaded &&
+              !isAnySafetyBlock && (
+                <button
+                  onClick={() => props.onRegenerate(props.genId, scene.sceneId)}
+                  className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  title="Regenerate Image"
+                >
+                  <RefreshIcon className="w-4 h-4" />
+                </button>
+              )}
+            <button
+              onClick={props.onDelete}
+              className="p-1.5 text-gray-100 hover:text-red-400 hover:bg-gray-700 rounded-lg transition-colors"
+              title="Remove Card"
+            >
+              <TrashIcon className="w-4 h-4" />
+            </button>
                     </div>
                 </div>
             </div>
 
             {(status === 'complete' || (status === 'error' && scene.src)) && !isAnySafetyBlock && (
-                <div className="bg-gray-800">
+          <div className="bg-[#111827] rounded-b-[1rem]">
                     {isActive ? (
-                        <div className="p-3 bg-gray-900/50 space-y-3 animate-in slide-in-from-top-4 relative z-50 rounded-b-none border-b-0">
+              <div className="p-3 bg-gray-900/50 space-y-3 animate-in slide-in-from-top-4 relative z-50 border-t border-white/5">
                             {props.videoError && <div className="p-2 bg-red-900/30 border border-red-800 rounded flex items-start gap-2 animate-in shake duration-300"><ExclamationTriangleIcon className="w-4 h-4 text-red-400 shrink-0" /><p className="text-[10px] text-red-300 text-left leading-tight font-bold">{props.videoError}</p></div>}
                             
                             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -169,27 +222,36 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                             <div className="space-y-1.5">
                                 <div className="flex justify-between items-center px-0.5">
                                     <div className="flex items-center gap-1.5">
-                                        <label className="text-[9px] font-black text-gray-500 tracking-[0.2em] uppercase">{props.isMusicVideo ? "Notes" : props.isHistory ? "Narration" : "Dialogue & Narration"}</label>
-                                        {props.hasScriptToImport && (
+                                        <label className="text-[10px] font-black text-gray-200 tracking-[0.2em] uppercase">{props.isMusicVideo ? "Notes" : props.isHistory ? "Narration" : "Dialogue & Narration"}</label>
+                                        {props.hasScriptToImport && !isUploaded && (
                                             <button 
                                                 onClick={props.onImportScript} 
                                                 className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-lg hover:from-indigo-500 hover:to-indigo-400 transition-all shadow-[0_0_15px_rgba(79,70,229,0.4)] animate-pulse border border-white/10 group" 
                                                 title="Import from Storywriter"
                                             >
                                                 <SparklesIcon className="w-3 h-3 text-amber-300 group-hover:scale-110 transition-transform" />
-                                                <span className="text-[8px] font-black uppercase tracking-widest">Magic Script</span>
+                          <span className="text-[8px] font-black uppercase tracking-widest">
+                            Magic Script
+                          </span>
                                             </button>
                                         )}
                                     </div>
                                     <button 
                                         onClick={() => setWithAudio(!withAudio)}
-                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${withAudio ? 'bg-indigo-600/40 border-indigo-500 text-indigo-100 shadow-lg' : 'bg-gray-800 border-gray-700 text-gray-500'}`}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${withAudio ? "bg-indigo-600/40 border-indigo-500 text-indigo-100 shadow-lg" : "bg-gray-800 border-gray-700 text-gray-400"}`}
                                     >
                                         <SpeakerWaveIcon className={`w-3 h-3 ${withAudio && hasScriptText ? 'animate-pulse' : ''}`} />
                                         <span className="text-[8px] font-bold tracking-tighter">AI Voice</span>
                                     </button>
                                 </div>
-                                <textarea value={props.draftScript} onChange={e => props.onUpdateDraft({ draftScript: e.target.value })} placeholder="Type character lines or narrative details here..." className="w-full bg-black/30 border border-gray-700 rounded-xl p-2.5 text-[10px] text-gray-200 focus:border-indigo-500 outline-none resize-none h-16 shadow-inner leading-relaxed" />
+                  <textarea
+                    value={props.draftScript}
+                    onChange={(e) =>
+                      props.onUpdateDraft({ draftScript: e.target.value })
+                    }
+                    placeholder="Type character lines or narrative details here..."
+                    className="w-full bg-black/30 border border-gray-600 rounded-xl p-2.5 text-[11px] font-bold text-white placeholder-gray-500 focus:border-indigo-500 outline-none resize-none h-16 shadow-inner leading-relaxed"
+                  />
                             </div>
 
                             <div className="flex items-end gap-1.5">
@@ -199,13 +261,26 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                                         <select value={props.draftMovement} onChange={(e) => props.onUpdateDraft({ draftCameraMovement: e.target.value })} className="w-full bg-black/30 border border-gray-700 rounded-xl px-3 text-[10px] font-bold text-gray-300 focus:border-indigo-500 appearance-none h-9 outline-none shadow-sm cursor-pointer hover:bg-black/40">
                                             {Object.keys(CAMERA_MOVEMENT_PROMPTS).map(key => (<option key={key} value={key}>{key}</option>))}
                                         </select>
-                                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-50"><ChevronDownIcon className="w-3 h-3" /></div>
+                      <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-80">
+                        <ChevronDownIcon className="w-3 h-3" />
+                      </div>
                                     </div>
                                 </div>
                                 {props.isConfirmingVideo && (
                                     <div className="flex flex-col animate-in slide-in-from-right-1">
-                                        <label className="text-[8px] font-bold text-indigo-400 mb-0.5 block tracking-widest px-1 uppercase">Engine</label>
-                                        <select value={props.videoModel} onChange={(e) => props.setVideoModel(e.target.value)} className="h-9 bg-indigo-900/20 text-[10px] font-bold text-indigo-200 border border-indigo-500/30 rounded-xl px-2 outline-none focus:border-indigo-500 cursor-pointer"><option value="veo-3.1-fast-generate-preview">Fast</option><option value="veo-3.1-generate-preview">HQ-Pro</option></select>
+                      <label className="text-[9px] font-bold text-indigo-300 mb-0.5 block tracking-widest px-1 uppercase">
+                        Engine
+                      </label>
+                      <select
+                        value={props.videoModel}
+                        onChange={(e) => props.setVideoModel(e.target.value)}
+                        className="h-9 bg-indigo-900/40 text-[10px] font-bold text-indigo-100 border border-indigo-500/50 rounded-xl px-2 outline-none focus:border-indigo-500 cursor-pointer"
+                      >
+                        <option value="veo-3.1-fast-generate-preview">
+                          Fast
+                        </option>
+                        <option value="veo-3.1-generate-preview">HQ-Pro</option>
+                      </select>
                                     </div>
                                 )}
                             </div>
@@ -221,9 +296,14 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                                 <button onClick={props.onToggleVideoCreator} className="px-5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border-l border-gray-700 rounded-none transition-colors shadow-xl" title="Close Panel"><XIcon className="w-4 h-4" /></button>
                             </div>
                         </div>
-                    ) : <button onClick={props.onToggleVideoCreator} className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-black tracking-[0.3em] uppercase transition-all bg-gray-800 text-gray-400 hover:bg-indigo-600 hover:text-white border-t border-gray-700 shadow-inner group-hover:bg-gray-700 rounded-b-none">
+            ) : (
+              <button
+                onClick={props.onToggleVideoCreator}
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-[10px] font-black tracking-[0.3em] uppercase transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border-t border-gray-700 shadow-inner group-hover:bg-gray-700 rounded-b-[1rem]"
+              >
                         <VideoIcon className="w-4 h-4" /> Create Video
-                    </button>}
+              </button>
+            )}
                 </div>
             )}
         </div>

@@ -168,12 +168,12 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
             <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
                 <img 
                     src="https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&q=80&w=2000" 
-                    className="w-full h-full object-cover opacity-[0.12] scale-110 animate-ken-burns"
-                    style={{ filter: 'grayscale(60%) contrast(120%)' }}
+            className="w-full h-full object-cover opacity-[0.22] scale-110 animate-ken-burns"
+            style={{ filter: "grayscale(30%) contrast(110%)" }}
                     alt="Cinematic Background"
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-gray-950 via-transparent to-gray-950"></div>
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(3,7,18,0.8)_100%)]"></div>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(3,7,18,0.7)_100%)]"></div>
             </div>
 
             <div className="px-4 pt-2 shrink-0 tab-bar-border relative z-20">
@@ -196,9 +196,11 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
                     <>
                         {renderActivePage()}
                         {props.isGenerating && (
-                            <div className="flex items-center gap-3 mt-4 px-2 opacity-50 relative z-10">
-                                <LoaderIcon className="w-4 h-4 animate-spin text-gray-500" />
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Producing next batch...</span>
+                <div className="flex items-center gap-3 mt-4 px-2 opacity-80 relative z-10">
+                  <LoaderIcon className="w-4 h-4 animate-spin text-indigo-500" />
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    Producing next batch...
+                  </span>
                             </div>
                         )}
                     </>

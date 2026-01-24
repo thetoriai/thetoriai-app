@@ -66,6 +66,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
 
     const abortControllerRef = useRef<AbortController | null>(null);
 
+  // Dynamic color for editing (matching Storyboard/Production color)
+  const activeColor = "#f59e0b"; // Amber
+
     // --- Effects ---
 
     useEffect(() => {
@@ -203,7 +206,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                     mCtx.globalCompositeOperation = 'source-over'; mCtx.drawImage(canvasRef.current, 0, 0); 
                     mCtx.globalCompositeOperation = 'source-in'; mCtx.fillStyle = '#FFFFFF';
                     mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-                    maskBase64 = maskCanvas.toDataURL('image/png').split(',')[1];
+          mCtx.globalCompositeOperation = "source-over";
+          mCtx.drawImage(canvasRef.current, 0, 0);
+          mCtx.globalCompositeOperation = "source-in";
+          mCtx.fillStyle = "#FFFFFF";
+          mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+          maskBase64 = maskCanvas.toDataURL("image/png").split(",")[1];
                 }
             }
             let finalPrompt = editPrompt.trim();
@@ -229,118 +237,249 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md" onClick={onClose}>
-            <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-6xl flex flex-col h-[90vh]" onClick={e => e.stopPropagation()}>
-                
-                {/* --- HEADER --- */}
-                <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
-                    <div className="flex items-center gap-3">
-                        <h2 className="font-bold text-white flex items-center gap-2"><PencilIcon className="w-5 h-5 text-indigo-500"/> Photo Editor</h2>
-                        <div className="h-4 w-px bg-gray-700"></div>
-                        <div className="flex gap-2 overflow-x-auto max-w-xl scrollbar-none items-center">
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-6xl flex flex-col h-full md:h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* --- HEADER (Compact for mobile) --- */}
+        <div className="p-3 md:p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900 shrink-0">
+          <div className="flex items-center gap-2 md:gap-3 overflow-hidden">
+            <h2 className="font-bold text-white flex items-center gap-1.5 text-xs md:text-sm whitespace-nowrap">
+              <PencilIcon className="w-4 h-4 md:w-5 md:h-5 text-indigo-500 shrink-0" />{" "}
+              Photo Editor
+            </h2>
+            <div className="h-3 md:h-4 w-px bg-gray-700 hidden sm:block"></div>
+            <div className="flex gap-1.5 md:gap-2 overflow-x-auto max-w-[80px] sm:max-w-xl scrollbar-none items-center">
                             {versions.map((v, i) => (
-                                <button key={i} onClick={() => handleSwitchVersion(v)} className={`relative w-10 h-10 rounded border overflow-hidden shrink-0 transition-all ${v === currentSrc ? 'border-indigo-500 ring-2 ring-indigo-500/50 shadow-lg' : 'border-gray-600 opacity-60 hover:opacity-100'}`}>
-                                    <img src={`data:image/png;base64,${v}`} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center"><span className="text-[9px] font-bold text-white shadow-sm drop-shadow-md">{i === 0 ? 'Orig' : i}</span></div>
+                <button
+                  key={i}
+                  onClick={() => handleSwitchVersion(v)}
+                  className={`relative w-8 h-8 md:w-10 md:h-10 rounded border overflow-hidden shrink-0 transition-all ${v === currentSrc ? "border-indigo-500 ring-2 ring-indigo-500/50 shadow-lg" : "border-gray-600 opacity-60 hover:opacity-100"}`}
+                >
+                  <img
+                    src={`data:image/png;base64,${v}`}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                    <span className="text-[7px] md:text-[9px] font-bold text-white shadow-sm drop-shadow-md">
+                      {i === 0 ? "Orig" : i}
+                    </span>
+                  </div>
                                 </button>
                             ))}
                         </div>
                     </div>
-                    <div className="flex gap-2"><button onClick={handleSaveAndClose} className="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold rounded border border-gray-600">Save & Close</button></div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveAndClose}
+              className="px-2.5 md:px-4 py-1 md:py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-[10px] md:text-xs font-bold rounded border border-gray-600 whitespace-nowrap"
+            >
+              Save & Close
+            </button>
+          </div>
                 </div>
                 
-                <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
                     {isProcessing && (
                         <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-300">
-                            <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_20px_rgba(79,70,229,0.5)]"></div>
-                            <div className="text-white font-bold text-lg animate-pulse">Processing...</div>
+              <div className="w-12 h-12 md:w-16 md:h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_20px_rgba(79,70,229,0.5)]"></div>
+              <div className="text-white font-bold text-sm md:text-lg animate-pulse">
+                Processing...
+              </div>
                         </div>
                     )}
                     
-                    {/* Floating Toolbar */}
-                    <div className="absolute top-4 left-4 z-40 bg-gray-900/80 backdrop-blur border border-gray-700 rounded-lg p-1.5 flex flex-col gap-2 shadow-2xl">
-                        <button onClick={() => setTool('brush')} className={`p-2 rounded transition-colors ${tool === 'brush' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`} title="Brush Tool"><PaintBrushIcon className="w-5 h-5"/></button>
-                        <button onClick={() => setTool('lasso')} className={`p-2 rounded transition-colors ${tool === 'lasso' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`} title="Lasso Selection"><LassoIcon className="w-5 h-5"/></button>
-                        <button onClick={() => setTool('rect')} className={`p-2 rounded transition-colors ${tool === 'rect' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`} title="Box Selection"><SquareIcon className="w-5 h-5"/></button>
-                        <div className="h-px bg-gray-700 mx-2"></div>
-                        <button onClick={clearCanvas} className="p-2 rounded text-gray-400 hover:bg-red-900/30 hover:text-red-400 transition-colors" title="Clear Canvas"><TrashIcon className="w-5 h-5"/></button>
+          {/* Floating Toolbar (Compact) */}
+          <div className="absolute top-3 left-3 z-40 bg-gray-900/80 backdrop-blur border border-gray-700 rounded-lg p-1 flex flex-col gap-1 md:gap-2 shadow-2xl">
+            <button
+              onClick={() => setTool("brush")}
+              className={`p-1.5 md:p-2 rounded transition-colors ${tool === "brush" ? "bg-indigo-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}
+              title="Brush Tool"
+            >
+              <PaintBrushIcon className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+            <button
+              onClick={() => setTool("lasso")}
+              className={`p-1.5 md:p-2 rounded transition-colors ${tool === "lasso" ? "bg-indigo-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}
+              title="Lasso Selection"
+            >
+              <LassoIcon className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+            <button
+              onClick={() => setTool("rect")}
+              className={`p-1.5 md:p-2 rounded transition-colors ${tool === "rect" ? "bg-indigo-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-white"}`}
+              title="Box Selection"
+            >
+              <SquareIcon className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
+            <div className="h-px bg-gray-700 mx-1"></div>
+            <button
+              onClick={clearCanvas}
+              className="p-1.5 md:p-2 rounded text-gray-400 hover:bg-red-900/30 hover:text-red-400 transition-colors"
+              title="Clear Canvas"
+            >
+              <TrashIcon className="w-4 h-4 md:w-5 md:h-5" />
+            </button>
                     </div>
                     
-                    <div className="flex-1 bg-[url('https://res.cloudinary.com/dvvxl2r1f/image/upload/v1727788934/transparent-bg_wbmclx.png')] relative overflow-hidden flex items-center justify-center p-8">
-                        <div className="relative shadow-2xl border border-gray-700" ref={containerRef}>
-                            <img ref={imageRef} src={`data:image/png;base64,${currentSrc}`} className="max-w-full max-h-[75vh] object-contain pointer-events-none select-none" />
-                            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full cursor-crosshair touch-none" onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} />
+          <div className="flex-1 bg-[url('https://res.cloudinary.com/dvvxl2r1f/image/upload/v1727788934/transparent-bg_wbmclx.png')] relative overflow-hidden flex items-center justify-center p-3 md:p-8 min-h-[35vh] md:min-h-0">
+            <div
+              className="relative shadow-2xl border border-gray-700"
+              ref={containerRef}
+            >
+              <img
+                ref={imageRef}
+                src={`data:image/png;base64,${currentSrc}`}
+                className="max-w-full max-h-[50vh] md:max-h-[75vh] object-contain pointer-events-none select-none"
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={draw}
+                onTouchEnd={stopDrawing}
+              />
                         </div>
                     </div>
 
-                    {/* --- SIDEBAR --- */}
-                    <div className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col shrink-0">
-                        <div className="p-4 space-y-6 overflow-y-auto flex-1">
-                            
+          {/* --- SIDEBAR (Compact for iPhone 6) --- */}
+          <div
+            className="w-full md:w-64 bg-gray-900 border-t md:border-t-0 md:border-l border-gray-800 flex flex-col shrink-0 m-0 md:m-2 md:rounded-2xl themed-artline overflow-hidden"
+            style={{ "--glow-color": activeColor } as React.CSSProperties}
+          >
+            <div className="p-3 md:p-4 space-y-4 md:space-y-6 overflow-y-auto flex-1 scrollbar-none">
                             {/* Brush Settings */}
                             {tool === 'brush' && (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex justify-between">Brush Size <span>{brushSize}px</span></label>
-                                    <input type="range" min="10" max="150" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-full accent-indigo-500 bg-gray-800 rounded-lg h-1.5 cursor-pointer" />
+                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex justify-between">
+                    Brush Size <span>{brushSize}px</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="10"
+                    max="150"
+                    value={brushSize}
+                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                    className="w-full accent-amber-500 bg-gray-800 rounded-lg h-1.5 cursor-pointer"
+                  />
                                 </div>
                             )}
 
                             {/* Selection Mode */}
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Selection Mode</label>
+                <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">
+                  Selection Mode
+                </label>
                                 <div className="flex gap-2">
-                                    <button onClick={() => setDrawingMode('add')} className={`flex-1 py-3 rounded flex flex-col items-center gap-1 border transition-all ${drawingMode === 'add' ? 'bg-green-900/30 border-green-500 text-green-400' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
-                                        <div className="w-3.5 h-3.5 rounded-full border-2 border-current flex items-center justify-center"><div className="w-1.5 h-1.5 bg-current rounded-full"></div></div>
-                                        <span className="text-[9px] font-bold uppercase">Add</span>
+                  <button
+                    onClick={() => setDrawingMode("add")}
+                    className={`flex-1 py-2 md:py-3 rounded-xl flex flex-col items-center gap-1 border transition-all ${drawingMode === "add" ? "bg-green-900/30 border-green-500 text-green-400 shadow-lg" : "bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300"}`}
+                  >
+                    <div className="w-3 h-3 md:w-4 md:h-4 rounded-full border-2 border-current flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-current rounded-full"></div>
+                    </div>
+                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest">
+                      Add
+                    </span>
                                     </button>
-                                    <button onClick={() => setDrawingMode('remove')} className={`flex-1 py-3 rounded flex flex-col items-center gap-1 border transition-all ${drawingMode === 'remove' ? 'bg-red-900/30 border-red-500 text-red-400' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
-                                        <div className="w-3.5 h-3.5 rounded-full bg-red-500"></div>
-                                        <span className="text-[9px] font-bold uppercase">Remove</span>
+                  <button
+                    onClick={() => setDrawingMode("remove")}
+                    className={`flex-1 py-2 md:py-3 rounded-xl flex flex-col items-center gap-1 border transition-all ${drawingMode === "remove" ? "bg-red-900/30 border-red-500 text-red-400 shadow-lg" : "bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300"}`}
+                  >
+                    <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-red-500"></div>
+                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest">
+                      Remove
+                    </span>
                                     </button>
                                 </div>
                             </div>
 
                             {/* COMPACT: Instruction & Reference Side-by-Side */}
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Instruction & Reference</label>
-                                <div className="flex gap-2 items-start">
+                <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">
+                  Instruction & Reference
+                </label>
+                <div className="flex flex-col gap-2">
                                     <textarea 
                                         value={editPrompt} 
                                         onChange={(e) => setEditPrompt(e.target.value)} 
                                         placeholder="Describe what to add or change here..."
-                                        className="flex-1 h-32 bg-black/30 border border-gray-700 rounded p-3 text-xs text-white resize-none focus:border-indigo-500 focus:outline-none"
+                    className="w-full h-20 md:h-28 bg-black/40 border border-white/10 rounded-xl p-3 text-[10px] md:text-[11px] font-bold text-white resize-none focus:border-amber-500 outline-none shadow-inner"
                                     />
-                                    <div className="w-16 h-16 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-12 h-12 md:w-14 md:h-14 shrink-0">
                                         {referenceImg ? (
                                             <div className="relative w-full h-full bg-black/40 rounded border border-gray-700 overflow-hidden group">
                                                 <img src={`data:image/png;base64,${referenceImg}`} className="w-full h-full object-cover opacity-80" />
                                                 <button onClick={() => setReferenceImg(null)} className="absolute inset-0 bg-red-600/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"><XIcon className="w-4 h-4" /></button>
                                             </div>
                                         ) : (
-                                            <button onClick={() => referenceInputRef.current?.click()} className="w-full h-full bg-gray-800 border border-dashed border-gray-600 rounded flex flex-col items-center justify-center hover:border-indigo-500 text-gray-500 hover:text-indigo-400 transition-colors">
-                                                <UploadIcon className="w-4 h-4" />
-                                                <span className="text-[7px] font-bold uppercase mt-1">Ref</span>
+                        <button
+                          onClick={() => referenceInputRef.current?.click()}
+                          className="w-full h-full bg-gray-800/50 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center hover:border-amber-500 text-gray-600 hover:text-amber-500 transition-all group shadow-sm"
+                        >
+                          <UploadIcon className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                          <span className="text-[6px] font-black uppercase mt-0.5">
+                            Ref
+                          </span>
                                             </button>
                                         )}
                                     </div>
+                    <div className="flex-1">
+                      <p className="text-[7px] text-gray-600 font-bold uppercase leading-tight italic">
+                        Select an area on the left first for precision.
+                      </p>
                                 </div>
-                                <input type="file" ref={referenceInputRef} className="hidden" accept="image/*" onChange={handleReferenceUpload} />
-                                <p className="text-[9px] text-gray-500 italic">Select an area on the left first for precision.</p>
+                  </div>
+                </div>
+                <input
+                  type="file"
+                  ref={referenceInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleReferenceUpload}
+                />
                             </div>
                             
-                            {error && <div className="p-2 bg-red-900/30 border border-red-800 rounded text-[10px] text-red-300">{error}</div>}
+              {error && (
+                <div className="p-2 bg-red-900/20 border border-red-500/30 rounded-lg text-[8px] md:text-[9px] font-bold text-red-400 animate-in slide-in-from-top-1">
+                  {error}
+                </div>
+              )}
                         </div>
 
-                        {/* Footer Action */}
-                        <div className="p-4 border-t border-gray-800 bg-gray-900">
+            {/* Footer Action (Shrunk for mobile) */}
+            <div className="p-3 md:p-4 border-t border-white/5 bg-gray-900/50">
                             <button 
                                 onClick={handleApply} 
-                                disabled={isProcessing || (!editPrompt.trim() && !hasDrawn && drawingMode !== 'remove')}
-                                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded text-sm font-bold flex items-center justify-center gap-2 shadow-lg transition-all"
+                disabled={
+                  isProcessing ||
+                  (!editPrompt.trim() && !hasDrawn && drawingMode !== "remove")
+                }
+                className="w-full py-2.5 md:py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-black uppercase tracking-widest rounded-xl text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 shadow-2xl transition-all active:scale-95"
                             >
-                                {isProcessing ? <><LoaderIcon className="w-4 h-4 animate-spin"/> Processing...</> : <><SparklesIcon className="w-4 h-4"/> Apply Changes</>}
+                {isProcessing ? (
+                  <>
+                    <LoaderIcon className="w-3.5 h-3.5 animate-spin" />{" "}
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="w-3.5 h-3.5" /> Apply Changes
+                  </>
+                )}
                             </button>
-                            <p className="text-[9px] text-gray-500 text-center mt-2 font-bold uppercase tracking-tighter">Cost: 2 Credits</p>
+              <p className="text-[7px] md:text-[8px] text-gray-600 text-center mt-2 font-black uppercase tracking-[0.2em]">
+                Cost: 2 Credits
+              </p>
                         </div>
                     </div>
                 </div>
