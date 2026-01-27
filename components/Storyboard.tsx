@@ -302,7 +302,7 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
             
         <div
           ref={scrollContainerRef}
-          className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800 relative z-10 p-6 md:p-8 ${isPhone ? "pb-32" : "pb-40"}`}
+          className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800 relative z-10 p-6 md:p-8 ${isPhone ? "pb-32" : 'pb-40'}`}
         >
           {openSessions.length === 0 ||
           props.historyIndex === -1 ||
