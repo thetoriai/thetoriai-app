@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { LoaderIcon, XIcon, CheckIcon, LockClosedIcon, ChevronLeftIcon } from './Icons';
+import { SUPPORT_EMAIL } from '../utils/constants';
 
 interface AuthProps {
     onBack?: () => void;
@@ -198,8 +199,10 @@ export const Auth: React.FC<AuthProps> = ({ onBack, isOverlay = false }) => {
                     )}
                 </form>
 
-                <div className="mt-10 pt-6 border-t border-white/5 flex flex-col items-center">
-                    <p className="text-[7px] text-gray-600 text-center leading-tight uppercase font-black tracking-[0.4em]">
+                <div className="mt-8 pt-6 border-t border-white/5 flex flex-col items-center gap-2">
+                    {/* Fixed: Removed uppercase class to allow lowercase email display */}
+                    <p className="text-[8px] font-black text-gray-500 tracking-widest">Technical Assistance: {SUPPORT_EMAIL}</p>
+                    <p className="text-[7px] text-gray-700 text-center leading-tight uppercase font-black tracking-[0.4em]">
                         Thetori Ai Production Engine v2.4.3
                     </p>
                 </div>

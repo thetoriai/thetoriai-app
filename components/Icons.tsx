@@ -1,11 +1,26 @@
 import React from "react";
 import { LOGO_URL } from "../utils/constants";
 
-// DO add comment above each fix. Defined IconProps to resolve 'Cannot find name IconProps' errors.
 export interface IconProps {
   className?: string;
   solid?: boolean;
 }
+
+export const GiftIcon: React.FC<IconProps> = ({ className, solid }) => (
+  <svg
+    className={className}
+    fill={solid ? "currentColor" : "none"}
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H4.5a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"
+    />
+  </svg>
+);
 
 export const ArrowUpIcon: React.FC<IconProps> = ({ className }) => (
   <svg
@@ -87,7 +102,6 @@ export const DownloadIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented RefreshIcon for regeneration actions.
 export const RefreshIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -104,7 +118,6 @@ export const RefreshIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented BookmarkIcon for saving scenes.
 export const BookmarkIcon: React.FC<IconProps> = ({ className, solid }) => (
   <svg
     className={className}
@@ -121,7 +134,6 @@ export const BookmarkIcon: React.FC<IconProps> = ({ className, solid }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented CameraIcon for angle variants.
 export const CameraIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -143,7 +155,6 @@ export const CameraIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented SparklesIcon for AI generation indicators.
 export const SparklesIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -160,7 +171,6 @@ export const SparklesIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented VideoIcon for video generation actions.
 export const VideoIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -177,7 +187,6 @@ export const VideoIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented TrashIcon for deletion actions.
 export const TrashIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -194,7 +203,6 @@ export const TrashIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented PlusIcon for adding new items.
 export const PlusIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -207,7 +215,6 @@ export const PlusIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented UploadIcon for importing assets.
 export const UploadIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -224,7 +231,6 @@ export const UploadIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented ClapperboardIcon for cinematic actions.
 export const ClapperboardIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -241,7 +247,6 @@ export const ClapperboardIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented ExclamationTriangleIcon for error states.
 export const ExclamationTriangleIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -258,7 +263,6 @@ export const ExclamationTriangleIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented StopIcon for cancelling operations.
 export const StopIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -280,7 +284,6 @@ export const StopIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented UndoIcon for reverting edits.
 export const UndoIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -297,7 +300,6 @@ export const UndoIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented CircularProgressIcon for loading overlays.
 export const CircularProgressIcon: React.FC<{
   progress: number;
   className?: string;
@@ -333,7 +335,6 @@ export const CircularProgressIcon: React.FC<{
   );
 };
 
-// DO add comment above each fix. Implemented ChevronLeftIcon for carousels.
 export const ChevronLeftIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -346,7 +347,6 @@ export const ChevronLeftIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented ChevronRightIcon for carousels and welcome page.
 export const ChevronRightIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -359,7 +359,6 @@ export const ChevronRightIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented PhotoIcon for visual context indicators.
 export const PhotoIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -376,7 +375,6 @@ export const PhotoIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented FilmIcon for video-related sections.
 export const FilmIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -393,14 +391,12 @@ export const FilmIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented PlayIcon for video playback.
 export const PlayIcon: React.FC<IconProps> = ({ className }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
     <path d="M8 5v14l11-7z" />
   </svg>
 );
 
-// DO add comment above each fix. Implemented UserPlusIcon for actor roster management.
 export const UserPlusIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -417,7 +413,6 @@ export const UserPlusIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented CreditCardIcon for billing and credits.
 export const CreditCardIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -434,7 +429,6 @@ export const CreditCardIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented BookOpenIcon for the storybook section.
 export const BookOpenIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -451,7 +445,6 @@ export const BookOpenIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented HistoryIcon for production history.
 export const HistoryIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -468,7 +461,6 @@ export const HistoryIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented TimelineIcon for the story timeline.
 export const TimelineIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -485,7 +477,6 @@ export const TimelineIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented ChevronDownIcon for dropdown menus.
 export const ChevronDownIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -498,21 +489,34 @@ export const ChevronDownIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment: Fixed Logo. Switched from hardcoded SVG to use user's LOGO_URL from constants. Added object-contain for circular fit.
+export const EllipsisVerticalIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="2.5"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"
+    />
+  </svg>
+);
+
 export const Logo: React.FC<IconProps> = ({ className }) => (
   <img
     src={LOGO_URL}
     className={`${className} object-contain`}
     alt="Thetori AI"
     onError={(e) => {
-      // Simple fallback if the logo doesn't exist yet
       (e.target as HTMLImageElement).src =
         "https://raw.githubusercontent.com/user-attachments/assets/6580a6b6-f513-43f6-8c43-2287754d9294";
     }}
   />
 );
 
-// DO add comment above each fix. Implemented LoaderIcon for loading states.
 export const LoaderIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -529,76 +533,6 @@ export const LoaderIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented PlusCircleIcon for additions.
-export const PlusCircleIcon: React.FC<IconProps> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M12 9v3m0 0v3m0-3h3m-3 0h-3m-9 3a9 9 0 1118 0 9 9 0 01-18 0z"
-    />
-  </svg>
-);
-
-// DO add comment above each fix. Implemented PencilIcon for editing labels.
-export const PencilIcon: React.FC<IconProps> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-    />
-  </svg>
-);
-
-// DO add comment above each fix. Implemented CheckIcon for success status.
-export const CheckIcon: React.FC<IconProps> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-  </svg>
-);
-
-// DO add comment above each fix. Implemented LassoIcon for freeform selection.
-export const LassoIcon: React.FC<IconProps> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M6 5c7.18 0 13 5.82 13 13s-5.82 13-13 13S-7 25.18-7 18 1.18 5 6 5z"
-    />
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M19 18a4 4 0 11-8 0 4 4 0 018 0z"
-    />
-  </svg>
-);
-
-// DO add comment above each fix. Implemented SquareIcon for rectangular selection.
 export const SquareIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -615,25 +549,7 @@ export const SquareIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented PaintBrushIcon for canvas painting.
-export const PaintBrushIcon: React.FC<IconProps> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
-    />
-  </svg>
-);
-
-// DO add comment above each fix. Implemented MusicalNoteIcon for audio assets.
-export const MusicalNoteIcon: React.FC<IconProps> = ({ className }) => (
+export const Square2StackIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
     fill="none"
@@ -649,7 +565,6 @@ export const MusicalNoteIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented SpeakerWaveIcon for audio volume control.
 export const SpeakerWaveIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -698,8 +613,21 @@ export const DocumentTextIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// DO add comment above each fix. Implemented AdjustmentsIcon for settings.
-export const AdjustmentsIcon: React.FC<IconProps> = ({ className }) => (
+// ADDED: CheckIcon
+export const CheckIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+  </svg>
+);
+
+// ADDED: PlusCircleIcon
+export const PlusCircleIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
     fill="none"
@@ -710,13 +638,13 @@ export const AdjustmentsIcon: React.FC<IconProps> = ({ className }) => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+      d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"
     />
   </svg>
 );
 
-// DO add comment above each fix. Implemented SwitchHorizontalIcon for transition modes.
-export const SwitchHorizontalIcon: React.FC<IconProps> = ({ className }) => (
+// ADDED: PencilIcon
+export const PencilIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
     fill="none"
@@ -727,13 +655,13 @@ export const SwitchHorizontalIcon: React.FC<IconProps> = ({ className }) => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
     />
   </svg>
 );
 
-// DO add comment above each fix. Implemented ClipboardIcon for copying script snippets.
-export const ClipboardIcon: React.FC<IconProps> = ({ className }) => (
+// ADDED: LassoIcon
+export const LassoIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
     fill="none"
@@ -744,12 +672,51 @@ export const ClipboardIcon: React.FC<IconProps> = ({ className }) => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
     />
   </svg>
 );
 
-// DO add comment above each fix. Implemented LockClosedIcon for UI component locking.
+// ADDED: PaintBrushIcon
+export const PaintBrushIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
+    />
+  </svg>
+);
+
+// ADDED: MusicalNoteIcon
+export const MusicalNoteIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+    />
+  </svg>
+);
+
+// ADDED: LockClosedIcon
 export const LockClosedIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -761,12 +728,12 @@ export const LockClosedIcon: React.FC<IconProps> = ({ className }) => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 00-2 2zm10-10V7a4 4 0 00-8 0v4h8z"
     />
   </svg>
 );
 
-// DO add comment above each fix. Implemented LockOpenIcon for unlocking UI elements.
+// ADDED: LockOpenIcon
 export const LockOpenIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -778,12 +745,12 @@ export const LockOpenIcon: React.FC<IconProps> = ({ className }) => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"
+      d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 00-2 2z"
     />
   </svg>
 );
 
-// DO add comment above each fix. Implemented ShirtIcon for outfit/costume settings.
+// ADDED: ShirtIcon
 export const ShirtIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -795,17 +762,17 @@ export const ShirtIcon: React.FC<IconProps> = ({ className }) => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M12 4L4 8v12h16V8l-8-4z"
+      d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"
     />
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M12 4v4m0 0l-4 4m4-4l4 4"
+      d="M12 11a4 4 0 100-8 4 4 0 000 8z"
     />
   </svg>
 );
 
-// DO add comment above each fix. Implemented DocumentMagnifyingGlassIcon for storyboard previews.
+// ADDED: DocumentMagnifyingGlassIcon
 export const DocumentMagnifyingGlassIcon: React.FC<IconProps> = ({
   className
 }) => (
@@ -819,67 +786,30 @@ export const DocumentMagnifyingGlassIcon: React.FC<IconProps> = ({
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"
-    />
-    <circle cx="17" cy="17" r="3" stroke="currentColor" strokeWidth="2" />
-    <path
-      d="M19 19l2 2"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
+      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
     />
   </svg>
 );
 
-// DO add comment above each fix. Implemented ArrowsRightLeftIcon for navigation.
+// ADDED: ArrowsRightLeftIcon
 export const ArrowsRightLeftIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
     fill="none"
     viewBox="0 0 24 24"
-    strokeWidth={1.5}
-    stroke="currentColor"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"
-    />
-  </svg>
-);
-
-// DO add comment above each fix. Implemented MagnifyingGlassPlusIcon for zoom controls.
-export const MagnifyingGlassPlusIcon: React.FC<IconProps> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth={1.5}
-    stroke="currentColor"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6"
-    />
-  </svg>
-);
-
-// DO add comment above each fix. Implemented ChevronLeftIcon for backwards navigation.
-export const ChevronLeftIconSmall: React.FC<IconProps> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
     stroke="currentColor"
     strokeWidth="2"
   >
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+    />
   </svg>
 );
 
-// DO add comment: Implemented Square2StackIcon for layer stack representation.
-export const Square2StackIcon: React.FC<IconProps> = ({ className }) => (
+// ADDED: ClipboardIcon
+export const ClipboardIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
     fill="none"
@@ -890,7 +820,7 @@ export const Square2StackIcon: React.FC<IconProps> = ({ className }) => (
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
-      d="M16.5 10.5V6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v7.5a2.25 2.25 0 002.25 2.25h3.75M16.5 10.5h3.75a2.25 2.25 0 012.25 2.25v7.5a2.25 2.25 0 01-2.25 2.25h-7.5a2.25 2.25 0 01-2.25-2.25V16.5m7.5-6v6m-7.5-6h7.5"
+      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
     />
   </svg>
 );

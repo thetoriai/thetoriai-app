@@ -121,6 +121,51 @@ export type EditImageParams = {
   referenceImage?: { base64: string; mimeType: string };
 };
 
+// REGIONAL IDENTITY PROTOCOL DATABASE
+const REGIONAL_IDENTITY_MAP: Record<string, string> = {
+  Nigeria:
+    "ETHNICITY: West African (Yoruba/Igbo/Hausa features). SKIN: Deep ebony to bronze. WARDROBE: Modern Kaftans or Ankara prints. VIBE: High energy, urban Lagos colors.",
+  Kenya:
+    "ETHNICITY: East African (Nilotic/Bantu features). SKIN: Radiant dark tones. WARDROBE: Maasai Shuka accents or modern Nairobi street-style. VIBE: Warm savannah lighting.",
+  Ghana:
+    "ETHNICITY: West African (Akan/Ga features). SKIN: Rich, very dark radiant skin. WARDROBE: Bold Kente cloth patterns. VIBE: Coastal vibrancy, gold accents.",
+  Ethiopia:
+    "ETHNICITY: Horn of Africa (Habesha features). SKIN: Light to medium bronze, distinct curly hair textures. WARDROBE: White cotton Habesha Kemis with embroidery. VIBE: Ancient stone textures.",
+  "South Africa":
+    "ETHNICITY: Southern African (Zulu/Xhosa/Rainbow nation diversity). SKIN: Broad range of melanin. WARDROBE: Zulu beadwork accents or Joburg urban-chic. VIBE: Modern cosmopolitan.",
+  Tanzania:
+    "ETHNICITY: Swahili/Coastal features. SKIN: Deep bronze. WARDROBE: Kanga or Kitenge wraps. VIBE: Zanzibar-style carved wood and oceanic blue tones.",
+  Uganda:
+    "ETHNICITY: Central/East African. SKIN: Strong ebony tones. WARDROBE: Gomesi or Kanzu textures. VIBE: Lush green banana plantations and red earth.",
+  Senegal:
+    "ETHNICITY: West African (Wolof features). SKIN: Deepest ebony, tall elegant builds. WARDROBE: Grand Boubou robes. VIBE: Saharan edge, sophisticated fashion.",
+  "Ivory Coast":
+    "ETHNICITY: West African. SKIN: Medium-to-dark bronze. WARDROBE: Modern Abidjan Pagne fashion. VIBE: Chic tropical lagoon aesthetic.",
+  Cameroon:
+    "ETHNICITY: Central African. SKIN: Diverse Bantu tones. WARDROBE: Toghu velvet embroidery. VIBE: Dense rainforest canopy lighting.",
+  Rwanda:
+    "ETHNICITY: East African. SKIN: Smooth bronze tones, tall stature. WARDROBE: Mushanana silky drapes. VIBE: Pristine 'Land of a Thousand Hills' green terraces.",
+  Zimbabwe:
+    "ETHNICITY: Southern African (Shona/Ndebele features). SKIN: Deep melanin. WARDROBE: Contemporary local designer wear. VIBE: Highveld savannah and stone structures.",
+  Zambia:
+    "ETHNICITY: Southern African. SKIN: Warm dark tones. WARDROBE: Chitenge patterned outfits. VIBE: Zambezi river mist and floodplain lighting.",
+  Morocco:
+    "ETHNICITY: North African (Amazigh/Arab features). SKIN: Olive to tan. WARDROBE: Hooded Djellabas and Kaftans. VIBE: Intricate mosaic (Zellige) and desert archways.",
+  Egypt:
+    "ETHNICITY: North African (Middle Eastern influence). SKIN: Olive to medium bronze. WARDROBE: Galabeya robes or modern Cairo attire. VIBE: Nile greenery vs. golden desert sands."
+};
+
+const MEDIUM_HARD_LOCK: Record<string, string> = {
+  "3D Render":
+    "STRICT MEDIUM LOCK: Pixar/Disney 3D CGI ONLY. FORBIDDEN: No 2D sketches, no flat vectors, no realistic 8K photos. Use volumetric shapes and subsurface scattering.",
+  Realistic:
+    "STRICT MEDIUM LOCK: Cinematic 8K Photography ONLY. FORBIDDEN: No 3D animation, no vector lines, no cartoons. Use real human skin pores and lens bokeh.",
+  Illustrator:
+    "STRICT MEDIUM LOCK: Flat 2D Vector Art ONLY. FORBIDDEN: No 3D depth, no realism, no photographic textures. Use clean outlines and solid fills.",
+  Anime:
+    "STRICT MEDIUM LOCK: Japanese 2D Cel-shaded Anime ONLY. FORBIDDEN: No 3D volume, no realism, no western illustration styles. Use bold lines and expressive large eyes."
+};
+
 export const PREBUILT_VOICES = ["Zephyr", "Puck", "Charon", "Kore", "Fenrir"];
 export const VOICE_EXPRESSIONS = [
   "Storytelling",
@@ -397,14 +442,12 @@ export async function editImage(
     });
   }
 
-  const castNotes = characters
-    .map((c) => `${c.name}: ${c.description}`)
-    .join("; ");
-  const system = `${getStyleInstructions(visualStyle, characterStyle)} CAST DNA: ${castNotes}. DO NOT change background unless prompted.`;
+  if (overlayImage) parts.push({ inlineData: { data: stripBase64Prefix(overlayImage.base64), mimeType: overlayImage.mimeType } });
+  if (referenceImage) parts.push({ inlineData: { data: stripBase64Prefix(referenceImage.base64), mimeType: referenceImage.mimeType } });
 
-  // DO add comment: Style Injection. Prepended visual medium to the user prompt to ensure the model doesn't drift into realism during edits.
-  const stylePrefix = `VISUAL MEDIUM: [${visualStyle}]. `;
-  parts.push({ text: stylePrefix + editPrompt });
+  const castNotes = characters.map((c) => `${c.name}: ${c.description}`).join("; ");
+  const system = `${getStyleInstructions(visualStyle)} CAST DNA: ${castNotes}. LOCK MEDIUM TO [${visualStyle}]. USE ATTACHED IMAGE AS VISUAL IDENTITY REFERENCE.`;
+  parts.push({ text: `STRICT VISUAL MEDIUM: [${visualStyle}]. REPLICATE ATTACHED CHARACTER FACE EXACTLY. ` + editPrompt });
 
   try {
     const response: GenerateContentResponse = await withRetry(
@@ -453,31 +496,23 @@ export async function generateSingleImage(
   const ai = getAiClient();
   const parts: Part[] = [];
 
-  if (referenceImage) {
+  // VISUAL ANCHOR PROTOCOL: Inject Hero character image into part list
+  const hero = characters.find(c => c.isHero) || characters[0];
+  if (hero && hero.originalImageBase64) {
     parts.push({
       inlineData: {
-        data: stripBase64Prefix(referenceImage),
-        mimeType: "image/png"
-      }
-    });
-  }
-  if (historyImage) {
-    parts.push({
-      inlineData: {
-        data: stripBase64Prefix(historyImage),
-        mimeType: "image/png"
+        data: stripBase64Prefix(hero.originalImageBase64), 
+        mimeType: hero.originalImageMimeType || "image/png" 
       }
     });
   }
 
-  const castNotes = characters
-    .map((c) => `${c.name}: ${c.description}`)
-    .join("; ");
-  const system = `${getStyleInstructions(visualStyle, characterStyle)} CAST DNA: ${castNotes}. GENRE: ${genre}.`;
+  if (referenceImage) parts.push({ inlineData: { data: stripBase64Prefix(referenceImage), mimeType: "image/png" } });
+  if (historyImage) parts.push({ inlineData: { data: stripBase64Prefix(historyImage), mimeType: "image/png" } });
 
-  // DO add comment: Master Style Enforcer. Injected a hard style-lock prefix into the user prompt to override model's photorealistic bias in storyboard mode.
-  const styleEnforcement = `STRICT VISUAL MEDIUM: [${visualStyle}]. STYLE LOCK: GENERATE ${visualStyle.toUpperCase()} ONLY. NO PHOTOREALISM. NO REAL SKIN. `;
-  parts.push({ text: styleEnforcement + prompt });
+  const castNotes = characters.map((c) => `${c.name}: ${c.description}`).join("; ");
+  const system = `${getStyleInstructions(visualStyle, characterStyle)} CAST DNA: ${castNotes}. LOCK MEDIUM TO [${visualStyle}]. USE SECOND PART AS PHYSICAL BLUEPRINT.`;
+  parts.push({ text: `STRICT VISUAL MEDIUM: [${visualStyle}]. NO STYLE DRIFT. USE CHARACTER IMAGE PROVIDED. ` + prompt });
 
   try {
     const response: GenerateContentResponse = await withRetry(
@@ -667,7 +702,8 @@ export async function generateStructuredStory(
   const castNotes = characters
     .map((c) => `${c.name}: ${c.description}`)
     .join("; ");
-  const system = `You are a professional ${movieStyle} screenwriter. Generate a story set in ${country} in ${genre} style.
+  const system = `You are a professional screenwriter. TARGET MEDIUM: [${movieStyle}]. 
+    STRICT MEDIUM AWARENESS: Do NOT use words like 'drawing' if medium is 3D. Do NOT use 'photo' if medium is Illustrator.
     CAST: ${castNotes}. ${includeDialogue ? "Include speaker-prefixed dialogue." : "No dialogue."}
     Return JSON with 'title', 'storyNarrative', and 'scenes' (array of {imageDescription, script}).
     Scene script MUST follow "Name: Dialogue" format. Dialogue must be spoken within 8 seconds.`;

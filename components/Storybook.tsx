@@ -5,23 +5,22 @@ import {
   SparklesIcon,
   LoaderIcon,
   CheckIcon,
-  ClipboardIcon,
   RefreshIcon,
-  UploadIcon,
   PlayIcon,
-  CreditCardIcon,
   TrashIcon,
   LockClosedIcon,
   LockOpenIcon,
-  ShirtIcon,
-  CircularProgressIcon,
   MusicalNoteIcon,
   PlusIcon,
   DocumentMagnifyingGlassIcon,
   UserPlusIcon,
   ArrowsRightLeftIcon,
+  StopIcon,
+  Logo,
+  FilmIcon,
+  ChevronDownIcon,
   SpeakerWaveIcon,
-  StopIcon
+  DownloadIcon
 } from "./Icons";
 import {
   generateStructuredStory,
@@ -33,7 +32,6 @@ import {
 } from "../services/geminiService";
 import type { Character, Storybook, Outfit } from "../services/geminiService";
 import { fileToBase64, base64ToBytes, pcmToWavBlob } from "../utils/fileUtils";
-import { PAYPAL_LINK } from "../utils/constants";
 
 interface StorybookCreatorProps {
   storybookContent: Storybook;
@@ -47,8 +45,12 @@ interface StorybookCreatorProps {
   onGenerateSingleStorybookScene?: (index: number, model: string) => void;
   onSwapOutfit?: (sceneIndex: number, outfit: Outfit) => Promise<void>;
   onAddAudioToTimeline?: (url: string, duration: number) => void;
-  onAddAudioClip?: (url: string, duration?: number, startTime?: number) => void;
-  onDeductAudioCredit?: () => boolean;
+  onAddAudioClip?: (
+    url: string | File,
+    duration?: number,
+    startTime?: number
+  ) => void;
+  onDeductAudioCredit?: () => Promise<boolean>;
   onResetStorybook: () => void;
   storySeed: string;
   setStorySeed: (val: string) => void;
@@ -61,11 +63,8 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   characterStyle,
   selectedCountry,
   creditBalance,
-  onClose,
   onGenerateFromStorybook,
   onGenerateSingleStorybookScene,
-  onSwapOutfit,
-  onAddAudioToTimeline,
   onAddAudioClip,
   onDeductAudioCredit,
   onResetStorybook,
@@ -96,6 +95,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const speakButtonRef = useRef<HTMLButtonElement>(null);
   const batchButtonRef = useRef<HTMLButtonElement>(null);
   const scenesEndRef = useRef<HTMLDivElement>(null);
+  const productionSequenceRef = useRef<HTMLDivElement>(null);
 
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState("Zephyr");
@@ -103,15 +103,16 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     null
   );
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-
-  // AUTO-SCROLL REFINEMENT: Track when a generation has JUST finished to scroll once
   const [shouldScroll, setShouldScroll] = useState(false);
 
+  const [generatingSceneAudioIdx, setGeneratingSceneAudioIdx] = useState<
+    number | null
+  >(null);
+
   useEffect(() => {
-    // SNAPPING FIX: Prevent auto-scroll from firing unless explicitly triggered by generation
     if (shouldScroll && storybookContent.scenes.length > 0) {
       setTimeout(() => {
-        scenesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        productionSequenceRef.current?.scrollIntoView({ behavior: "smooth" });
         setShouldScroll(false);
       }, 300);
     }
@@ -136,32 +137,18 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
         isConfirmingSpeak &&
         speakButtonRef.current &&
         !speakButtonRef.current.contains(target)
-      ) {
+      )
         setIsConfirmingSpeak(false);
-      }
       if (
         confirmingBatch &&
         batchButtonRef.current &&
         !batchButtonRef.current.contains(target)
-      ) {
+      )
         setConfirmingBatch(false);
-      }
-      if (
-        confirmingExecuteIdx !== null &&
-        !(target as HTMLElement).closest(".execute-btn-container")
-      ) {
-        setConfirmingExecuteIdx(null);
-      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isConfirmingSpeak, confirmingBatch, confirmingExecuteIdx]);
-
-  useEffect(() => {
-    if (confirmingExecuteIdx === null) return;
-    const timer = setTimeout(() => setConfirmingExecuteIdx(null), 3000);
-    return () => clearTimeout(timer);
-  }, [confirmingExecuteIdx]);
+  }, [isConfirmingSpeak, confirmingBatch]);
 
   const toggleCharacterInCast = (name: string) => {
     const currentChars = [...storybookContent.characters];
@@ -172,15 +159,9 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     setStorybookContent({ ...storybookContent, characters: newChars });
   };
 
-  const isCharacterInCast = (name: string) => {
-    return storybookContent.characters.includes(name);
-  };
-
   const handleStoryTextChange = (val: string) => {
     setSharedStoryText(val);
-    if (storybookContent.scenes.length === 0) {
-      setStorySeed(val);
-    }
+    if (storybookContent.scenes.length === 0) setStorySeed(val);
   };
 
   const handleCreateStory = async (forceContinuation: boolean = false) => {
@@ -192,13 +173,9 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       );
       const inputIdea =
         storySeed && storySeed.trim().length > 5 ? storySeed : sharedStoryText;
-
-      const hasKeyword = inputIdea.toLowerCase().includes("continues");
-      const isContinuation =
-        forceContinuation ||
-        (hasKeyword && storybookContent.storyNarrative.length > 0);
-
-      const history = isContinuation ? storybookContent.storyNarrative : "";
+      const historyText = forceContinuation
+        ? storybookContent.storyNarrative
+        : "";
       const res = await generateStructuredStory(
         inputIdea,
         title,
@@ -208,19 +185,17 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
         selectedStoryGenre,
         selectedMovieStyle,
         "3",
-        history,
+        historyText,
         false,
         "",
         selectedCountry
       );
-
       const lockedScenes = res.scenes.map((s: any) => ({
         ...s,
         isDescriptionLocked: true,
         isScriptLocked: true
       }));
-
-      if (isContinuation) {
+      if (forceContinuation) {
         const updatedNarrative = `${storybookContent.storyNarrative}\n\n${res.storyNarrative}`;
         setStorybookContent({
           ...storybookContent,
@@ -231,13 +206,14 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       } else {
         setStorybookContent({
           ...storybookContent,
-          title: title,
+          title,
           storyNarrative: res.storyNarrative,
           scenes: lockedScenes,
           includeDialogue
         });
         setSharedStoryText(res.storyNarrative);
       }
+      setShouldScroll(true);
     } catch (e) {
       setStoryError("Failed to generate story.");
     } finally {
@@ -267,11 +243,12 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       }));
       setStorybookContent({
         ...storybookContent,
-        title: title,
+        title,
         storyNarrative: sharedStoryText,
         scenes: lockedScenes,
         includeDialogue
       });
+      setShouldScroll(true);
     } catch (e) {
       console.error(e);
     } finally {
@@ -279,7 +256,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     }
   };
 
-  const handleGenerateSpeech = async () => {
+  const handleGenerateSpeechMaster = async () => {
     if (!sharedStoryText.trim()) return;
     if (!isConfirmingSpeak && !isGeneratingSpeech) {
       setIsConfirmingSpeak(true);
@@ -300,22 +277,53 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
         "Storytelling"
       );
       const bytes = base64ToBytes(base64);
-      // FIXED NARRATIVE AUDIO: Raw PCM needs WAV header to be playable and visible.
       const blob = pcmToWavBlob(bytes, 24000);
       const url = URL.createObjectURL(blob);
-
-      // DURATION LOGIC: Calculated duration (bytes/2/24000) prevents the clip from being hidden (0 width) on the timeline.
-      const calculatedDuration = bytes.length / 2 / 24000;
-
       setStorybookContent({ ...storybookContent, narrativeAudioSrc: url });
-      if (onAddAudioToTimeline) onAddAudioToTimeline(url, calculatedDuration);
-
-      const audio = new Audio(url);
-      setPreviewAudio(audio);
+      setPreviewAudio(new Audio(url));
     } catch (e) {
       setStoryError("TTS Failed.");
     } finally {
       setIsGeneratingSpeech(false);
+    }
+  };
+
+  const handleGenerateSceneAudio = async (index: number) => {
+    const scene = storybookContent.scenes[index];
+    if (!scene.script.trim()) return;
+    if (creditBalance < 1) {
+      setStoryError("Insufficient credits.");
+      return;
+    }
+    setGeneratingSceneAudioIdx(index);
+    try {
+      if (onDeductAudioCredit && !onDeductAudioCredit()) {
+        setStoryError("Insufficient credits.");
+        return;
+      }
+      const base64 = await generateSpeech(
+        scene.script,
+        selectedCountry,
+        selectedVoice,
+        "Storytelling"
+      );
+      const bytes = base64ToBytes(base64);
+      const blob = pcmToWavBlob(bytes, 24000);
+      const url = URL.createObjectURL(blob);
+      const newScenes = [...storybookContent.scenes];
+      newScenes[index] = { ...newScenes[index], audioSrc: url };
+      setStorybookContent({ ...storybookContent, scenes: newScenes });
+    } catch (e) {
+      setStoryError("Failed to generate scene audio.");
+    } finally {
+      setGeneratingSceneAudioIdx(null);
+    }
+  };
+
+  const handleAddSceneAudioToTimeline = (index: number) => {
+    const scene = storybookContent.scenes[index];
+    if (scene.audioSrc && onAddAudioClip) {
+      onAddAudioClip(scene.audioSrc, 10);
     }
   };
 
@@ -335,15 +343,22 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("audio/")) {
+      setStoryError(
+        "Format Rejection: Please upload an audio file. Videos are not supported for transcription."
+      );
+      if (audioInputRef.current) audioInputRef.current.value = "";
+      return;
+    }
     setIsProcessingAudio(true);
     try {
       const base64 = await fileToBase64(file);
       const transcription = await generatePromptFromAudio(base64, file.type);
-      const updatedText =
-        (sharedStoryText ? sharedStoryText + "\n" : "") + transcription;
-      setSharedStoryText(updatedText);
+      setSharedStoryText(
+        (sharedStoryText ? sharedStoryText + "\n" : "") + transcription
+      );
       setStorySeed((storySeed ? storySeed + "\n" : "") + transcription);
-    } catch (error: any) {
+    } catch {
       setStoryError("Failed to transcribe audio.");
     } finally {
       setIsProcessingAudio(false);
@@ -371,7 +386,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
         isScriptLocked: true
       }));
       setStorybookContent({ ...storybookContent, scenes: lockedScenes });
-      setShouldScroll(true); // Trigger scroll once after sync
+      setShouldScroll(true);
     } catch (e) {
       console.error(e);
     } finally {
@@ -403,18 +418,19 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     }
   };
 
-  const handleAddManualScene = () => {
-    const newScene = {
-      id: Date.now(),
-      imageDescription: "Enter visual details...",
-      script: "Enter dialogue or narration...",
-      isDescriptionLocked: false,
-      isScriptLocked: false
-    };
-    setStorybookContent({
-      ...storybookContent,
-      scenes: [...storybookContent.scenes, newScene]
-    });
+  const handleExecuteSingleScene = (index: number) => {
+    if (confirmingExecuteIdx !== index) {
+      setConfirmingExecuteIdx(index);
+      return;
+    }
+    if (creditBalance < 1) {
+      setStoryError("Insufficient credits.");
+      setConfirmingExecuteIdx(null);
+      return;
+    }
+    if (onGenerateSingleStorybookScene)
+      onGenerateSingleStorybookScene(index, "gemini-2.5-flash-image");
+    setConfirmingExecuteIdx(null);
   };
 
   const handleBatchProduce = () => {
@@ -424,185 +440,173 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       return;
     }
     if (creditBalance < storybookContent.scenes.length) {
-      setStoryError(
-        `Insufficient credits. Required: ${storybookContent.scenes.length}`
-      );
+      setStoryError("Insufficient credits for full sequence production.");
       setConfirmingBatch(false);
       return;
     }
-    onGenerateFromStorybook(
-      storybookContent.scenes.map((s) => s.imageDescription)
-    );
     setConfirmingBatch(false);
+    const scenes = storybookContent.scenes.map((s) => s.imageDescription);
+    onGenerateFromStorybook(scenes);
   };
 
-  const handleExecuteSingleScene = (index: number) => {
-    if (confirmingExecuteIdx !== index) {
-      setConfirmingExecuteIdx(index);
-      return;
-    }
-    if (creditBalance < 1) {
-      setStoryError("Insufficient credits to execute scene.");
-      setConfirmingExecuteIdx(null);
-      return;
-    }
-    if (onGenerateSingleStorybookScene) {
-      onGenerateSingleStorybookScene(index, "gemini-2.5-flash-image");
-    }
-    setConfirmingExecuteIdx(null);
+  const handleDownloadAudio = (url: string, filename: string) => {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
-
-  const hasNarrativeContent = sharedStoryText.trim().length > 0;
-  // REFINED: The Continue button will ONLY emerge after the first successful production of scenes.
-  // This ensures it doesn't appear while you're still drafting your initial idea.
-  const hasFinalizedStory = storybookContent.scenes.length > 0;
-  const totalCost = storybookContent.scenes.length;
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-950 animate-in fade-in duration-500 overflow-hidden font-sans">
-      <div className="p-4 border-b border-white/5 flex justify-between items-center shrink-0 bg-[#0a0f1d]">
-        <h2 className="text-xs font-black text-gray-300 flex items-center gap-2 uppercase tracking-widest">
-          <BookOpenIcon className="w-5 h-5 text-indigo-500" /> Storywriter
-          Section
+    <div className="w-full h-full flex flex-col bg-gray-950 overflow-y-auto lg:overflow-hidden font-sans scroll-smooth">
+      <div className="desktop:flex p-2 border-b border-white/5 justify-between items-center shrink-0 bg-[#0a0f1d] hidden">
+        <h2 className="text-[9px] font-black text-gray-400 flex items-center gap-1.5 uppercase tracking-widest">
+          <BookOpenIcon className="w-4 h-4 text-indigo-500" /> Story writer
         </h2>
-        <button
-          onClick={handleClearEverything}
-          className="flex items-center gap-2 px-3 py-1.5 bg-red-900/10 hover:bg-red-800 border border-red-900/30 text-red-400 rounded-lg text-[9px] font-black uppercase transition-all active:scale-95"
-        >
-          <TrashIcon className="w-3 h-3" /> Reset
-        </button>
+        <div className="flex items-center gap-2">
+          {storybookContent.narrativeAudioSrc && (
+            <button
+              onClick={() =>
+                onAddAudioClip?.(storybookContent.narrativeAudioSrc!, 10)
+              }
+              className="flex items-center gap-1.5 px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600 border border-indigo-500/30 text-indigo-100 rounded-lg text-[8px] font-black uppercase transition-all"
+            >
+              <MusicalNoteIcon className="w-3 h-3" /> To Timeline
+            </button>
+          )}
+          <button
+            onClick={handleClearEverything}
+            className="flex items-center gap-1.5 px-2 py-1 bg-red-900/10 hover:bg-red-800 border border-red-900/30 text-red-400 rounded-lg text-[8px] font-black uppercase active:scale-95"
+          >
+            <TrashIcon className="w-3 h-3" /> Reset
+          </button>
+        </div>
       </div>
 
-      {/* UNIFIED SCROLL ON MOBILE: Changed from flex-row to a single flex-col container that scrolls entirely on mobile */}
-      <div className="flex-1 overflow-y-auto bg-[#070b14] scrollbar-thin scrollbar-thumb-gray-800">
-        <div className="flex flex-col md:flex-row min-h-full">
-          <div className="w-full md:w-[340px] p-4 md:border-r border-white/5 flex flex-col gap-5 shrink-0">
-            <div className="flex bg-gray-900 rounded-xl p-0.5 border border-white/5 themed-artline">
-              <button
-                onClick={() => setCreationMode("ai")}
-                className={`flex-1 py-1.5 text-[9px] font-black rounded transition-all uppercase ${
-                  creationMode === "ai"
-                    ? "bg-indigo-600 text-white shadow-md"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                Blueprint
-              </button>
-              <button
-                onClick={() => setCreationMode("paste")}
-                className={`flex-1 py-1.5 text-[9px] font-black rounded uppercase transition-all ${creationMode === "paste" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-400"}`}
-              >
-                Draft
-              </button>
-            </div>
+      <div className="flex-1 flex flex-col lg:flex-row overflow-visible lg:overflow-hidden">
+        {/* LEFT COLUMN: HIGH DENSITY COMPACT DESIGN */}
+        <div className="w-full lg:w-[280px] p-2 lg:border-r border-white/5 flex flex-col gap-1.5 shrink-0 bg-[#0a0f1d]/20 h-auto lg:h-full lg:overflow-y-auto scrollbar-none">
+          <div className="flex bg-gray-900 rounded-lg p-0.5 border border-white/5 themed-artline shrink-0">
+            <button
+              onClick={() => setCreationMode("ai")}
+              className={`flex-1 py-1 text-[8px] font-black rounded-md uppercase transition-all ${creationMode === "ai" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-200"}`}
+            >
+              Blueprint
+            </button>
+            <button
+              onClick={() => setCreationMode("paste")}
+              className={`flex-1 py-1 text-[8px] font-black rounded-md uppercase transition-all ${creationMode === "paste" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500"}`}
+            >
+              Draft
+            </button>
+          </div>
 
-            <div className="flex flex-col gap-5 shrink-0">
-              <div className="flex flex-col items-center">
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Titled Story..."
-                  className="w-full bg-transparent border-none py-2 text-2xl font-black text-white focus:outline-none placeholder-gray-800 text-center tracking-tighter italic"
-                />
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Story Title..."
+            className="w-full bg-transparent border-none py-1 text-lg font-black text-white focus:outline-none placeholder-gray-800 text-center tracking-tighter italic shrink-0"
+          />
+
+          <div className="flex flex-wrap justify-center gap-1 p-1 bg-black/20 rounded-lg border border-white/5 shadow-inner min-h-[50px] shrink-0">
+            {characters.length === 0 ? (
+              <div className="flex items-center justify-center w-full opacity-20">
+                <span className="text-[6px] font-black uppercase tracking-widest text-gray-600">
+                  No Actors
+                </span>
               </div>
+            ) : (
+              characters.map((char) => (
+                <button
+                  key={char.id}
+                  onClick={() => toggleCharacterInCast(char.name)}
+                  className={`flex flex-col items-center transition-all active:scale-95 group`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-full border overflow-hidden transition-all ${storybookContent.characters.includes(char.name) ? "border-green-500 scale-105 shadow-[0_0_8px_rgba(34,197,94,0.3)]" : "border-gray-800 opacity-40 grayscale group-hover:opacity-100"}`}
+                  >
+                    {char.imagePreview ? (
+                      <img
+                        src={char.imagePreview}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-900\">
+                        <UserPlusIcon className="w-3 h-3 text-gray-700" />
+                      </div>
+                    )}
+                  </div>
+                  <span
+                    className={`text-[5px] font-black uppercase tracking-tighter ${storybookContent.characters.includes(char.name) ? "text-green-500" : "text-gray-600"}`}
+                  >
+                    {char.name.split(" ")[0] || "Actor"}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
 
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap justify-center gap-2.5 max-h-[140px] overflow-y-auto p-2 scrollbar-none bg-black/20 rounded-2xl border border-white/5">
-                  {characters.map((char) => {
-                    const active = isCharacterInCast(char.name);
-                    return (
-                      <button
-                        key={char.id}
-                        onClick={() => toggleCharacterInCast(char.name)}
-                        className={`flex flex-col items-center gap-1 transition-all group active:scale-95`}
-                      >
-                        <div
-                          className={`w-12 h-12 rounded-full border-2 overflow-hidden transition-all ${storybookContent.characters.includes(char.name) ? "border-green-500 scale-110 shadow-[0_0_15px_rgba(34,197,94,0.5)]" : "border-gray-800 opacity-40 grayscale hover:opacity-100"}`}
-                        >
-                          {char.imagePreview ? (
-                            <img
-                              src={char.imagePreview}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-gray-900">
-                              <UserPlusIcon className="w-5 h-5 text-gray-700" />
-                            </div>
-                          )}
-                        </div>
-                        <span
-                          className={`text-[8px] font-black uppercase tracking-tighter ${storybookContent.characters.includes(char.name) ? "text-green-500" : "text-gray-400"}`}
-                        >
-                          {char.name || "Actor"}
-                        </span>
-                      </button>
-                    );
-                  })}
-                  {characters.length === 0 && (
-                    <div className="text-[8px] font-bold text-gray-700 uppercase italic py-8 tracking-widest text-center w-full">
-                      Actors required from roster...
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex-1 flex flex-col gap-2 overflow-hidden min-h-0">
-              <div className="flex justify-between items-center shrink-0 px-1">
-                <div className="flex items-center gap-2">
-                  <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
-                    Story Concept
-                  </label>
-                  {storybookContent.narrativeAudioSrc && (
+          <div className="flex flex-col gap-1 flex-1 min-h-0">
+            <div className="flex justify-between items-center px-1 shrink-0">
+              <label className="text-[7px] font-black text-gray-600 uppercase tracking-widest">
+                Concept
+              </label>
+              <div className="flex gap-1">
+                {storybookContent.narrativeAudioSrc && (
+                  <div className="flex gap-1 animate-in zoom-in-95">
                     <button
                       onClick={togglePreviewAudio}
-                      className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-all ${isPlayingPreview ? "bg-red-600 border-red-400 text-white" : "bg-indigo-600/20 border-indigo-500/30 text-indigo-400"}`}
+                      className={`flex items-center gap-1 px-1 py-0.5 rounded border transition-all ${isPlayingPreview ? "bg-red-600 border-red-400 text-white" : "bg-indigo-600/20 border-indigo-500/30 text-indigo-400"}`}
                     >
                       {isPlayingPreview ? (
-                        <StopIcon className="w-2.5 h-2.5" />
+                        <StopIcon className="w-2 h-2" />
                       ) : (
-                        <PlayIcon className="w-2.5 h-2.5" />
+                        <PlayIcon className="w-2 h-2" />
                       )}
-                      <span className="text-[7px] font-black uppercase">
-                        Preview
+                      <span className="text-[5px] font-black uppercase">
+                        Play
                       </span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
                 <button
                   onClick={() => audioInputRef.current?.click()}
-                  className="flex items-center gap-1.5 px-2 py-1 bg-indigo-900/20 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-300 hover:text-white rounded text-[8px] font-black uppercase transition-colors"
+                  className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-900/20 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-300 hover:text-white rounded text-[6px] font-black uppercase transition-all shadow-sm"
                 >
                   {isProcessingAudio ? (
-                    <LoaderIcon className="w-2.5 h-2.5 animate-spin" />
+                    <LoaderIcon className="w-1.5 h-1.5 animate-spin" />
                   ) : (
-                    <MusicalNoteIcon className="w-2.5 h-2.5" />
-                  )}
-                  {isProcessingAudio ? "Listening..." : "Audio"}
+                    <MusicalNoteIcon className="w-1.5 h-1.5" />
+                  )}{" "}
+                  {isProcessingAudio ? "..." : "Voice"}
                 </button>
-                <input
-                  type="file"
-                  ref={audioInputRef}
-                  className="hidden"
-                  accept="audio/*"
-                  onChange={handleAudioUpload}
-                />
               </div>
-              <textarea
-                value={sharedStoryText}
-                onChange={(e) => handleStoryTextChange(e.target.value)}
-                placeholder="Describe your vision here... Part 2? Click 'Continue' below."
-                className="flex-1 w-full bg-black/30 border border-white/5 rounded-2xl p-4 text-xs text-white resize-none focus:border-indigo-500 outline-none shadow-inner leading-relaxed placeholder-gray-800"
+              <input
+                type="file"
+                ref={audioInputRef}
+                className="hidden"
+                accept="audio/*"
+                onChange={handleAudioUpload}
               />
             </div>
+            <textarea
+              value={sharedStoryText}
+              onChange={(e) => handleStoryTextChange(e.target.value)}
+              placeholder="Type narrative vision..."
+              className="w-full min-h-[80px] lg:flex-1 bg-black/40 border border-white/5 rounded-lg p-2 text-[10px] font-bold text-white resize-none outline-none focus:border-indigo-500/50 transition-all placeholder-gray-700 leading-relaxed shadow-inner scrollbar-none"
+            />
+          </div>
 
-            <div className="space-y-3 shrink-0">
-              <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1 shrink-0">
+            <div className="grid grid-cols-2 gap-1">
+              <div className="relative">
                 <select
                   value={selectedStoryGenre}
                   onChange={(e) => setSelectedStoryGenre(e.target.value)}
-                  className="w-full bg-gray-900 border border-white/5 rounded-lg px-2 py-2 text-[9px] font-black text-gray-400 outline-none cursor-pointer"
+                  className="w-full bg-gray-900 border border-white/10 rounded-md px-1.5 py-1 text-[8px] font-black text-gray-400 outline-none appearance-none cursor-pointer"
                 >
+                  {" "}
                   <option>Oral Tradition</option>
                   <option>Drama</option>
                   <option>Action</option>
@@ -615,45 +619,43 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                   <option>Mystery</option>
                   <option>Fantasy</option>
                 </select>
+                <ChevronDownIcon className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              </div>
+              <div className="relative">
                 <select
                   value={selectedMovieStyle}
                   onChange={(e) => setSelectedMovieStyle(e.target.value)}
-                  className="w-full bg-gray-900 border border-white/10 rounded-lg px-2 py-2 text-[9px] font-black text-gray-200 outline-none"
+                  className="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-black text-gray-200 outline-none appearance-none cursor-pointer"
                 >
                   <option>Nollywood</option>
                   <option>Hollywood</option>
                   <option>General</option>
                 </select>
+                <ChevronDownIcon className="w-2 h-2 absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-700 pointer-events-none" />
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIncludeDialogue(!includeDialogue)}
-                  className={`w-full py-2.5 rounded-xl border flex items-center justify-center gap-2.5 transition-all ${includeDialogue ? "bg-indigo-600/20 border-indigo-500 text-indigo-100 shadow-lg" : "bg-gray-900 border-gray-800 text-gray-500"}`}
-                >
-                  <div
-                    className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                      includeDialogue
-                        ? "bg-indigo-600 border-indigo-400"
-                        : "border-gray-700"
-                    }`}
-                  >
-                    {includeDialogue && (
-                      <CheckIcon className="w-3 h-3 text-white" />
-                    )}
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest">
-                    AI Dialogue Helper
-                  </span>
-                </button>
+            </div>
+            <button
+              onClick={() => setIncludeDialogue(!includeDialogue)}
+              className={`w-full py-1 rounded-md border flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] ${includeDialogue ? "bg-indigo-600/10 border-indigo-500 text-indigo-200" : "bg-gray-900 border-white/5 text-gray-600"}`}
+            >
+              <div
+                className={`w-2.5 h-2.5 rounded border flex items-center justify-center ${includeDialogue ? "bg-indigo-600 border-indigo-400" : "border-gray-800"}`}
+              >
+                {includeDialogue && (
+                  <CheckIcon className="w-1.5 h-1.5 text-white" />
+                )}
               </div>
-
-              <div className="flex gap-2">
-                <div className="flex-1 flex flex-col gap-1">
+              <span className="text-[8px] font-black uppercase tracking-widest">
+                Dialogue Gen
+              </span>
+            </button>
+            <div className="flex gap-1 pb-1 lg:pb-0">
+              <div className="flex-1 flex flex-col gap-0.5">
+                <div className="relative">
                   <select
                     value={selectedVoice}
                     onChange={(e) => setSelectedVoice(e.target.value)}
-                    className="w-full bg-gray-900 border border-white/5 rounded-lg px-2 py-1.5 text-[8px] font-black text-indigo-400 outline-none cursor-pointer"
+                    className="w-full bg-gray-900 border border-white/10 rounded-md px-1.5 py-1 text-[7px] font-black text-indigo-500 outline-none appearance-none"
                   >
                     {PREBUILT_VOICES.map((v) => (
                       <option key={v} value={v}>
@@ -661,285 +663,294 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                       </option>
                     ))}
                   </select>
-                  <button
-                    ref={speakButtonRef}
-                    onClick={handleGenerateSpeech}
-                    disabled={isGeneratingSpeech || !sharedStoryText.trim()}
-                    className={`w-full py-2.5 rounded-lg text-[9px] font-black uppercase transition-all ${isConfirmingSpeak ? "bg-green-600 text-white shadow-lg" : "bg-gray-800 text-gray-300 hover:text-white"}`}
-                  >
-                    {isGeneratingSpeech ? (
-                      <LoaderIcon className="w-3.5 h-3.5 animate-spin" />
-                    ) : isConfirmingSpeak ? (
-                      "1 Credit"
-                    ) : (
-                      "Narrate"
-                    )}
-                  </button>
+                  <ChevronDownIcon className="w-1.5 h-1.5 absolute right-1.5 top-1/2 -translate-y-1/2 text-indigo-900 pointer-events-none" />
                 </div>
-
-                <div className="flex-[2] flex flex-col gap-1">
-                  {creationMode === "ai" ? (
-                    <div className="flex gap-1 h-full">
-                      <button
-                        onClick={() =>
-                          creationMode === "ai"
-                            ? handleCreateStory(false)
-                            : handleProcessPastedStory()
-                        }
-                        disabled={isGeneratingStory}
-                        className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-xl shadow-2xl transition-all active:scale-95 text-[9px] flex items-center justify-center gap-2"
-                      >
-                        {isGeneratingStory ? (
-                          <LoaderIcon className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <SparklesIcon className="w-3 h-3" />
-                        )}
-                        Generate
-                      </button>
-                      {/* Continue button ONLY appears after initial production exists */}
-                      {hasNarrativeContent && hasFinalizedStory && (
-                        <button
-                          onClick={() => handleCreateStory(true)}
-                          disabled={isGeneratingStory}
-                          className="px-3 bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest rounded-xl shadow-2xl transition-all active:scale-95 text-[8px] flex items-center justify-center gap-1.5"
-                          title="Continue Writing"
-                        >
-                          {isGeneratingStory ? (
-                            <LoaderIcon className="w-2.5 h-2.5 animate-spin" />
-                          ) : (
-                            <ArrowsRightLeftIcon className="w-2.5 h-2.5" />
-                          )}
-                          Cont.
-                        </button>
-                      )}
-                    </div>
+                <button
+                  ref={speakButtonRef}
+                  onClick={handleGenerateSpeechMaster}
+                  disabled={isGeneratingSpeech || !sharedStoryText.trim()}
+                  className={`w-full py-1 rounded-md text-[7px] font-black uppercase tracking-widest transition-all active:scale-[0.98] border border-white/5 ${isConfirmingSpeak ? "bg-green-600 text-white" : "bg-gray-800 text-gray-500 hover:text-white"}`}
+                >
+                  {isGeneratingSpeech ? (
+                    <LoaderIcon className="w-2 h-2 animate-spin mx-auto" />
+                  ) : isConfirmingSpeak ? (
+                    "1C"
                   ) : (
-                    <div className="flex gap-1 h-full">
-                      <button
-                        onClick={handleProcessPastedStory}
-                        disabled={isGeneratingStory || !sharedStoryText.trim()}
-                        className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-xl shadow-2xl transition-all active:scale-95 text-[10px] flex items-center justify-center gap-2"
-                      >
-                        {isGeneratingStory ? (
-                          <LoaderIcon className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <SparklesIcon className="w-4 h-4" />
-                        )}
-                        Parse Narrative
-                      </button>
-                      {/* Same restriction for Draft mode */}
-                      {hasNarrativeContent && hasFinalizedStory && (
-                        <button
-                          onClick={() => handleCreateStory(true)}
-                          disabled={isGeneratingStory}
-                          className="px-3 bg-amber-600 hover:bg-amber-500 text-white font-black uppercase tracking-widest rounded-xl shadow-2xl transition-all active:scale-95 text-[8px] flex items-center justify-center gap-1.5"
-                          title="Append Part 2"
-                        >
-                          {isGeneratingStory ? (
-                            <LoaderIcon className="w-2.5 h-2.5 animate-spin" />
-                          ) : (
-                            <ArrowsRightLeftIcon className="w-2.5 h-2.5" />
-                          )}
-                          Cont.
-                        </button>
-                      )}
-                    </div>
+                    "Speak"
                   )}
-                </div>
+                </button>
+              </div>
+              <div className="flex-[2] flex flex-col gap-0.5">
+                <button
+                  onClick={() =>
+                    creationMode === "ai"
+                      ? handleCreateStory(false)
+                      : handleProcessPastedStory()
+                  }
+                  disabled={isGeneratingStory}
+                  className="h-full bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.1em] rounded-md shadow-lg active:scale-[0.98] text-[9px] flex items-center justify-center gap-1.5 border border-indigo-400/20"
+                >
+                  {isGeneratingStory ? (
+                    <LoaderIcon className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <SparklesIcon className="w-3 h-3" />
+                  )}
+                  <span>{creationMode === "ai" ? "GENERATE" : "PROCESS"}</span>
+                </button>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* RIGHT: SCENE BOARD - SCROLLABLE */}
-          <div className="flex-1 p-6 overflow-y-auto bg-black/10 scrollbar-thin scrollbar-thumb-gray-800">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">
-                  Production Sequence ({storybookContent.scenes.length})
-                </h3>
-                <div className="flex gap-3">
-                  {storybookContent.scenes.length > 0 && (
-                    <button
-                      onClick={handleGenerateScenes}
-                      disabled={isGeneratingScenes}
-                      className="text-[10px] font-black text-indigo-300 hover:text-white flex items-center gap-2 transition-colors uppercase tracking-widest"
-                    >
-                      {isGeneratingScenes ? (
-                        <LoaderIcon className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <RefreshIcon className="w-4 h-4" />
-                      )}{" "}
-                      Sync Visuals
-                    </button>
-                  )}
-                  {creationMode === "paste" && (
-                    <button
-                      onClick={handleAddManualScene}
-                      className="text-[10px] font-black text-emerald-400 hover:text-white flex items-center gap-2 transition-colors uppercase tracking-widest"
-                    >
-                      <PlusIcon className="w-4 h-4" /> Add Scene
-                    </button>
-                  )}
+        {/* SEQUENCE AREA */}
+        <div
+          ref={productionSequenceRef}
+          className="flex-1 flex flex-col relative overflow-visible lg:overflow-hidden bg-black/10"
+        >
+          <div className="flex-1 p-2 lg:p-4 lg:overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800">
+            <div className="max-w-4xl mx-auto space-y-4 pb-32">
+              <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-indigo-600/10 rounded-lg border border-indigo-500/20">
+                    <FilmIcon className="w-3 h-3 text-indigo-500" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-white italic tracking-tighter uppercase leading-none">
+                      Sequence Map
+                    </h3>
+                    <p className="text-[7px] font-black text-gray-600 uppercase tracking-[0.2em] mt-0.5">
+                      Count: {storybookContent.scenes.length}
+                    </p>
+                  </div>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                {storybookContent.scenes.map((scene, index) => (
-                  <div
-                    key={index}
-                    className="bg-gray-800/60 rounded-2xl border border-white/5 p-5 hover:border-indigo-500/40 transition-all shadow-xl group"
+                {storybookContent.scenes.length > 0 && (
+                  <button
+                    onClick={handleGenerateScenes}
+                    disabled={isGeneratingScenes}
+                    className="px-2 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-md text-[7px] font-black text-indigo-300 hover:text-white flex items-center gap-1.5 transition-all uppercase tracking-widest"
                   >
-                    <div className="flex justify-between items-center mb-4">
-                      <div className="flex items-center gap-2">
-                        <span className="px-3.5 py-1.5 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg border border-white/10">
-                          SCENE {index + 1}
-                        </span>
-                        <button
-                          onClick={() => {
-                            const ns = [...storybookContent.scenes];
-                            ns[index].isDescriptionLocked =
-                              !ns[index].isDescriptionLocked;
-                            setStorybookContent({
-                              ...storybookContent,
-                              scenes: ns
-                            });
-                          }}
-                          className={`p-1.5 rounded-full transition-colors ${scene.isDescriptionLocked ? "text-amber-500 bg-amber-500/10" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
-                        >
-                          {scene.isDescriptionLocked ? (
-                            <LockClosedIcon className="w-4 h-4" />
-                          ) : (
-                            <LockOpenIcon className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleExecuteSingleScene(index)}
-                          className={`px-4 py-2 text-[10px] font-black rounded-full uppercase transition-all shadow-md ${confirmingExecuteIdx === index ? "bg-green-600 text-white scale-105" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}
-                        >
-                          {confirmingExecuteIdx === index
-                            ? "Confirm (1C)"
-                            : "Execute"}
-                        </button>
-                        <button
-                          onClick={() => handleRegenerateVisual(index)}
-                          className="p-2 text-gray-400 hover:text-white transition-colors rounded-full bg-white/5 hover:bg-white/10"
-                        >
-                          <RefreshIcon className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            const ns = [...storybookContent.scenes];
-                            ns.splice(index, 1);
-                            setStorybookContent({
-                              ...storybookContent,
-                              scenes: ns
-                            });
-                          }}
-                          className="p-2 text-gray-400 hover:text-red-400 transition-colors rounded-full bg-white/5 hover:bg-red-900/10"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">
-                          Visual Blueprint
-                        </label>
-                        <textarea
-                          value={scene.imageDescription}
-                          readOnly={scene.isDescriptionLocked}
-                          onChange={(e) => {
-                            const ns = [...storybookContent.scenes];
-                            ns[index].imageDescription = e.target.value;
-                            setStorybookContent({
-                              ...storybookContent,
-                              scenes: ns
-                            });
-                          }}
-                          className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-[12px] font-bold text-white leading-relaxed min-h-[100px] outline-none focus:border-indigo-500/50 transition-colors"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">
-                          Dialogue & Narration
-                        </label>
-                        <textarea
-                          value={scene.script}
-                          readOnly={scene.isDescriptionLocked}
-                          onChange={(e) => {
-                            const ns = [...storybookContent.scenes];
-                            ns[index].script = e.target.value;
-                            setStorybookContent({
-                              ...storybookContent,
-                              scenes: ns
-                            });
-                          }}
-                          className="w-full bg-black/50 border border-white/10 rounded-2xl p-4 text-[12px] font-bold text-white leading-relaxed min-h-[100px] outline-none focus:border-indigo-500/50 transition-colors"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div ref={scenesEndRef} className="h-4" />
+                    {isGeneratingScenes ? (
+                      <LoaderIcon className="w-2.5 h-2.5 animate-spin" />
+                    ) : (
+                      <RefreshIcon className="w-2.5 h-2.5" />
+                    )}{" "}
+                    SYNC
+                  </button>
+                )}
               </div>
 
-              {storybookContent.scenes.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-32 opacity-10">
-                  <div className="w-24 h-24 mb-6 rounded-full border-4 border-dashed border-white flex items-center justify-center">
-                    <BookOpenIcon className="w-12 h-12" />
+              {storybookContent.scenes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center opacity-10">
+                  <div className="w-12 h-12 rounded-full border border-dashed border-gray-600 flex items-center justify-center mb-4">
+                    <Logo className="w-6 h-6 grayscale" />
                   </div>
-                  <h3 className="text-sm font-black uppercase tracking-[0.6em]">
-                    Scripting Desk Empty
-                  </h3>
+                  <h4 className="text-[8px] font-black uppercase tracking-[0.3em] text-gray-500">
+                    Awaiting Blueprint
+                  </h4>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {storybookContent.scenes.map((scene, index) => (
+                    <div
+                      key={index}
+                      className="bg-gray-800/20 rounded-xl border border-white/5 p-3 lg:p-4 hover:border-indigo-500/20 transition-all group relative overflow-hidden"
+                    >
+                      <div className="flex justify-between items-center mb-3 relative z-10">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 bg-indigo-600 text-white rounded-full text-[8px] font-black uppercase tracking-widest">
+                            SCENE {index + 1}
+                          </span>
+                          <button
+                            onClick={() => {
+                              const ns = [...storybookContent.scenes];
+                              ns[index].isDescriptionLocked =
+                                !ns[index].isDescriptionLocked;
+                              setStorybookContent({
+                                ...storybookContent,
+                                scenes: ns
+                              });
+                            }}
+                            className={`p-1 rounded-md transition-all border ${scene.isDescriptionLocked ? "text-amber-500 bg-amber-500/10 border-amber-500/30" : "text-gray-600 bg-white/5 border-white/5"}`}
+                          >
+                            {scene.isDescriptionLocked ? (
+                              <LockClosedIcon className="w-3 h-3" />
+                            ) : (
+                              <LockOpenIcon className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-300">
+                          <button
+                            onClick={() => handleExecuteSingleScene(index)}
+                            className={`px-3 py-1.5 text-[7px] font-black rounded-md uppercase tracking-widest transition-all active:scale-95 ${confirmingExecuteIdx === index ? "bg-green-600 text-white" : "bg-indigo-600 text-white"}`}
+                          >
+                            {confirmingExecuteIdx === index
+                              ? "CONFIRM"
+                              : "PRODUCE"}
+                          </button>
+                          <button
+                            onClick={() => handleRegenerateVisual(index)}
+                            className="p-1.5 text-gray-500 hover:text-white transition-colors rounded-md bg-white/5 border border-white/5"
+                          >
+                            <RefreshIcon className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              const ns = [...storybookContent.scenes];
+                              ns.splice(index, 1);
+                              setStorybookContent({
+                                ...storybookContent,
+                                scenes: ns
+                              });
+                            }}
+                            className="p-1.5 text-gray-600 hover:text-red-400 transition-colors rounded-md bg-white/5 border border-white/5"
+                          >
+                            <TrashIcon className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10">
+                        <div className="space-y-1">
+                          <label className="text-[7px] font-black text-gray-500 uppercase ml-1 tracking-widest">
+                            Image Prompt
+                          </label>
+                          <textarea
+                            value={scene.imageDescription}
+                            readOnly={scene.isDescriptionLocked}
+                            onChange={(e) => {
+                              const ns = [...storybookContent.scenes];
+                              ns[index].imageDescription = e.target.value;
+                              setStorybookContent({
+                                ...storybookContent,
+                                scenes: ns
+                              });
+                            }}
+                            className="w-full bg-black/50 border border-white/5 rounded-lg p-2.5 text-[11px] font-bold text-white leading-relaxed min-h-[70px] outline-none focus:border-indigo-500/30 transition-colors shadow-inner scrollbar-none"
+                          />
+                        </div>
+                        <div className="space-y-1 flex flex-col">
+                          <div className="flex justify-between items-center mb-0.5">
+                            <label className="text-[7px] font-black text-gray-500 uppercase ml-1 tracking-widest">
+                              The Story
+                            </label>
+                            <div className="flex gap-1">
+                              {scene.audioSrc ? (
+                                <div className="flex gap-1 animate-in zoom-in-95">
+                                  <button
+                                    onClick={() => {
+                                      const audio = new Audio(scene.audioSrc!);
+                                      audio.play();
+                                    }}
+                                    className="p-1 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-md hover:bg-emerald-600 transition-all"
+                                  >
+                                    <PlayIcon className="w-2 h-2" />
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleDownloadAudio(
+                                        scene.audioSrc!,
+                                        `scene_${index + 1}.wav`
+                                      )
+                                    }
+                                    className="p-1 bg-gray-800 text-gray-400 border border-white/5 rounded-md hover:text-white"
+                                  >
+                                    <DownloadIcon className="w-2 h-2" />
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleAddSceneAudioToTimeline(index)
+                                    }
+                                    className="flex items-center gap-1 px-1.5 py-0.5 bg-indigo-600 text-white rounded-md text-[6px] font-black uppercase tracking-widest shadow-md"
+                                  >
+                                    Timeline
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    handleGenerateSceneAudio(index)
+                                  }
+                                  disabled={
+                                    generatingSceneAudioIdx === index ||
+                                    !scene.script.trim()
+                                  }
+                                  className="flex items-center gap-1 px-1.5 py-0.5 bg-white/5 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-white/10 rounded-md text-[6px] font-black uppercase tracking-widest transition-all"
+                                >
+                                  {generatingSceneAudioIdx === index ? (
+                                    <LoaderIcon className="w-2 h-2 animate-spin" />
+                                  ) : (
+                                    <SpeakerWaveIcon className="w-2 h-2" />
+                                  )}{" "}
+                                  Narrate
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <textarea
+                            value={scene.script}
+                            readOnly={scene.isDescriptionLocked}
+                            onChange={(e) => {
+                              const ns = [...storybookContent.scenes];
+                              ns[index].script = e.target.value;
+                              setStorybookContent({
+                                ...storybookContent,
+                                scenes: ns
+                              });
+                            }}
+                            className="w-full bg-black/50 border border-white/5 rounded-lg p-2.5 text-[11px] font-bold text-white leading-relaxed flex-1 min-h-[70px] outline-none focus:border-indigo-500/30 transition-colors shadow-inner scrollbar-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={scenesEndRef} className="h-10" />
                 </div>
               )}
             </div>
           </div>
+
+          {/* FLOATING MASTER BATCH CONSOLE - MINIMALIST */}
+          {storybookContent.scenes.length > 0 && (
+            <div className="fixed lg:absolute bottom-3 left-0 right-0 px-4 flex justify-center pointer-events-none z-[100]">
+              <div className="w-full max-w-sm bg-[#0a0f1d] border border-white/10 rounded-full shadow-[0_10px_30px_rgba(0,0,0,0.8)] p-1.5 flex items-center justify-between pointer-events-auto animate-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center gap-3 pl-4">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-black text-white tracking-tighter italic leading-none uppercase">
+                        {storybookContent.scenes.length} Scenes
+                      </span>
+                      <div className="h-2 w-px bg-white/10"></div>
+                      <span className="text-[8px] font-black text-indigo-400 leading-none">
+                        Est. {storybookContent.scenes.length}C
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  ref={batchButtonRef}
+                  onClick={handleBatchProduce}
+                  className={`px-6 py-2.5 font-black uppercase tracking-widest rounded-full shadow-lg transition-all active:scale-95 flex items-center gap-2 text-[9px] border ${confirmingBatch ? "bg-green-600 border-green-400 text-white" : "bg-indigo-600 border-indigo-400 text-white shadow-[0_4px_15px_rgba(79,70,229,0.3)]"}`}
+                >
+                  <DocumentMagnifyingGlassIcon className="w-3 h-3" />
+                  {confirmingBatch ? `Confirm` : "Produce Batch"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="p-6 border-t border-white/5 bg-[#0a0f1d] flex justify-end shrink-0 shadow-2xl relative z-50">
-        {storybookContent.scenes.length > 0 && (
-          <div className="flex items-center gap-6">
-            <div className="flex flex-col items-end border-r border-white/10 pr-6">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                Est. Production Cost
-              </span>
-              <span className="text-2xl font-black text-indigo-400 tracking-tighter italic">
-                {storybookContent.scenes.length} CREDITS
-              </span>
-            </div>
-            <button
-              ref={batchButtonRef}
-              onClick={handleBatchProduce}
-              className={`px-10 py-4 font-black uppercase tracking-widest rounded-2xl shadow-2xl transition-all active:scale-95 flex items-center gap-3 text-sm border ${
-                confirmingBatch
-                  ? "bg-green-600 border-green-400 text-white animate-pulse"
-                  : "bg-indigo-600 border-indigo-400 text-white hover:bg-indigo-500"
-              }`}
-            >
-              <DocumentMagnifyingGlassIcon className="w-6 h-6" />
-              {confirmingBatch
-                ? `Confirm (${storybookContent.scenes.length}C)`
-                : "Produce Sequence"}
-            </button>
-          </div>
-        )}
-      </div>
-
       {storyError && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-red-900 border border-red-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 z-[150]">
-          <span className="text-[11px] font-black uppercase tracking-wider">
-            Production Error: {storyError}
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-red-900 border border-red-500 text-white px-5 py-2 rounded-lg shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-2 z-[200]">
+          <span className="text-[9px] font-black uppercase tracking-widest italic">
+            Signal Error: {storyError}
           </span>
           <button
             onClick={() => setStoryError(null)}
-            className="p-1 hover:bg-white/10 rounded-full"
+            className="p-1 hover:bg-white/10 rounded transition-colors"
           >
-            <XIcon className="w-4 h-4" />
+            <XIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       )}

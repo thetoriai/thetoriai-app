@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   UserPlusIcon,
   BookOpenIcon,
@@ -13,40 +13,11 @@ import {
   XIcon,
   FilmIcon
 } from "./Icons";
-
-const AFRICAN_COUNTRIES = [
-  "Nigeria",
-  "Ghana",
-  "Kenya",
-  "Ethiopia",
-  "South Africa",
-  "Tanzania",
-  "Uganda",
-  "Senegal",
-  "Ivory Coast",
-  "Cameroon",
-  "Rwanda",
-  "Zambia",
-  "Zimbabwe",
-  "Morocco",
-  "Egypt"
-];
-const WORLD_COUNTRIES = [
-  "USA",
-  "UK",
-  "France",
-  "Germany",
-  "Japan",
-  "China",
-  "India",
-  "Brazil",
-  "Canada",
-  "Australia",
-  "Mexico",
-  "Italy",
-  "Spain",
-  "South Korea"
-];
+import {
+  HELLO_EMAIL,
+  AFRICAN_COUNTRIES,
+  WORLD_COUNTRIES
+} from "../utils/constants";
 
 interface SidebarProps {
   activeView: string;
@@ -64,15 +35,14 @@ interface SidebarProps {
   session?: any;
 }
 
-// COLOR MAPPING FOR ARTLINE SYSTEM
 export const VIEW_COLORS: Record<string, string> = {
-  roster: "#a855f7", // Purple
-  storybook: "#10b981", // Emerald
-  storyboard: "#f59e0b", // Amber
-  timeline: "#6366f1", // Indigo
-  footage: "#06b6d4", // Cyan
-  history: "#94a3b8", // Slate
-  "buy-credits": "#eab308" // Gold
+  roster: "#a855f7",
+  storybook: "#10b981",
+  storyboard: "#f59e0b",
+  timeline: "#6366f1",
+  footage: "#06b6d4",
+  history: "#94a3b8",
+  "buy-credits": "#eab308"
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -90,233 +60,374 @@ export const Sidebar: React.FC<SidebarProps> = ({
   creditBalance,
   session
 }) => {
-  const isWelcome = activeView === "welcome";
-  const isMobile = window.innerWidth < 768;
+  const windowWidth = window.innerWidth;
+  // UPDATED BREAKPOINTS: 500px and below is Phone. 501px-1023px is Standing Tablet. 1024px+ is Desktop/Rotating.
+  const isPhone = windowWidth <= 500;
+  const isTablet = windowWidth >= 501 && windowWidth < 1024;
+
+  const [showDirectivesDropdown, setShowDirectivesDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // CLICK-AWAY PROTOCOL: Ensures the master directives menu closes when focus is lost.
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowDirectivesDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const countries =
     characterStyle === "Afro-toon" ? AFRICAN_COUNTRIES : WORLD_COUNTRIES;
 
   const handleNavClick = (view: string) => {
     setActiveView(view);
+    if (isPhone) setShowDirectivesDropdown(false);
   };
 
   const handleContextChange = (style: string) => {
     setCharacterStyle(style);
-    if (style === "Afro-toon") {
-      setSelectedCountry("Nigeria");
-    } else {
-      setSelectedCountry("USA");
-    }
+    setSelectedCountry(style === "Afro-toon" ? "Nigeria" : "USA");
   };
 
-  return (
-    <aside
-      className={`
-                h-full bg-[#0a0f1d] border-r border-white/5 flex flex-col transition-all duration-500 ease-in-out z-50 shrink-0
-                ${isWelcome && isMobile ? "w-[72px]" : "w-full md:w-[350px]"}
-                overflow-hidden
-            `}
+  const containerClasses = isPhone
+    ? "w-full h-full bg-[#0a0f1d] flex flex-col z-[100] animate-in slide-in-from-bottom duration-300"
+    : isTablet
+      ? "w-[80px] h-full bg-[#0a0f1d] border-r border-white/5 flex flex-col items-center py-6 gap-6 shrink-0 transition-all duration-300"
+      : "w-[350px] h-full bg-[#0a0f1d] border-r border-white/5 flex flex-col shrink-0 overflow-hidden";
+
+  // MASTER DIRECTIVES TRIGGER: The 'three dots' that carry Visual + Context settings.
+  const DotsTrigger = () => (
+    <button
+      onClick={() => setShowDirectivesDropdown(!showDirectivesDropdown)}
+      className="flex gap-1.5 py-1.5 px-3 rounded-full hover:bg-white/10 transition-all group border border-white/5 bg-white/5"
+      title="Production Directives"
     >
-      <div
-        className={`flex flex-col p-4 ${isWelcome && isMobile ? "px-0 items-center gap-6" : "px-8 items-stretch gap-6 pt-8"}`}
-      >
-        <div
-          className={`flex items-center justify-between ${isWelcome && isMobile ? "flex-col gap-4" : ""}`}
-        >
-          <div
-            className={`flex items-center gap-4 ${isWelcome && isMobile ? "flex-col pt-2" : ""}`}
-          >
-            <div className="w-10 h-10 bg-indigo-600/10 border border-indigo-500/20 rounded-full overflow-hidden flex items-center justify-center p-2 shadow-lg">
-              <Logo className={`transition-all duration-300 w-full h-full`} />
+      <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)] group-hover:scale-125 transition-transform"></div>
+      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] group-hover:scale-125 transition-transform delay-75"></div>
+      <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.6)] group-hover:scale-125 transition-transform delay-150"></div>
+    </button>
+  );
+
+  // UNIFIED DIRECTIVES MENU: Carries both Visual and Context directives as requested.
+  const DirectivesDropdown = ({
+    positionClasses
+  }: {
+    positionClasses: string;
+  }) => (
+    <div
+      ref={dropdownRef}
+      className={`${positionClasses} w-72 bg-[#111827] border border-indigo-500/30 rounded-[1.5rem] shadow-[0_30px_60px_rgba(0,0,0,0.7)] p-5 animate-in zoom-in-95 slide-in-from-top-4 duration-300 z-[200]`}
+    >
+      <div className="space-y-6">
+        <div>
+          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+            Visual Directives
+          </span>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[8px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+                Style
+              </label>
+              <div className="relative">
+                <select
+                  value={visualStyle}
+                  onChange={(e) => setVisualStyle(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-bold text-gray-200 outline-none appearance-none"
+                >
+                  <option>3D Render</option>
+                  <option>Realistic</option>
+                  <option>Illustrator</option>
+                  <option>Anime</option>
+                </select>
+                <ChevronDownIcon className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              </div>
             </div>
-            {(!isWelcome || !isMobile) && (
-              <h1 className="text-2xl font-black text-white tracking-tighter italic animate-in fade-in duration-500 text-shadow-sm">
-                Thetori Ai
-              </h1>
-            )}
+            <div className="space-y-1.5">
+              <label className="text-[8px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+                Aspect
+              </label>
+              <div className="relative">
+                <select
+                  value={aspectRatio}
+                  onChange={(e) => setAspectRatio(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-bold text-gray-200 outline-none appearance-none"
+                >
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                </select>
+                <ChevronDownIcon className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-px bg-white/5"></div>
+
+        <div>
+          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+            Production Context
+          </span>
+          <div className="space-y-3">
+            <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
+              <button
+                onClick={() => handleContextChange("Afro-toon")}
+                className={`flex-1 py-1.5 text-[9px] font-black transition-all uppercase rounded-lg ${characterStyle === "Afro-toon" ? "bg-indigo-600 text-white" : "text-gray-500"}`}
+              >
+                Afro
+              </button>
+              <button
+                onClick={() => handleContextChange("General")}
+                className={`flex-1 py-1.5 text-[9px] font-black transition-all uppercase rounded-lg ${characterStyle === "General" ? "bg-indigo-600 text-white" : "text-gray-500"}`}
+              >
+                Global
+              </button>
+            </div>
+            <div className="relative">
+              <select
+                value={selectedCountry}
+                onChange={(e) => setSelectedCountry(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-[10px] font-bold text-gray-200 outline-none appearance-none cursor-pointer"
+              >
+                {countries.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <ChevronDownIcon className="w-3.5 h-3.5 absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // NAVIGATION LIST: Simplified per user request.
+  const navItems = [
+    {
+      id: "roster",
+      icon: <UserPlusIcon className="w-5 h-5" />,
+      label: "Character roster"
+    },
+    {
+      id: "storybook",
+      icon: <BookOpenIcon className="w-5 h-5" />,
+      label: "Story writer"
+    },
+    {
+      id: "storyboard",
+      icon: <VideoIcon className="w-5 h-5" />,
+      label: "Production stage"
+    },
+    {
+      id: "footage",
+      icon: <FilmIcon className="w-5 h-5" />,
+      label: "Quick footage desk"
+    },
+    {
+      id: "timeline",
+      icon: <TimelineIcon className="w-5 h-5" />,
+      label: "Story timeline"
+    },
+    {
+      id: "history",
+      icon: <HistoryIcon className="w-5 h-5" />,
+      label: "Production history"
+    },
+    {
+      id: "buy-credits",
+      icon: <CreditCardIcon className="w-5 h-5" />,
+      label: "Get credits"
+    }
+  ];
+
+  if (isPhone) {
+    return (
+      <div className={containerClasses}>
+        <div className="p-8 flex items-center justify-between border-b border-white/5 bg-[#0a0f1d] sticky top-0 z-[110]">
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center">
+              <div className="w-10 h-10 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-2 mb-1">
+                <Logo className="w-full h-full" />
+              </div>
+              <DotsTrigger />
+            </div>
+            <h1 className="text-xl font-black italic tracking-tighter ml-1">
+              Thetori Ai
+            </h1>
           </div>
 
-          {(!isWelcome || !isMobile) && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveView("buy-credits")}
-                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600/20 border border-indigo-500/30 shadow-inner hover:bg-indigo-600/40 transition-all group rounded-xl"
-              >
-                <CreditCardIcon className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-black text-indigo-300 tracking-widest">
-                  {creditBalance.toLocaleString()}
-                </span>
-              </button>
-              <button
-                onClick={onLogout}
-                className="p-2 text-gray-500 hover:text-white transition-all hover:bg-white/5 rounded-xl"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
-                  />
-                </svg>
-              </button>
-            </div>
+          {showDirectivesDropdown && (
+            <DirectivesDropdown positionClasses="absolute top-[90px] left-8" />
           )}
+
+          <div className="bg-indigo-600/20 px-3 py-1.5 rounded-xl border border-indigo-500/30 flex items-center gap-2">
+            <CreditCardIcon className="w-4 h-4 text-indigo-400" />
+            <span className="text-[10px] font-black text-indigo-300">
+              {creditBalance}
+            </span>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-2">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleNavClick(item.id)}
+              className="w-full flex items-center gap-6 p-5 rounded-2xl bg-white/[0.02] border border-white/5 text-gray-400 active:bg-indigo-600 active:text-white transition-all"
+            >
+              <span
+                style={{
+                  color: activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
+                }}
+              >
+                {item.icon}
+              </span>
+              <span className="text-[12px] font-black uppercase tracking-[0.2em]">
+                {item.label}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="p-8 border-t border-white/5 flex flex-col gap-4 bg-[#0a0f1d]">
+          <button
+            onClick={onLogout}
+            className="w-full py-4 rounded-2xl bg-red-900/10 text-red-400 font-black uppercase tracking-widest text-[10px] border border-red-900/20"
+          >
+            Sign Out Session
+          </button>
+          <p className="text-[8px] font-black text-gray-600 text-center uppercase tracking-[0.3em]">
+            v2.5.3 Production Terminal
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isTablet) {
+    return (
+      <aside className={containerClasses}>
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 bg-indigo-600/10 border border-indigo-500/20 rounded-xl flex items-center justify-center p-2 mb-2">
+            <Logo className="w-full h-full" />
+          </div>
+          <DotsTrigger />
+          {showDirectivesDropdown && (
+            <DirectivesDropdown positionClasses="absolute top-24 left-[90px]" />
+          )}
+        </div>
+
+        <nav className="flex flex-col gap-4">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleNavClick(item.id)}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${activeView === item.id ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:bg-white/5 hover:text-gray-300"}`}
+            >
+              <span
+                style={{
+                  color: activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
+                }}
+              >
+                {item.icon}
+              </span>
+            </button>
+          ))}
+        </nav>
+        <div className="mt-auto pb-4 flex flex-col gap-4 items-center">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex flex-col items-center justify-center text-[8px] font-black text-indigo-400 uppercase">
+            {creditBalance}
+          </div>
+          <button
+            onClick={onLogout}
+            className="p-3 text-gray-500 hover:text-red-400 transition-colors"
+            title="Sign Out"
+          >
+            <XIcon className="w-6 h-6" />
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className={containerClasses}>
+      <div className="flex flex-col p-8 items-stretch gap-6 pt-10">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-2 shadow-lg">
+                <Logo className="w-full h-full" />
+              </div>
+              <h1 className="text-2xl font-black text-white tracking-tighter italic">
+                Thetori Ai
+              </h1>
+            </div>
+            {/* COMPUTER/DESKTOP TRIGGER: Dots carry all visual directives and contexts. */}
+            <div className="ml-2 relative">
+              <DotsTrigger />
+              {showDirectivesDropdown && (
+                <DirectivesDropdown positionClasses="absolute top-10 left-0" />
+              )}
+            </div>
+          </div>
+          <div className="bg-indigo-600/20 px-3 py-1.5 rounded-xl border border-indigo-500/30 flex items-center gap-2 h-max">
+            <CreditCardIcon className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="text-[10px] font-black text-indigo-300 tracking-widest">
+              {creditBalance.toLocaleString()}
+            </span>
+          </div>
         </div>
       </div>
 
-      {(!isWelcome || !isMobile) && (
-        <div className="flex flex-col flex-1 px-8 pb-8 overflow-hidden">
-          <div className="sidebar-box p-5 mb-4 shrink-0 !rounded-2xl">
-            <span className="sidebar-label mb-4 text-[10px] font-black tracking-[0.2em] text-white opacity-90 uppercase">
-              Visual directives
-            </span>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-gray-400 tracking-widest block ml-1 uppercase">
-                  Style
-                </label>
-                <div className="relative">
-                  <select
-                    value={visualStyle}
-                    onChange={(e) => setVisualStyle(e.target.value)}
-                    className="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2.5 text-[10px] font-bold text-gray-200 outline-none appearance-none cursor-pointer hover:border-white/20 transition-colors"
-                  >
-                    <option>3D Render</option>
-                    <option>Realistic</option>
-                    <option>Illustrator</option>
-                    <option>Anime</option>
-                  </select>
-                  <ChevronDownIcon className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-gray-400 tracking-widest block ml-1 uppercase">
-                  Aspect
-                </label>
-                <div className="relative">
-                  <select
-                    value={aspectRatio}
-                    onChange={(e) => setAspectRatio(e.target.value)}
-                    className="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2.5 text-[10px] font-bold text-gray-200 outline-none appearance-none cursor-pointer hover:border-white/20 transition-colors"
-                  >
-                    <option value="16:9">16:9</option>
-                    <option value="9:16">9:16</option>
-                  </select>
-                  <ChevronDownIcon className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="sidebar-box p-5 mb-6 shrink-0 !rounded-2xl">
-            <span className="sidebar-label mb-4 text-[10px] font-black tracking-[0.2em] text-white opacity-90 uppercase">
-              Production context
-            </span>
-            <div className="space-y-3">
-              <div className="flex bg-gray-900 p-1 border border-white/10 rounded-xl shadow-inner">
-                <button
-                  onClick={() => handleContextChange("Afro-toon")}
-                  className={`flex-1 py-2 text-[10px] font-black transition-all uppercase rounded-lg ${characterStyle === "Afro-toon" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-400 hover:text-gray-200"}`}
-                >
-                  Afro
-                </button>
-                <button
-                  onClick={() => handleContextChange("General")}
-                  className={`flex-1 py-2 text-[10px] font-black transition-all uppercase rounded-lg ${characterStyle === "General" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-400 hover:text-gray-200"}`}
-                >
-                  Global
-                </button>
-              </div>
-              <div className="relative">
-                <select
-                  value={selectedCountry}
-                  onChange={(e) => setSelectedCountry(e.target.value)}
-                  className="w-full bg-gray-900 border border-white/10 rounded-xl px-4 py-3 text-[10px] font-bold text-gray-200 outline-none appearance-none cursor-pointer hover:border-white/20 transition-colors shadow-sm"
-                >
-                  {countries.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDownIcon className="w-3.5 h-3.5 absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-              </div>
-            </div>
-          </div>
-
-          <nav className="flex-1 flex flex-col gap-1.5 min-h-0 overflow-y-auto pr-1 scrollbar-none">
-            {[
-              {
-                id: "roster",
-                icon: <UserPlusIcon className="w-4 h-4" />,
-                label: "Character roster"
-              },
-              {
-                id: "storybook",
-                icon: <BookOpenIcon className="w-4 h-4" />,
-                label: "Storywriter section"
-              },
-              {
-                id: "storyboard",
-                icon: <VideoIcon className="w-4 h-4" />,
-                label: "Production stage"
-              },
-              {
-                id: "timeline",
-                icon: <TimelineIcon className="w-4 h-4" />,
-                label: "Story timeline"
-              },
-              {
-                id: "footage",
-                icon: <FilmIcon className="w-4 h-4" />,
-                label: "Quick Footage Desk"
-              },
-              {
-                id: "history",
-                icon: <HistoryIcon className="w-4 h-4" />,
-                label: "Production history"
-              },
-              {
-                id: "buy-credits",
-                icon: <CreditCardIcon className="w-4 h-4" />,
-                label: "Get credits"
+      <div className="flex flex-col flex-1 px-8 pb-8 overflow-hidden">
+        <nav className="flex-1 flex flex-col gap-1.5 min-h-0 overflow-y-auto pr-1 scrollbar-none">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleNavClick(item.id)}
+              style={
+                {
+                  "--glow-color": VIEW_COLORS[item.id] || "#6366f1"
+                } as React.CSSProperties
               }
-            ].map((item) => (
-              <div key={item.id} className="relative group">
-                <button
-                  onClick={() => handleNavClick(item.id)}
-                  style={
-                    {
-                      "--glow-color": VIEW_COLORS[item.id] || "#6366f1"
-                    } as React.CSSProperties
-                  }
-                  className={`sidebar-glow-btn w-full flex items-center gap-4 px-4 py-3.5 transition-all border-2 border-transparent rounded-xl ${activeView === item.id ? "active" : "text-gray-400 hover:bg-white/[0.03] hover:text-gray-200"}`}
-                >
-                  <span
-                    className={`transition-colors duration-300 ${activeView === item.id ? "text-white" : "text-gray-500"}`}
-                  >
-                    {item.icon}
-                  </span>
-                  <span className="text-[11px] font-black tracking-[0.15em] uppercase truncate">
-                    {item.label}
-                  </span>
-                </button>
-              </div>
-            ))}
-          </nav>
+              className={`sidebar-glow-btn w-full flex items-center gap-4 px-4 py-3.5 transition-all border-2 border-transparent rounded-xl ${activeView === item.id ? "active" : "text-gray-400 hover:bg-white/[0.03] hover:text-gray-200"}`}
+            >
+              <span
+                className={`transition-colors duration-300 ${activeView === item.id ? "text-white" : ""}`}
+                style={{
+                  color: activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
+                }}
+              >
+                {item.icon}
+              </span>
+              <span className="text-[11px] font-black tracking-[0.15em] uppercase truncate">
+                {item.label}
+              </span>
+            </button>
+          ))}
+        </nav>
 
-          <div className="mt-auto pt-6 border-t border-white/5 opacity-40 shrink-0">
-            <p className="text-[8px] font-black text-center text-gray-500 tracking-[0.4em] uppercase">
-              Thetori Ai Engine v2.5.3
-            </p>
-          </div>
+        <div className="mt-auto pt-6 border-t border-white/5 flex flex-col items-center gap-3 shrink-0">
+          <button
+            onClick={onLogout}
+            className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-400 border border-red-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98]"
+          >
+            Sign Out Session
+          </button>
+          <p className="text-[7px] font-black text-center text-gray-500 tracking-[0.15em] italic">
+            Contact: {HELLO_EMAIL}
+          </p>
+          <p className="text-[8px] font-black text-center text-gray-700 tracking-[0.4em] uppercase">
+            Thetori Ai Engine v2.5.3
+          </p>
         </div>
-      )}
+      </div>
     </aside>
   );
 };

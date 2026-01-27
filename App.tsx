@@ -25,7 +25,9 @@ import {
   CheckIcon,
   CreditCardIcon,
   ChevronLeftIcon,
-  TrashIcon
+  TrashIcon,
+  Logo,
+  GiftIcon
 } from "./components/Icons";
 import { supabase } from "./services/supabaseClient";
 import {
@@ -42,7 +44,13 @@ import {
 } from "./services/geminiService";
 import { fileToBase64 } from "./utils/fileUtils";
 import { dbGet, dbSet } from "./utils/indexedDB";
-import { SUPPORT_EMAIL } from "./utils/constants";
+import {
+  SUPPORT_EMAIL,
+  HELLO_EMAIL,
+  PAYPAL_STARTER_LINK,
+  PAYPAL_PRO_LINK,
+  PAYPAL_STUDIO_LINK
+} from "./utils/constants";
 
 // Define aistudio interface extension
 declare global {
@@ -55,132 +63,49 @@ declare global {
   }
 }
 
-const PrivacyPolicy: React.FC = () => (
-  <div className="min-h-screen bg-gray-950 text-gray-300 p-8 md:p-20 overflow-y-auto font-sans selection:bg-indigo-500/30">
-    <div className="max-w-3xl mx-auto space-y-12 pb-32">
-      <a
-        href="/"
-        className="inline-flex items-center gap-2 text-indigo-400 hover:text-white transition-all text-[10px] font-black uppercase tracking-[0.3em] mb-10 group"
-      >
-        <ChevronLeftIcon className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />{" "}
-        Back to Studio
-      </a>
+// Labels for production tracking. Costs are managed entirely on Supabase.
+const CREDIT_ACTIONS = {
+  IMAGE_NORMAL: "IMAGE_NORMAL",
+  IMAGE_PRO: "IMAGE_PRO",
+  IMAGE_EDIT_PRO: "IMAGE_EDIT_PRO",
+  IMAGE_CAMERA_ANGLE_PRO: "IMAGE_CAMERA_ANGLE_PRO",
 
-      <header className="space-y-4 border-l-4 border-indigo-600 pl-8">
-        <h1 className="text-5xl font-black text-white italic tracking-tighter uppercase leading-none">
-          Privacy Policy
-        </h1>
-        <h2 className="text-2xl font-black text-indigo-500 italic tracking-tighter uppercase leading-none">
-          Data Deletion Instructions
-        </h2>
-        <p className="text-[10px] text-gray-500 uppercase tracking-[0.4em] font-bold">
-          Effective Date: October 24, 2023
-        </p>
-      </header>
+  STORYBOOK_SCENE: "STORYBOOK_SCENE",
 
-      <div className="prose prose-invert max-w-none space-y-10">
-        <section className="space-y-4">
-          <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/5 pb-2">
-            1. Overview
-          </h3>
-          <p className="leading-relaxed text-sm text-gray-400">
-            Thetori Ai ("the App") is an AI-powered creative workspace. This
-            policy describes how we handle your information when you access our
-            services through Facebook or Google authentication.
-          </p>
-        </section>
+  CHARACTER_IMAGE: "CHARACTER_IMAGE",
 
-        <section className="space-y-4">
-          <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/5 pb-2">
-            2. Data Collection
-          </h3>
-          <p className="leading-relaxed text-sm text-gray-400 font-medium">
-            When you use Facebook Login, we request access to:
-          </p>
-          <ul className="list-disc ml-6 space-y-3 text-sm text-gray-400">
-            <li>
-              <span className="text-white font-bold">Email Address:</span> Used
-              to uniquely identify your studio account and sync your production
-              credits.
-            </li>
-            <li>
-              <span className="text-white font-bold">
-                Public Profile (Name/Picture):
-              </span>{" "}
-              Used to personalize your workspace interface.
-            </li>
-          </ul>
-        </section>
+  VIDEO_FAST: "VIDEO_FAST",
+  VIDEO_HQ: "VIDEO_HQ",
+  VIDEO_ADD_AUDIO: "VIDEO_ADD_AUDIO",
 
-        <section className="space-y-6 bg-indigo-900/10 border border-indigo-500/20 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <TrashIcon className="w-20 h-20 text-indigo-500" />
-          </div>
-          <h3 className="text-xl font-black text-indigo-400 uppercase tracking-widest flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
-            3. User Data Deletion Instructions
-          </h3>
-          <p className="leading-relaxed text-sm text-indigo-100/70 font-medium">
-            According to Facebook's Platform Rules, we provide a clear path for
-            users to request the deletion of their data. You may delete your
-            account and all associated AI production assets at any time.
-          </p>
-          <div className="space-y-4">
-            <div className="flex items-start gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
-              <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-black text-white shrink-0 mt-1">
-                1
-              </div>
-              <p className="text-sm text-gray-300">
-                Email{" "}
-                <span className="text-indigo-400 font-black">
-                  {SUPPORT_EMAIL}
-                </span>{" "}
-                from your registered email address.
-              </p>
-            </div>
-            <div className="flex items-start gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
-              <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-black text-white shrink-0 mt-1">
-                2
-              </div>
-              <p className="text-sm text-gray-300">
-                Subject line:{" "}
-                <span className="text-white font-bold uppercase tracking-wider italic">
-                  "Data Deletion Request - [Your Name]"
-                </span>
-                .
-              </p>
-            </div>
-            <div className="flex items-start gap-4 bg-black/40 p-4 rounded-xl border border-white/5">
-              <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-black text-white shrink-0 mt-1">
-                3
-              </div>
-              <p className="text-sm text-gray-300">
-                Our team will verify the request and permanently purge your
-                email, profile data, and AI assets from our servers within{" "}
-                <span className="text-white font-bold">48 hours</span>.
-              </p>
-            </div>
-          </div>
-        </section>
+  AUDIO_GENERIC: "AUDIO_GENERIC"
+};
 
-        <section className="space-y-4">
-          <h3 className="text-lg font-black text-white uppercase tracking-widest border-b border-white/5 pb-2">
-            4. Data Usage
-          </h3>
-          <p className="leading-relaxed text-sm text-gray-400">
-            We do not sell, rent, or trade user data. Your data is used
-            exclusively to maintain your "Actor Roster," "Storyboard History,"
-            and "Credit Balance."
-          </p>
-        </section>
+type LayoutMode = "phone" | "tablet" | "desktop";
 
-        <section className="space-y-4 pt-10">
-          <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] text-center">
-            Thetori Ai Production Engine • Privacy Compliance Office
-          </p>
-        </section>
+const ViewHeader: React.FC<{
+  title: string;
+  onBack: () => void;
+  layout: LayoutMode;
+}> = ({ title, onBack, layout }) => (
+  <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#0a0f1d] shrink-0 z-50">
+    <div className="flex items-center gap-3">
+      <div className="w-8 h-8 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-1.5 shadow-lg">
+        <Logo className="w-full h-full" />
       </div>
-    </div>
+        <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em] italic">
+          {title}
+        </h2>
+          </div>
+    <button
+      onClick={onBack}
+      className="p-2 bg-gray-800/50 hover:bg-red-900/20 rounded-xl text-gray-400 hover:text-red-400 transition-all flex items-center gap-2 border border-white/5 group"
+    >
+      <span className="text-[8px] font-black uppercase tracking-widest hidden sm:block group-hover:translate-x-[-2px] transition-transform">
+        Close Page
+                </span>
+      <XIcon className="w-5 h-5" />
+    </button>
   </div>
 );
 
@@ -188,10 +113,31 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [activeView, setActiveView] = useState("welcome");
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("desktop");
 
-  // Check for privacy route
-  const isPrivacyPage = window.location.pathname === "/privacy";
+  // ALIGNMENT PROTOCOL: Ensures 'Standing' iPads use compact sidebars while 'Rotating' iPads get the full console.
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const isPortrait = height > width;
+
+      if (width <= 500) {
+        setLayoutMode("phone");
+      } else if (width < 1024 && isPortrait) {
+        // STANDING IPAD: Compact sidebar logic.
+        setLayoutMode("tablet");
+        if (activeView === "menu") setActiveView("storybook");
+      } else {
+        // ROTATING IPAD / DESKTOP: Full sidebar workspace.
+        setLayoutMode("desktop");
+        if (activeView === "menu") setActiveView("storybook");
+      }
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [activeView]);
 
   const [visualStyle, setVisualStyle] = useState(
     () => localStorage.getItem("visualStyle") || "3D Render"
@@ -205,7 +151,7 @@ const App: React.FC = () => {
   const [selectedCountry, setSelectedCountry] = useState(
     () => localStorage.getItem("selectedCountry") || "Nigeria"
   );
-  const [imageModel, setImageModel] = useState("gemini-2.5-flash-image");
+  const [imageModel] = useState("gemini-2.5-flash-image");
   const [videoModel, setVideoModel] = useState("veo-3.1-fast-generate-preview");
   const [videoResolution, setVideoResolution] = useState("720p");
 
@@ -219,6 +165,10 @@ const App: React.FC = () => {
     currency: "USD"
   });
 
+  // Gift States
+  const [isGiftMode, setIsGiftMode] = useState(false);
+  const [giftRecipientEmail, setGiftRecipientEmail] = useState("");
+
   useEffect(() => {
     const fetchProfile = async () => {
       if (session?.user?.id) {
@@ -227,12 +177,11 @@ const App: React.FC = () => {
           .select("credits")
           .eq("id", session.user.id)
           .single();
-        if (!error && data) {
+        if (!error && data)
           setCreditSettings((prev) => ({
             ...prev,
             creditBalance: data.credits
           }));
-        }
       }
     };
     fetchProfile();
@@ -301,6 +250,7 @@ const App: React.FC = () => {
 
   // TIMELINE HISTORY ENGINE
   const [timelineHistory, setTimelineHistory] = useState<string[]>([]);
+  // DO add comment: Fixed block-scoped variable error by removing redundant and syntactically incorrect 'isUndoing.current' initialization.
   const isUndoing = useRef(false);
 
   useEffect(() => {
@@ -347,12 +297,6 @@ const App: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }: any) => {
       setSession(session);
       setIsAuthChecking(false);
@@ -361,9 +305,8 @@ const App: React.FC = () => {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
       setSession(session);
-      if (session && activeView === "welcome") {
-        setActiveView(isMobile ? "menu" : "welcome");
-      }
+      if (session && activeView === "welcome")
+        setActiveView(layoutMode === "phone" ? "menu" : "storybook");
       if (_event === "SIGNED_OUT") {
         setCharacters([]);
         setHistory([]);
@@ -375,7 +318,7 @@ const App: React.FC = () => {
       }
     });
     return () => subscription.unsubscribe();
-  }, [activeView, isMobile]);
+  }, [activeView, layoutMode]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -467,28 +410,35 @@ const App: React.FC = () => {
     [characterStyle]
   );
 
-  //React sends user_id to Supabase function to consume credits
-  const consumeCredits = async (amount: number) => {
-    if (!session?.user?.id) {
-      throw new Error("Not authenticated");
-    }
+  // MASTER CREDIT DEDUCTION: Must run and succeed BEFORE any API generation occurs.
+  const consumeCredits = async (actionType: keyof typeof CREDIT_ACTIONS) => {
+    if (!session?.user?.id) throw new Error("Not authenticated");
 
-    const { data, error } = await supabase.rpc("consume_credits", {
-      p_user_id: session.user.id,
-      p_amount: amount
-    });
+    // Call Supabase RPC to handle deduction logic based on action label
+   const { data, error } = await supabase.rpc("consume_credits", {
+     p_user_id: session.user.id,
+     p_action_type: actionType
+   });
 
-    if (error) {
-      console.error("Credit consumption error:", error);
-      throw error;
-    }
+    if (error) throw error;
+    if (data !== true) throw new Error("INSUFFICIENT_CREDITS");
 
-    if (data !== true) {
-      throw new Error("Insufficient credits");
-    }
+    // Silent balance sync after successful deduction
+   const { data: profile } = await supabase
+     .from("profiles")
+     .select("credits")
+     .eq("id", session.user.id)
+     .single();
 
-    return true;
-  };
+   if (profile) {
+     setCreditSettings((p) => ({
+       ...p,
+       creditBalance: profile.credits
+     }));
+   }
+
+   return true;
+ };
 
   const ensureApiKey = async () => {
     if (
@@ -511,16 +461,8 @@ const App: React.FC = () => {
     preferredImageModel?: string
   ) => {
     const activeImageModel = preferredImageModel || imageModel;
+    if (activeImageModel === "gemini-3-pro-image-preview") await ensureApiKey();
 
-    if (activeImageModel === "gemini-3-pro-image-preview") {
-      await ensureApiKey();
-    }
-
-    const cost =
-      (activeImageModel === "gemini-3-pro-image-preview" ? 2 : 1) +
-      (referenceImage ? 1 : 0);
-    const totalCost = (prompts?.length || 1) * cost;
-    if (creditSettings.creditBalance < totalCost) return;
     setIsGenerating(true);
 
     if (source !== "footage") setActiveView("storyboard");
@@ -540,7 +482,7 @@ const App: React.FC = () => {
         imageSet: [],
         videoStates: [],
         aspectRatio,
-        characterStyle,
+        characterStyle: selectedCountry,
         visualStyle,
         isClosed: false
       };
@@ -580,6 +522,17 @@ const App: React.FC = () => {
       let currentSequentialRef: string | undefined = referenceImage;
 
       for (let i = 0; i < prompts.length; i++) {
+        // DEDUCTION FIRST: Image generating label. Logic avoids double-charging by assigning source-specific label.
+        let action: any =
+          source === "storybook"
+            ? "STORYBOOK_SCENE"
+            : activeImageModel === "gemini-3-pro-image-preview"
+              ? "IMAGE_PRO"
+              : "IMAGE_NORMAL";
+
+        await consumeCredits(action as any);
+        if (referenceImage) await consumeCredits("IMAGE_EDIT_PRO");
+
         const activeRef =
           source === "storybook" && i > 0
             ? currentSequentialRef
@@ -588,17 +541,14 @@ const App: React.FC = () => {
         const { src, error } = await generateSingleImage(
           prompts[i],
           aspectRatio,
-          characterStyle,
+          selectedCountry,
           visualStyle,
           "General",
           characters,
           activeImageModel,
           activeRef
         );
-
-        if (src) {
-          currentSequentialRef = src;
-        }
+        if (src) currentSequentialRef = src;
 
         const updatedScene = {
           sceneId: `scene-${sessionId}-${i}`,
@@ -614,8 +564,8 @@ const App: React.FC = () => {
             source === "storybook"
               ? "StorybookSection"
               : source === "footage"
-              ? "FootageFrontSection"
-              : "FootageFrontSection"
+                ? "FootageFrontSection"
+                : "FootageFrontSection"
         };
 
         setHistory((prev) =>
@@ -630,32 +580,12 @@ const App: React.FC = () => {
               : h
           )
         );
-
-        if (source === "footage") {
+        if (source === "footage")
           setFootageHistory((prev) => [updatedScene, ...prev]);
-        }
-
-        const isSafetyBlock =
-          error === "BLOCK_MINOR" || error === "BLOCK_SAFETY_GENERAL";
-        if (src && !isSafetyBlock) {
-          await consumeCredits(cost);
-
-          const { data } = await supabase
-            .from("profiles")
-            .select("credits")
-            .eq("id", session.user.id)
-            .single();
-
-          if (data) {
-            setCreditSettings((p) => ({
-              ...p,
-              creditBalance: data.credits
-            }));
-          }
-        }
       }
     } catch (e: any) {
       console.error(e);
+      setIsGenerating(false);
     } finally {
       setIsGenerating(false);
     }
@@ -696,10 +626,13 @@ const App: React.FC = () => {
     );
 
     try {
+      // DEDUCTION FIRST: Image generated label.
+      await consumeCredits("IMAGE_NORMAL");
+
       const { src, error } = await generateSingleImage(
         prompt,
         aspectRatio,
-        characterStyle,
+        selectedCountry,
         visualStyle,
         "General",
         characters,
@@ -736,16 +669,7 @@ const App: React.FC = () => {
             : h
         )
       );
-
-      const isSafetyBlock =
-        error === "BLOCK_MINOR" || error === "BLOCK_SAFETY_GENERAL";
-      if (src && !isSafetyBlock)
-        setCreditSettings((p: any) => ({
-          ...p,
-          creditBalance: p.creditBalance - 1
-        }));
     } catch (e) {
-      console.error(e);
       setHistory((prev) =>
         prev.map((h) =>
           h.id === genId
@@ -787,30 +711,30 @@ const App: React.FC = () => {
 
   const handleAnimateFootage = async (item: any) => {
     await ensureApiKey();
-    const cost = videoModel.includes("fast") ? 5 : 8;
-    if (creditSettings.creditBalance < cost) return;
+    const action = videoModel.includes("fast") ? "VIDEO_FAST" : "VIDEO_HQ";
 
     setFootageHistory((prev) =>
       prev.map((f) =>
         f.sceneId === item.sceneId ? { ...f, videoStatus: "loading" } : f
       )
     );
-
     try {
+      // DEDUCTION FIRST: Video label.
+      await consumeCredits(action as any);
+
       const { videoUrl, videoObject } = await generateVideoFromScene(
         { src: item.src, prompt: item.prompt },
         aspectRatio,
         item.prompt,
         null,
         visualStyle,
-        characterStyle,
+        selectedCountry,
         videoModel,
         videoResolution as any,
         "Zoom In",
         () => {},
         characters
       );
-
       if (videoUrl) {
         setFootageHistory((prev) =>
           prev.map((f) =>
@@ -826,13 +750,8 @@ const App: React.FC = () => {
               : f
           )
         );
-        setCreditSettings((p: any) => ({
-          ...p,
-          creditBalance: p.creditBalance - cost
-        }));
       }
     } catch (e) {
-      console.error(e);
       setFootageHistory((prev) =>
         prev.map((f) =>
           f.sceneId === item.sceneId ? { ...f, videoStatus: "error" } : f
@@ -849,11 +768,13 @@ const App: React.FC = () => {
     );
     if (!scene || !sess) return;
 
-    if (creditSettings.creditBalance < 2) return;
     setIsGenerating(true);
     setActiveModal(null);
 
     try {
+      // DEDUCTION FIRST: Everything label (Camera angle specific).
+      await consumeCredits("IMAGE_CAMERA_ANGLE_PRO");
+
       const focusDirective = subject
         ? ` focusing specifically on ${subject}`
         : "";
@@ -862,7 +783,7 @@ const App: React.FC = () => {
       const { src, error } = await generateSingleImage(
         prompt,
         sess.aspectRatio,
-        sess.characterStyle,
+        selectedCountry,
         sess.visualStyle,
         "General",
         characters,
@@ -879,13 +800,6 @@ const App: React.FC = () => {
           prompt,
           angle
         );
-        const isSafetyBlock =
-          error === "BLOCK_MINOR" || error === "BLOCK_SAFETY_GENERAL";
-        if (!isSafetyBlock)
-          setCreditSettings((p: any) => ({
-            ...p,
-            creditBalance: p.creditBalance - 2
-          }));
       }
     } catch (e) {
       console.error(e);
@@ -900,40 +814,17 @@ const App: React.FC = () => {
   ) => {
     const scene = storybook.scenes[index];
     if (!scene) return;
-
-    // 1️⃣ Check credit BEFORE generation
-    if (creditSettings.creditBalance < 1) {
-      console.warn("Not enough credits");
-      return;
-    }
-
     try {
-      // 2️⃣ Generate image
+      // DOUBLE CHARGE FIX: Removed direct consumeCredits call here.
+      // handleGenerate now handles the source-specific deduction 'STORYBOOK_SCENE'.
       await handleGenerate(
         [scene.imageDescription],
         "storybook",
         undefined,
         model
       );
-
-      // 3️⃣ Deduct credit AFTER successful generation
-      await consumeCredits(1);
-
-      // 4️⃣ Sync balance from database
-      const { data } = await supabase
-        .from("profiles")
-        .select("credits")
-        .eq("id", session.user.id)
-        .single();
-
-      if (data) {
-        setCreditSettings((p) => ({
-          ...p,
-          creditBalance: data.credits
-        }));
-      }
     } catch (err) {
-      console.error("Storybook single scene generation failed", err);
+      console.error(err);
     }
   };
 
@@ -950,8 +841,8 @@ const App: React.FC = () => {
             ? "UploadedSection"
             : h.type === "timeline"
             ? "TimelineSection"
-            : h.type === "footage"
-            ? "FootageFrontSection"
+                : h.type === "footage"
+                  ? "FootageFrontSection"
             : "FootageFrontSection"
       }))
     );
@@ -993,17 +884,15 @@ const App: React.FC = () => {
           }
         ],
         aspectRatio,
-        characterStyle,
+        characterStyle: selectedCountry,
         visualStyle,
         isClosed: false
       };
-
       setHistory((prev) => {
         const next = [...prev, newItem];
         setActiveHistoryIndex(next.length - 1);
         return next;
       });
-
       setActiveView("storyboard");
     } catch (e) {
       console.error("Upload failed", e);
@@ -1041,7 +930,15 @@ const App: React.FC = () => {
             ? {
                 ...h,
                 imageSet: [...h.imageSet, newScene],
-                videoStates: [...h.videoStates, newVideoState],
+                videoStates: [
+                  ...h.videoStates,
+                  {
+                    status: "idle",
+                    clips: [],
+                    draftScript: "",
+                    draftCameraMovement: "Zoom In (Focus In)"
+                  }
+                ],
                 isClosed: false
               }
             : h
@@ -1076,7 +973,7 @@ const App: React.FC = () => {
           }
         ],
         aspectRatio,
-        characterStyle,
+        characterStyle: selectedCountry,
         visualStyle,
         isClosed: false
       };
@@ -1441,8 +1338,8 @@ const App: React.FC = () => {
     withAudio?: boolean
   ) => {
     await ensureApiKey();
-    const cost = (videoModel.includes("fast") ? 5 : 8) + (withAudio ? 1 : 0);
-    if (creditSettings.creditBalance < cost) return;
+    const action = videoModel.includes("fast") ? "VIDEO_FAST" : "VIDEO_HQ";
+    
     const item = history.find((h) => h.id === genId);
     const sceneIdx = item.imageSet.findIndex((s: any) => s.sceneId === sceneId);
     setHistory((prev) =>
@@ -1458,13 +1355,17 @@ const App: React.FC = () => {
       )
     );
     try {
+      // DEDUCTION FIRST: Video production label.
+      await consumeCredits(action as any);
+      if (withAudio) await consumeCredits("VIDEO_ADD_AUDIO");
+
       const { videoUrl, videoObject } = await generateVideoFromScene(
         item.imageSet[sceneIdx],
         aspectRatio,
         item.imageSet[sceneIdx].prompt,
         null,
         visualStyle,
-        characterStyle,
+        selectedCountry,
         videoModel,
         videoResolution as any,
         cameraMovement || "Zoom In",
@@ -1472,21 +1373,6 @@ const App: React.FC = () => {
         characters
       );
       if (videoUrl) {
-        // SERVER-SIDE CREDIT DEDUCTION
-        await consumeCredits(cost);
-
-        const { data } = await supabase
-          .from("profiles")
-          .select("credits")
-          .eq("id", session.user.id)
-          .single();
-
-        if (data) {
-          setCreditSettings((p) => ({
-            ...p,
-            creditBalance: data.credits
-          }));
-        }
         setHistory((prev) =>
           prev.map((h) =>
             h.id === genId
@@ -1524,10 +1410,7 @@ const App: React.FC = () => {
             isMuted: false
           }
         ]);
-        setCreditSettings((p: any) => ({
-          ...p,
-          creditBalance: p.creditBalance - cost
-        }));
+        
       }
     } catch (e: any) {
       console.error(e);
@@ -1590,6 +1473,7 @@ const App: React.FC = () => {
     });
   }, [savedScenes, activeHistoryIndex]);
 
+  // --- Sub-View Renderers ---
   const renderRoster = () => (
     <div className="flex-1 overflow-y-auto p-4 md:p-8 scrollbar-thin scrollbar-thumb-gray-800">
       <div className="max-w-5xl mx-auto w-full">
@@ -1597,13 +1481,15 @@ const App: React.FC = () => {
           characters={characters}
           setCharacters={setCharacters}
           handleBuildCharacterVisual={async (id) => {
-            if (creditSettings.creditBalance < 3) return;
             const char = characters.find((c) => c.id === id);
             if (!char) return;
             setCharacters((prev) =>
               prev.map((c) => (c.id === id ? { ...c, isDescribing: true } : c))
             );
             try {
+              // DEDUCTION FIRST: Everything label (Character generation).
+              await consumeCredits("CHARACTER_IMAGE");
+
               const { src, error } = await generateCharacterVisual(
                 char,
                 visualStyle,
@@ -1627,17 +1513,14 @@ const App: React.FC = () => {
                       : c
                   )
                 );
-                setCreditSettings((p: any) => ({
-                  ...p,
-                  creditBalance: p.creditBalance - 3
-                }));
-              } else if (error) {
+              } else if (error)
                 setCharacters((prev) =>
                   prev.map((c) =>
                     c.id === id ? { ...c, detectedImageStyle: error } : c
                   )
                 );
-              }
+            } catch (e) {
+              console.error(e);
             } finally {
               setCharacters((prev) =>
                 prev.map((c) =>
@@ -1648,26 +1531,58 @@ const App: React.FC = () => {
           }}
           handleUploadNewCharacterImage={async (f) => {
             const base64 = await fileToBase64(f);
+            const tempId = Date.now();
             const newChar: Character = {
-              id: Date.now(),
-              name: "",
+              id: tempId,
+              name: "Scanning Identity...",
               imagePreview: `data:${f.type};base64,${base64}`,
               originalImageBase64: base64,
               originalImageMimeType: f.type,
               description: null,
               detectedImageStyle: null,
               isDescribing: false,
+              isAnalyzing: true,
               isHero: false
             };
             setCharacters((prev) => [...prev, newChar]);
+            try {
+              // DEDUCTION FIRST: Everything label (Character import scan).
+              await consumeCredits("CHARACTER_IMAGE");
+
+              const {  description, detectedStyle } =
+                await generateCharacterDescription(base64, f.type);
+              setCharacters((prev) =>
+                prev.map((c) =>
+                  c.id === tempId
+                    ? {
+                        ...c,
+                        
+                        description,
+                        detectedImageStyle: detectedStyle,
+                        isAnalyzing: false
+                      }
+                    : c
+                )
+              );
+            } catch {
+              setCharacters((prev) =>
+                prev.map((c) =>
+                  c.id === tempId
+                    ? { ...c, name: "Actor Entry", isAnalyzing: false }
+                    : c
+                )
+              );
+            }
           }}
           handleCharacterImageUpload={async (f, id) => {
-            if (creditSettings.creditBalance < 1) return;
             const base64 = await fileToBase64(f);
             setCharacters((prev) =>
               prev.map((c) => (c.id === id ? { ...c, isAnalyzing: true } : c))
             );
             try {
+              // DEDUCTION FIRST: Everything label (Character update scan).
+              await consumeCredits("CHARACTER_IMAGE");
+
               const { description, detectedStyle } =
                 await generateCharacterDescription(base64, f.type);
               setCharacters((prev) =>
@@ -1679,16 +1594,12 @@ const App: React.FC = () => {
                         originalImageBase64: base64,
                         originalImageMimeType: f.type,
                         description,
-                        detectedStyle,
+                        detectedImageStyle: detectedStyle,
                         isAnalyzing: false
                       }
                     : c
                 )
               );
-              setCreditSettings((p: any) => ({
-                ...p,
-                creditBalance: p.creditBalance - 1
-              }));
             } catch {
               setCharacters((prev) =>
                 prev.map((c) =>
@@ -1720,38 +1631,41 @@ const App: React.FC = () => {
   );
 
   const renderStorybook = () => (
-      <StorybookCreator
-        storybookContent={storybook}
-        setStorybookContent={setStorybook}
-        characters={characters}
-        characterStyle={characterStyle}
-        selectedCountry={selectedCountry}
-        creditBalance={creditSettings.creditBalance}
-        onClose={() => setActiveView(isMobile ? "menu" : "welcome")}
-        onGenerateFromStorybook={(scenes) => handleGenerate(scenes, "storybook")}
-        onGenerateSingleStorybookScene={handleGenerateSingleStorybookScene}
-        onResetStorybook={() =>
-          setStorybook({
-            title: "",
-            characters: [],
-            storyNarrative: "",
-            scenes: [],
-            includeDialogue: true
-          })
-        }
-        storySeed={storySeed}
-        setStorySeed={setStorySeed}
-        onAddAudioToTimeline={onAddAudioClip}
-        onAddAudioClip={onAddAudioClip}
-        onDeductAudioCredit={() => {
-          if (creditSettings.creditBalance >= 1) {
-            consumeCredits(1);
-            return true;
-          }
+    <StorybookCreator
+      storybookContent={storybook}
+      setStorybookContent={setStorybook}
+      characters={characters}
+      characterStyle={characterStyle}
+      selectedCountry={selectedCountry}
+      creditBalance={creditSettings.creditBalance}
+      onClose={() =>
+        setActiveView(layoutMode === "phone" ? "menu" : "storybook")
+      }
+      onGenerateFromStorybook={(scenes) => handleGenerate(scenes, "storybook")}
+      onGenerateSingleStorybookScene={handleGenerateSingleStorybookScene}
+      onResetStorybook={() =>
+        setStorybook({
+          title: "",
+          characters: [],
+          storyNarrative: "",
+          scenes: [],
+          includeDialogue: true
+        })
+      }
+      storySeed={storySeed}
+      setStorySeed={setStorySeed}
+      onAddAudioToTimeline={onAddAudioClip}
+      onAddAudioClip={onAddAudioClip}
+      onDeductAudioCredit={async () => {
+        try {
+          await consumeCredits("AUDIO_GENERIC");
+          return true;
+        } catch (e) {
           return false;
-        }}
-      />
-    );
+        }
+      }}
+    />
+  );
 
   const renderStoryboard = () => (
     <Storyboard
@@ -1913,12 +1827,17 @@ const App: React.FC = () => {
         const url =
           item.videoClips?.[0]?.videoUrl ||
           (item.src ? `data:image/png;base64,${item.src}` : null);
-        if (url) {
-          const type = item.videoClips?.length > 0 ? "video" : "image";
-          onAddTimelineClip(url, type, 8, undefined, 0);
-        }
+        if (url)
+          onAddTimelineClip(
+            url,
+            item.videoClips?.length > 0 ? "video" : "image",
+            8,
+            undefined,
+            0
+          );
       }}
       onAnimate={handleAnimateFootage}
+      onUpdateCountry={setSelectedCountry}
       savedItems={savedScenes}
       footagePrompt={footagePrompt}
       setFootagePrompt={setFootagePrompt}
@@ -1939,7 +1858,9 @@ const App: React.FC = () => {
         history={history}
         masterHistory={masterHistory}
         savedItems={savedScenes}
-        onClose={() => setActiveView(isMobile ? "menu" : "welcome")}
+        onClose={() =>
+          setActiveView(layoutMode === "desktop" ? "storybook" : "menu")
+        }
         onLoadHistory={handleLoadHistory}
         onClearHistory={handleClearHistory}
         onToggleSave={handleToggleSave}
@@ -1948,26 +1869,75 @@ const App: React.FC = () => {
   );
 
   const renderCredits = () => (
-    <div className="flex-1 h-full flex flex-col items-center justify-center bg-gray-950 p-2 overflow-hidden">
-      <div className="flex flex-col items-center max-w-5xl w-full animate-in fade-in zoom-in-95 duration-500 scale-[0.9] origin-center">
-        <div className="text-center mb-4">
-          <h2 className="text-2xl font-black text-white italic tracking-tighter mb-0.5 uppercase leading-none">
+    <div className="flex-1 h-full overflow-y-auto bg-gray-950 p-4 sm:p-8 scrollbar-thin scrollbar-thumb-gray-800">
+      <div className="max-w-5xl mx-auto flex flex-col items-center animate-in fade-in zoom-in-95 duration-500 origin-top">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-black text-white italic tracking-tighter mb-2 uppercase leading-none">
             Studio Top-Up
           </h2>
-          <div className="inline-flex items-center gap-2 px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/30 rounded-full">
-            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest italic">
+          <div className="inline-flex flex-col items-center gap-4">
+            {/* GIFT TOGGLE SYSTEM */}
+            <div className="flex bg-white/5 rounded-2xl p-1 border border-white/10 shadow-inner">
+              {/* DO add comment: Corrected state variable 'isGifting' to 'isGiftMode' */}
+              <button
+                onClick={() => setIsGiftMode(false)}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isGiftMode ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+              >
+                Account Recharge
+              </button>
+              <button
+                onClick={() => setIsGiftMode(true)}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isGiftMode ? "bg-amber-500 text-black shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+              >
+                <GiftIcon className="w-4 h-4" /> Gift Someone
+              </button>
+            </div>
+
+            {isGiftMode && (
+              <div className="w-full max-w-md animate-in slide-in-from-top-4 duration-500">
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black text-amber-500 uppercase tracking-[0.2em] block ml-2">
+                    Recipient Email Address
+                  </label>
+                  <div className="relative group">
+                    <input
+                      type="email"
+                      value={giftRecipientEmail}
+                      onChange={(e) => setGiftRecipientEmail(e.target.value)}
+                      placeholder="registered-user@studio.com"
+                      className="w-full bg-black/40 border border-amber-500/30 rounded-2xl px-6 py-4 text-white focus:border-amber-500 outline-none transition-all placeholder-gray-800 text-sm shadow-inner group-hover:border-amber-500/50"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                      <span className="text-[8px] font-black text-amber-500/50 uppercase tracking-widest">
+                        Registered User Required
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!isGiftMode && (
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-600/10 border border-indigo-500/30 rounded-full">
+                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic">
               Pay-As-You-Produce • NOT a subscription
             </span>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-6">
-          <div className="bg-[#0f172a] border border-sky-500/20 rounded-xl p-4 flex flex-col items-center text-center transition-all hover:scale-[1.02] shadow-xl group">
-            <div className="w-10 h-10 rounded-xl bg-sky-600/10 flex items-center justify-center mb-3 border border-sky-500/20 group-hover:bg-sky-600 group-hover:text-white transition-all text-sky-400">
-              <CreditCardIcon className="w-5 h-5" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-10">
+          <div
+            className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center transition-all hover:scale-[1.02] shadow-xl group`}
+          >
+            <div
+              className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 border transition-all ${isGiftMode ? "bg-amber-600/10 border-amber-500/20 text-amber-500 group-hover:bg-amber-600 group-hover:text-black" : "bg-sky-600/10 border-sky-500/20 text-sky-400 group-hover:bg-sky-600 group-hover:text-white"}`}
+            >
+              <CreditCardIcon className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-black text-white mb-0.5 italic tracking-tighter uppercase leading-none">
-              Line Up
+            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
+              {isGiftMode ? "Gift Pack: Line Up" : "Line Up"}
             </h3>
             <div className="flex items-baseline gap-1 mb-3">
               <span className="text-2xl font-black text-white tracking-tighter">
@@ -1978,92 +1948,114 @@ const App: React.FC = () => {
               </span>
             </div>
             <a
-              href="https://www.paypal.com/ncp/payment/4EQJXXNTMMUWW"
+              href={PAYPAL_STARTER_LINK}
               target="_blank"
-              className="w-full py-2.5 bg-sky-600 text-white font-black text-[9px] uppercase tracking-widest rounded-lg shadow-lg mb-4 hover:bg-sky-500 transition-colors"
+              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-sky-600 text-white hover:bg-sky-500"}`}
             >
-              Purchase Now
+              {isGiftMode ? "Gift 100 Credits" : "Purchase Now"}
             </a>
-            <div className="w-full space-y-2 text-left border-t border-white/5 pt-3">
-              <div className="flex items-center gap-2 text-sky-300">
-                <CheckIcon className="w-3.5 h-3.5 shrink-0" />
-                <span className="text-[9px] font-black uppercase tracking-wider">
-                  100 Production Credits
+            <div className="w-full space-y-2 text-left border-t border-white/5 pt-4">
+              <div
+                className={`flex items-center gap-2 ${isGiftMode ? "text-amber-400" : "text-sky-300"}`}
+              >
+                <CheckIcon className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] font-black uppercase tracking-wider">
+                  100 Credits
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="bg-white/[0.03] border-2 border-white/20 rounded-xl p-4 flex flex-col items-center text-center scale-105 z-10 shadow-[0_0_40px_rgba(255,255,255,0.05)] relative overflow-hidden group">
-            <div className="absolute top-0 left-0 right-0 bg-white text-[7px] font-black text-black py-0.5 uppercase tracking-[0.2em]">
-              MOST POPULAR
+          <div
+            className={`border-2 rounded-2xl flex flex-col items-center text-center shadow-[0_0_40px_rgba(255,255,255,0.05)] relative overflow-hidden group transition-all ${isGiftMode ? "bg-[#221c0e] border-amber-500/30" : "bg-[#111827] border-white/20"}`}
+          >
+            <div
+              className={`w-full text-[8px] font-black py-1.5 uppercase tracking-[0.2em] shrink-0 ${isGiftMode ? "bg-amber-500 text-black" : "bg-white text-black"}`}
+            >
+              MOST POPULAR GIFT
             </div>
-            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center mt-2 mb-3 shadow-lg text-indigo-950">
-              <SparklesIcon className="w-5 h-5" />
+            <div className="p-6 pt-2 flex flex-col items-center w-full">
+              <div
+                className={`w-12 h-12 rounded-xl flex items-center justify-center mt-3 mb-4 shadow-lg transition-all ${isGiftMode ? "bg-amber-600 text-black" : "bg-white text-indigo-950"}`}
+              >
+                {isGiftMode ? (
+                  <GiftIcon className="w-6 h-6" />
+                ) : (
+                  <SparklesIcon className="w-6 h-6" />
+                )}
             </div>
-            <h3 className="text-lg font-black text-white mb-0.5 italic tracking-tighter uppercase leading-none">
-              Production
+              <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
+                {isGiftMode ? "Gift Pack: Production" : "Production"}
             </h3>
-            <div className="flex items-baseline gap-1 mb-3">
-              <span className="text-2xl font-black text-white tracking-tighter">
+              <div className="flex items-baseline gap-1 mb-4">
+                <span className="text-3xl font-black text-white tracking-tighter">
                 $25
               </span>
-              <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest italic text-center">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
                 Best Value
               </span>
             </div>
             <a
-              href="https://www.paypal.com/ncp/payment/Q4LLSWNWJTC4G"
+                href={PAYPAL_PRO_LINK}
               target="_blank"
-              className="w-full py-2.5 bg-white text-black font-black text-[9px] uppercase tracking-widest rounded-lg shadow-lg mb-4 hover:bg-gray-200 transition-all"
+                className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg mb-6 transition-all ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-white text-black hover:bg-gray-200"}`}
             >
-              Fuel Vision
+                {isGiftMode ? "Gift 300 Credits" : "Fuel Vision"}
             </a>
-            <div className="w-full space-y-2 text-left border-t border-white/10 pt-3">
-              <div className="flex items-center gap-2 text-white">
-                <CheckIcon className="w-3.5 h-3.5 shrink-0 text-white" />
-                <span className="text-[9px] font-black uppercase tracking-wider">
-                  300 Production Credits
+              <div className="w-full space-y-2 text-left border-t border-white/10 pt-4">
+                <div
+                  className={`flex items-center gap-2 ${isGiftMode ? "text-amber-400" : "text-white"}`}
+                >
+                  <CheckIcon
+                    className={`w-4 h-4 shrink-0 ${isGiftMode ? "text-amber-400" : "text-white"}`}
+                  />
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    300 Credits
                 </span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="bg-[#0f172a] border border-amber-500/20 rounded-xl p-4 flex flex-col items-center text-center transition-all hover:scale-[1.02] shadow-xl group">
-            <div className="w-10 h-10 rounded-xl bg-amber-600/10 flex items-center justify-center mb-3 border border-amber-500/20 group-hover:bg-amber-600 group-hover:text-white transition-all text-amber-500">
-              <VideoIcon className="w-5 h-5" />
+          <div
+            className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center transition-all hover:scale-[1.02] shadow-xl group`}
+          >
+            <div
+              className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 border transition-all ${isGiftMode ? "bg-amber-600/10 border-amber-500/20 text-amber-500 group-hover:bg-amber-600 group-hover:text-black" : "bg-sky-600/10 border-sky-500/20 text-sky-400 group-hover:bg-sky-600 group-hover:text-white"}`}
+            >
+              <VideoIcon className="w-6 h-6" />
             </div>
-            <h3 className="text-lg font-black text-white mb-0.5 italic tracking-tighter uppercase leading-none">
-              Studio
+            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
+              {isGiftMode ? "Gift Pack: Studio" : "Studio"}
             </h3>
-            <div className="flex items-baseline gap-1 mb-3">
-              <span className="text-2xl font-black text-white tracking-tighter">
+            <div className="flex items-baseline gap-1 mb-4">
+              <span className="text-3xl font-black text-white tracking-tighter">
                 $50
               </span>
-              <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                 Max Power
               </span>
             </div>
             <a
-              href="https://www.paypal.com/ncp/payment/QUAASXG9J8JCW"
+              href={PAYPAL_STUDIO_LINK}
               target="_blank"
-              className="w-full py-2.5 bg-amber-600 text-white font-black text-[9px] uppercase tracking-widest rounded-lg shadow-lg mb-4 hover:bg-amber-500 transition-colors"
+              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-amber-600 text-white hover:bg-amber-500"}`}
             >
-              Purchase Now
+              {isGiftMode ? "Gift 700 Credits" : "Purchase Now"}
             </a>
-            <div className="w-full space-y-2 text-left border-t border-white/5 pt-3">
+            <div className="w-full space-y-2 text-left border-t border-white/5 pt-4">
               <div className="flex items-center gap-2 text-amber-400">
-                <CheckIcon className="w-3.5 h-3.5 shrink-0" />
-                <span className="text-[9px] font-black uppercase tracking-wider">
-                  700 Production Credits
+                <CheckIcon className="w-4 h-4 shrink-0" />
+                <span className="text-[10px] font-black uppercase tracking-wider">
+                  700 Credits
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="w-full max-w-2xl bg-white/[0.02] border border-white/5 rounded-xl p-4 text-center animate-in slide-in-from-bottom-4 shadow-2xl space-y-2">
-          <p className="text-gray-500 text-[9px] sm:text-[10px] leading-relaxed font-bold tracking-tight max-w-xl mx-auto italic">
+        <div className="w-full max-w-2xl bg-white/[0.02] border border-white/5 rounded-xl p-6 text-center shadow-2xl space-y-3 mb-20">
+          <p className="text-gray-500 text-[11px] leading-relaxed font-bold tracking-tight italic">
             freedom, no obligation. from Thetori Ai
           </p>
           <p className="text-indigo-400 text-[9px] sm:text-[10px] leading-relaxed font-black tracking-tight max-w-xl mx-auto italic px-4">
@@ -2072,7 +2064,7 @@ const App: React.FC = () => {
             That's why Thetori Ai is here for you. a trial will convince you.
           </p>
           <div className="pt-2 border-t border-white/5 mt-2">
-            <span className="text-[8px] font-black text-indigo-500 uppercase tracking-[0.4em]">
+            <span className="text-[9px] font-black text-indigo-500 uppercase tracking-[0.4em]">
               New Account Welcome Bonus: 5 Credits Applied Automatically
             </span>
           </div>
@@ -2109,10 +2101,14 @@ const App: React.FC = () => {
     );
 
   const currentGlowColor = VIEW_COLORS[activeView] || "#6366f1";
+  const closeSubPage = () =>
+    setActiveView(layoutMode === "phone" ? "menu" : activeView);
 
   return (
-    <div className="flex h-screen bg-gray-950 text-white font-sans overflow-hidden">
-      {!isMobile && session && (
+    <div
+      className={`flex h-screen bg-gray-950 text-white font-sans overflow-hidden layout-${layoutMode}`}
+    >
+      {layoutMode !== "phone" && session && activeView !== "welcome" && (
         <Sidebar
           activeView={activeView}
           setActiveView={setActiveView}
@@ -2139,7 +2135,7 @@ const App: React.FC = () => {
             session={session}
             onEnter={() => {
               if (!session) setActiveView("welcome");
-              else setActiveView(isMobile ? "menu" : "welcome");
+              else setActiveView(layoutMode === "phone" ? "menu" : "storybook");
             }}
           />
         ) : (
@@ -2147,23 +2143,8 @@ const App: React.FC = () => {
             className="flex-1 flex flex-col h-full workspace-artline neon-active-frame"
             style={{ "--glow-color": currentGlowColor } as React.CSSProperties}
           >
-        {!isMobile && (
-          <>
-            {activeView === "roster" && renderRoster()}
-            {activeView === "storybook" && (
-              <div className="flex-1 h-full overflow-hidden">
-                {renderStorybook()}
-              </div>
-            )}
-            {activeView === "storyboard" && renderStoryboard()}
-            {activeView === "timeline" && renderTimeline()}
-            {activeView === "history" && renderHistory()}
-            {activeView === "buy-credits" && renderCredits()}
-            {activeView === "footage" && renderFootageDesk()}
-          </>
-        )}
-        {isMobile && session && (
-          <>
+            {layoutMode === "phone" ? (
+              <div className="flex-1 h-full overflow-hidden flex flex-col">
             {activeView === "menu" && (
               <Sidebar
                 activeView={activeView}
@@ -2184,42 +2165,98 @@ const App: React.FC = () => {
                 session={session}
               />
             )}
-            {activeView === "roster" && (
-              <MobileViewWrapper title="Character Roster">
-                {renderRoster()}
-              </MobileViewWrapper>
-            )}
+                {activeView === "roster" && (
+                  <MobileViewWrapper title="Character Roster">
+                    {renderRoster()}
+                  </MobileViewWrapper>
+                )}
             {activeView === "storybook" && (
-              <MobileViewWrapper title="Storywriter Section">
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <ViewHeader
+                      title="Story writer"
+                      onBack={closeSubPage}
+                      layout={layoutMode}
+                    />
                 {renderStorybook()}
-              </MobileViewWrapper>
+                  </div>
             )}
+
             {activeView === "storyboard" && (
-              <MobileViewWrapper title="Production Stage">
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <ViewHeader
+                      title="Production stage"
+                      onBack={closeSubPage}
+                      layout={layoutMode}
+                    />
                 {renderStoryboard()}
-              </MobileViewWrapper>
+                  </div>
+                )}
+
+                {activeView === "roster" && (
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <ViewHeader
+                      title="Character roster"
+                      onBack={closeSubPage}
+                      layout={layoutMode}
+                    />
+                    {renderRoster()}
+                  </div>
             )}
+
             {activeView === "timeline" && (
-              <MobileViewWrapper title="Story Timeline">
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <ViewHeader
+                      title="Story timeline"
+                      onBack={closeSubPage}
+                      layout={layoutMode}
+                    />
                 {renderTimeline()}
-              </MobileViewWrapper>
+                  </div>
             )}
+
             {activeView === "history" && (
-              <MobileViewWrapper title="Production History">
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <ViewHeader
+                      title="Production history"
+                      onBack={closeSubPage}
+                      layout={layoutMode}
+                    />
                 {renderHistory()}
-              </MobileViewWrapper>
+                  </div>
             )}
+
             {activeView === "buy-credits" && (
-              <MobileViewWrapper title="Credit Exchange">
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <ViewHeader
+                      title="Get credits"
+                      onBack={closeSubPage}
+                      layout={layoutMode}
+                    />
                 {renderCredits()}
-              </MobileViewWrapper>
+                  </div>
             )}
+
             {activeView === "footage" && (
-              <MobileViewWrapper title="Footage Desk">
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <ViewHeader
+                      title="Quick footage desk"
+                      onBack={closeSubPage}
+                      layout={layoutMode}
+                    />
                 {renderFootageDesk()}
-              </MobileViewWrapper>
-            )}
-          </>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col h-full overflow-hidden">
+                {activeView === "roster" && renderRoster()}
+                {activeView === "storybook" && renderStorybook()}
+                {activeView === "storyboard" && renderStoryboard()}
+                {activeView === "timeline" && renderTimeline()}
+                {activeView === "history" && renderHistory()}
+                {activeView === "buy-credits" && renderCredits()}
+                {activeView === "footage" && renderFootageDesk()}
+              </div>
             )}
           </div>
         )}
@@ -2254,7 +2291,7 @@ const App: React.FC = () => {
         storySeed={storySeed}
         setStorySeed={setStorySeed}
         savedItems={savedScenes}
-        characterStyle={characterStyle}
+        characterStyle={selectedCountry}
         selectedCountry={selectedCountry}
         currencySymbol="$"
         exchangeRate={1}
@@ -2328,13 +2365,15 @@ const App: React.FC = () => {
         onUndoEdit={handleUndoEdit}
         setCharacters={setCharacters}
         handleBuildCharacterVisual={async (id) => {
-          if (creditSettings.creditBalance < 3) return;
           const char = characters.find((c) => c.id === id);
           if (!char) return;
           setCharacters((prev) =>
             prev.map((c) => (c.id === id ? { ...c, isDescribing: true } : c))
           );
           try {
+            // DEDUCTION FIRST: Identity generation.
+            await consumeCredits("CHARACTER_IMAGE");
+
             const { src, error } = await generateCharacterVisual(
               char,
               visualStyle,
@@ -2358,17 +2397,9 @@ const App: React.FC = () => {
                     : c
                 )
               );
-              setCreditSettings((p: any) => ({
-                ...p,
-                creditBalance: p.creditBalance - 3
-              }));
-            } else if (error) {
-              setCharacters((prev) =>
-                prev.map((c) =>
-                  c.id === id ? { ...c, detectedImageStyle: error } : c
-                )
-              );
             }
+          } catch (e) {
+            console.error(e);
           } finally {
             setCharacters((prev) =>
               prev.map((c) => (c.id === id ? { ...c, isDescribing: false } : c))
@@ -2377,26 +2408,58 @@ const App: React.FC = () => {
         }}
         handleUploadNewCharacterImage={async (f) => {
           const base64 = await fileToBase64(f);
+          const tempId = Date.now();
           const newChar = {
-            id: Date.now(),
-            name: "",
+            id: tempId,
+            name: "Scanning Identity...",
             imagePreview: `data:${f.type};base64,${base64}`,
             originalImageBase64: base64,
             originalImageMimeType: f.type,
             description: null,
             detectedImageStyle: null,
             isDescribing: false,
+            isAnalyzing: true,
             isHero: false
           };
           setCharacters((prev) => [...prev, newChar]);
+          try {
+            // DEDUCTION FIRST: Identity production.
+            await consumeCredits("CHARACTER_IMAGE");
+
+            const {  description, detectedStyle } =
+              await generateCharacterDescription(base64, f.type);
+            setCharacters((prev) =>
+              prev.map((c) =>
+                c.id === tempId
+                  ? {
+                      ...c,
+                       
+                      description,
+                      detectedImageStyle: detectedStyle,
+                      isAnalyzing: false
+                    }
+                  : c
+              )
+            );
+          } catch {
+            setCharacters((prev) =>
+              prev.map((c) =>
+                c.id === tempId
+                  ? { ...c, name: "Actor Entry", isAnalyzing: false }
+                  : c
+              )
+            );
+          }
         }}
         handleCharacterImageUpload={async (f, id) => {
-          if (creditSettings.creditBalance < 1) return;
           const base64 = await fileToBase64(f);
           setCharacters((prev) =>
             prev.map((c) => (c.id === id ? { ...c, isAnalyzing: true } : c))
           );
           try {
+            // DEDUCTION FIRST: Identity replacement.
+            await consumeCredits("CHARACTER_IMAGE");
+
             const { description, detectedStyle } =
               await generateCharacterDescription(base64, f.type);
             setCharacters((prev) =>
@@ -2414,10 +2477,6 @@ const App: React.FC = () => {
                   : c
               )
             );
-            setCreditSettings((p: any) => ({
-              ...p,
-              creditBalance: p.creditBalance - 1
-            }));
           } catch {
             setCharacters((prev) =>
               prev.map((c) => (c.id === id ? { ...c, isAnalyzing: false } : c))
@@ -2448,10 +2507,10 @@ const App: React.FC = () => {
           );
           if (!scene || !scene.variants) return;
           const cur = scene.selectedVariantIndex || 0;
-          let nextIdx = dir === "next" ? cur + 1 : cur - 1;
-          if (nextIdx < 0) nextIdx = scene.variants.length - 1;
-          if (nextIdx >= scene.variants.length) nextIdx = 0;
-          handleSelectSceneVariant(gid, sid, nextIdx);
+          let nIdx = dir === "next" ? cur + 1 : cur - 1;
+          if (nIdx < 0) nIdx = scene.variants.length - 1;
+          if (nIdx >= scene.variants.length) nIdx = 0;
+          handleSelectSceneVariant(gid, sid, nIdx);
         }}
         onUpdateSceneImage={handleUpdateSceneImage}
         onRegenerateScene={handleRegenerateScene}

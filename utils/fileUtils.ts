@@ -7,7 +7,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
       // The result is a data URL: "data:audio/mpeg;base64,..."
       // We only need the base64 part.
       const result = reader.result as string;
-      const base64String = result.split(',')[1];
+      const base64String = result.split(",")[1];
       if (base64String) {
         resolve(base64String);
       } else {
@@ -52,25 +52,26 @@ export const compressImageBase64 = (
                 }
             }
 
-            const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
             canvas.width = width;
             canvas.height = height;
-            const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
             if (!ctx) {
                 return reject(new Error("Could not get canvas context."));
             }
             ctx.drawImage(img, 0, 0, width, height);
 
-            const newMimeType = 'image/jpeg';
+      const newMimeType = "image/jpeg";
             const dataUrl = canvas.toDataURL(newMimeType, quality);
-            const newBase64 = dataUrl.split(',')[1];
+      const newBase64 = dataUrl.split(",")[1];
 
             if (!newBase64) {
                 return reject(new Error("Failed to compress image."));
             }
             resolve({ base64: newBase64, mimeType: newMimeType });
         };
-        img.onerror = (error) => reject(new Error(`Image loading failed for compression: ${error}`));
+    img.onerror = (error) =>
+      reject(new Error(`Image loading failed for compression: ${error}`));
     });
 };
 
@@ -80,6 +81,10 @@ function writeString(view: DataView, offset: number, string: string) {
     }
 }
 
+/**
+ * FIXED: Universal WAV encoder for 16-bit PCM.
+ * Ensures the binary header is correctly structured for mobile and desktop playback.
+ */
 export const pcmToWavBlob = (
     pcmData: Uint8Array,
     sampleRate: number = 24000,
@@ -90,29 +95,30 @@ export const pcmToWavBlob = (
     const buffer = new ArrayBuffer(44 + dataSize);
     const view = new DataView(buffer);
 
-    // RIFF chunk descriptor
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + dataSize, true); // ChunkSize
-    writeString(view, 8, 'WAVE');
+  // RIFF Chunk
+  writeString(view, 0, "RIFF");
+  view.setUint32(4, 36 + dataSize, true);
+  writeString(view, 8, "WAVE");
 
-    // "fmt " sub-chunk
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true); // Subchunk1Size
-    view.setUint16(20, 1, true); // AudioFormat (1 for PCM)
-    view.setUint16(22, numChannels, true); // NumChannels
-    view.setUint32(24, sampleRate, true); // SampleRate
+  // FMT Sub-chunk
+  writeString(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM Format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
     const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-    view.setUint32(28, byteRate, true); // ByteRate
+  view.setUint32(28, byteRate, true);
     const blockAlign = numChannels * (bitsPerSample / 8);
-    view.setUint16(32, blockAlign, true); // BlockAlign
-    view.setUint16(34, bitsPerSample, true); // BitsPerSample
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
 
-    // "data" sub-chunk
-    writeString(view, 36, 'data');
-    view.setUint32(40, dataSize, true); // Subchunk2Size
+  // Data Sub-chunk
+  writeString(view, 36, "data");
+  view.setUint32(40, dataSize, true);
 
-    // Write the PCM data
-    new Uint8Array(buffer).set(pcmData, 44);
+  // Copy PCM data
+  const pcmUint8 = new Uint8Array(buffer, 44);
+  pcmUint8.set(pcmData);
 
-    return new Blob([view], { type: 'audio/wav' });
+  return new Blob([buffer], { type: "audio/wav" });
 };

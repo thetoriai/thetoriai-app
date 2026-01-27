@@ -9,7 +9,7 @@ import {
   ClapperboardIcon
 } from "./Icons";
 import { Auth } from "./Auth";
-
+import { HELLO_EMAIL } from "../utils/constants";
 interface WelcomePageProps {
   onEnter: () => void;
   session?: any;

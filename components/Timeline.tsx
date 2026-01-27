@@ -24,7 +24,7 @@ import {
 
 interface TimelineClip {
   id: string;
-  url: string;
+  url: string | File;
   type: "video" | "image";
   duration: number;
   startTime: number;
@@ -42,7 +42,7 @@ interface TimelineClip {
 
 interface AudioClip {
   id: string;
-  url: string;
+  url: string | File;
   duration: number;
   startTime: number;
   originalDuration: number;
@@ -87,14 +87,18 @@ interface TimelineProps {
   onUpdateClip: (id: string, updates: Partial<TimelineClip>) => void;
   onUpdateAudioClip: (id: string, updates: any) => void;
   onAddClip: (
-    url: string,
+    url: string | File,
     type: "video" | "image",
     duration?: number,
     startTime?: number,
     layer?: number,
     videoObject?: any
   ) => void;
-  onAddAudioClip: (url: string, duration?: number, startTime?: number) => void;
+  onAddAudioClip: (
+    url: string | File,
+    duration?: number,
+    startTime?: number
+  ) => void;
   onAddTextClip: (text: string, startTime?: number) => void;
   onExport: () => void;
   onCaptureFrame?: (base64: string) => void;
@@ -158,6 +162,9 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [flashingClipId, setFlashingClipId] = useState<string | null>(null);
   const [isProcessingFrame, setIsProcessingFrame] = useState(false);
 
+  // DO add comment: Side panel ID state remains to track double-click activity.
+  const [sidePanelClipId, setSidePanelClipId] = useState<string | null>(null);
+
   const mainMonitorRef = useRef<HTMLVideoElement>(null);
   const overlayMonitorRef = useRef<HTMLVideoElement>(null);
   const audioMonitorRef = useRef<HTMLAudioElement>(null);
@@ -168,6 +175,17 @@ export const Timeline: React.FC<TimelineProps> = ({
   const requestRef = useRef<number>(null);
   const lastTickRef = useRef<number>(0);
   const isScrubbingRef = useRef(false);
+
+  // Persistence Cache: Store created Blob URLs for File objects to prevent leaks and flickering
+  const objectUrlCache = useRef(new Map<File | Blob, string>());
+
+  // Cleanup Blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      objectUrlCache.current.forEach((url) => URL.revokeObjectURL(url));
+      objectUrlCache.current.clear();
+    };
+  }, []);
 
   // Sync back to parent when scrubbing or unmounting to save position
   useEffect(() => {
@@ -192,8 +210,18 @@ export const Timeline: React.FC<TimelineProps> = ({
   const viewportDuration = Math.max(contentDuration + 10, 30);
   const labelWidth = isMobile ? 36 : 60;
 
-  const formatAssetUrl = useCallback((url: string) => {
+  const formatAssetUrl = useCallback((url: string | File) => {
     if (!url) return "";
+
+    // Handle File/Blob objects from manual uploads for cross-session persistence
+    if (typeof url !== "string") {
+      if (objectUrlCache.current.has(url))
+        return objectUrlCache.current.get(url)!;
+      const newUrl = URL.createObjectURL(url);
+      objectUrlCache.current.set(url, newUrl);
+      return newUrl;
+    }
+
     if (
       url.startsWith("http") ||
       url.startsWith("blob:") ||
@@ -226,9 +254,20 @@ export const Timeline: React.FC<TimelineProps> = ({
       } else {
         const clip = (clips || []).find((c) => c.id === selectedClip.id);
         if (clip && clip.type === "image") {
-          onCaptureFrame(
-            clip.url.includes(",") ? clip.url.split(",")[1] : clip.url
-          );
+          const formattedUrl = formatAssetUrl(clip.url);
+          // If it's data URL, use it directly. If it's blob/file, we might need to draw it to a canvas.
+          if (formattedUrl.startsWith("data:")) {
+            onCaptureFrame(formattedUrl.split(",")[1]);
+          } else {
+            // Handle Blob/File capture for images
+            const img = new Image();
+            img.src = formattedUrl;
+            await new Promise((res) => (img.onload = res));
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            ctx.drawImage(img, 0, 0);
+            onCaptureFrame(canvas.toDataURL("image/png").split(",")[1]);
+          }
         }
       }
     } catch (e) {
@@ -241,6 +280,18 @@ export const Timeline: React.FC<TimelineProps> = ({
     }
   };
 
+  // DO add comment: handleCaptureLastFrameAction now specifically navigates to the end of the clip and captures it.
+  const handleCaptureLastFrameAction = async (clip: TimelineClip) => {
+    const lastFrameTime = clip.startTime + clip.duration - 0.01;
+    setLocalPlaybackTime(lastFrameTime);
+    onUpdatePlaybackTime(lastFrameTime);
+    setSelectedClip({ id: clip.id, type: 'visual' });
+    setSidePanelClipId(null);
+    setTimeout(() => {
+        handleCapture();
+    }, 150);
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isTyping =
@@ -249,6 +300,10 @@ export const Timeline: React.FC<TimelineProps> = ({
       if (e.code === "Space" && !isTyping) {
         e.preventDefault();
         setIsPlaying((prev) => !prev);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !isTyping) {
+        e.preventDefault();
+        onUndo?.();
       }
       if (
         (e.key === "Backspace" || e.key === "Delete") &&
@@ -263,11 +318,12 @@ export const Timeline: React.FC<TimelineProps> = ({
             (textClips || []).filter((t) => t.id !== selectedClip.id)
           );
         setSelectedClip(null);
+        
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedClip, onDelete, onDeleteAudio, onUpdateTextClips, textClips]);
+  }, [selectedClip, onDelete, onDeleteAudio, onUpdateTextClips, textClips, onUndo]);
 
   useEffect(() => {
     if (isPlaying && scrollAreaRef.current) {
@@ -344,6 +400,11 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   const animate = useCallback(
     (time: number) => {
+      if (localPlaybackTime >= contentDuration) {
+        setIsPlaying(false);
+        setLocalPlaybackTime(contentDuration);
+        return;
+      }
       if (lastTickRef.current !== 0) {
         const delta = (time - lastTickRef.current) / 1000;
         setLocalPlaybackTime((prev) => {
@@ -358,7 +419,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       lastTickRef.current = time;
       if (isPlaying) requestRef.current = requestAnimationFrame(animate);
     },
-    [isPlaying, contentDuration]
+    [isPlaying, contentDuration, localPlaybackTime]
   );
 
   useEffect(() => {
@@ -416,17 +477,32 @@ export const Timeline: React.FC<TimelineProps> = ({
     (clientX: number) => {
       if (!scrollAreaRef.current) return;
       const rect = scrollAreaRef.current.getBoundingClientRect();
-      const clickX =
-        clientX - rect.left + scrollAreaRef.current.scrollLeft - labelWidth;
-      const newTime = Math.max(
-        0,
-        Math.min(contentDuration, clickX / pixelsPerSecond)
-      );
-      setLocalPlaybackTime(newTime);
-      onUpdatePlaybackTime(newTime); // Sync for navigation persistence
-    },
-    [contentDuration, pixelsPerSecond, labelWidth, onUpdatePlaybackTime]
-  );
+        const clickX = clientX - rect.left + scrollAreaRef.current.scrollLeft - labelWidth;
+        const newTime = Math.max(0, Math.min(contentDuration, clickX / pixelsPerSecond));
+        
+        // MAGNET SNAPPING LOGIC
+        const SNAP_THRESHOLD = 0.2;
+        const boundaries = [
+            0, contentDuration,
+            ...clips.map(c => c.startTime),
+            ...clips.map(c => c.startTime + c.duration),
+            ...audioClips.map(a => a.startTime),
+            ...audioClips.map(a => a.startTime + a.duration),
+            ...textClips.map(t => t.startTime),
+            ...textClips.map(t => t.startTime + t.duration)
+        ];
+        
+        let snappedTime = newTime;
+        for (const b of boundaries) {
+            if (Math.abs(newTime - b) < SNAP_THRESHOLD) {
+                snappedTime = b;
+                break;
+            }
+        }
+        
+        setLocalPlaybackTime(snappedTime);
+        onUpdatePlaybackTime(snappedTime);
+    }, [contentDuration, pixelsPerSecond, labelWidth, onUpdatePlaybackTime, clips, audioClips, textClips]);
 
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent | TouchEvent) => {
@@ -676,6 +752,8 @@ export const Timeline: React.FC<TimelineProps> = ({
       className="flex-1 flex flex-col h-full bg-[#0a0f1d] overflow-hidden select-none font-sans relative"
       onClick={() => {
         setSelectedClip(null);
+        // DO add comment: Sidebar dismiss logic remains intact.
+        setSidePanelClipId(null);
       }}
     >
       <div className="h-8 md:h-10 bg-gray-950 border-b border-white/5 flex items-center justify-between px-2 md:px-4 shrink-0 z-[110] shadow-md">
@@ -877,13 +955,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                       currentSelected.startTime + currentSelected.duration
                   }
                 />
-                <ControlButton
-                  icon={CameraIcon}
-                  title="Capture Frame"
-                  onClick={handleCapture}
-                  active={false}
-                  label="Capture"
-                />
+                {/* DO add comment: Removed the Capture button from the main toolbar settings as requested. */}
                 <ControlButton
                   icon={TrashIcon}
                   title="Delete"
@@ -1193,7 +1265,12 @@ export const Timeline: React.FC<TimelineProps> = ({
                   </div>
                 ))}
               </div>
-              {[1, 0].map((layer) => (
+              {[1, 0].map((layer) => {
+                // DO add comment: Identify the most recently added clip on this layer chronologically to restrict double-click logic.
+                const layerClips = (clips || []).filter(c => Number(c.layer) === layer);
+                const lastClipInLayer = layerClips.length > 0 ? layerClips.reduce((prev, current) => (prev.startTime > current.startTime) ? prev : current) : null;
+
+                return (
                 <div
                   key={layer}
                   className="relative w-full h-10 md:h-12 border-b border-white/5 group/track"
@@ -1226,17 +1303,29 @@ export const Timeline: React.FC<TimelineProps> = ({
                       </div>{" "}
                     </button>
                   </div>
-                  {(clips || [])
-                    .filter((c) => Number(c.layer) === layer)
-                    .map((clip) => {
+                  {layerClips.map((clip) => {
                       const isSelected = selectedClip?.id === clip.id;
                       const isFlashing = flashingClipId === clip.id;
+                      // DO add comment: Logic to check if this clip has been double-clicked to show the side-panel.
+                      const isSidePanelOpen = sidePanelClipId === clip.id;
+                      // DO add comment: Check if this specific clip is the last one in the layer.
+                      const isLastInLayer = lastClipInLayer?.id === clip.id;
+
                       return (
                         <div
                           key={clip.id}
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedClip({ id: clip.id, type: "visual" });
+                            // DO add comment: Clicking the video causes the panel to disappear.
+                            setSidePanelClipId(null);
+                          }}
+                          // DO add comment: Double-click behavior draws out the side-panel, but only for the very last clip added to the track.
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            if (isLastInLayer && clip.type === 'video') {
+                                setSidePanelClipId(clip.id);
+                            }
                           }}
                           onMouseDown={(e) => {
                             if (!(e.target as HTMLElement).closest(".handle")) {
@@ -1255,6 +1344,38 @@ export const Timeline: React.FC<TimelineProps> = ({
                             width: `${clip.duration * pixelsPerSecond}px`
                           }}
                         >
+                          {/* DO add comment: Compact side-panel. Small rectangle containing only the logo, with the last frame as visual background. */}
+                          {isSidePanelOpen && (
+                            <div 
+                              className="absolute top-0 bottom-0 left-full ml-1.5 z-[200] bg-gray-950 border border-indigo-500 rounded-md w-12 flex items-center justify-center shadow-[0_0_15px_rgba(79,70,229,0.4)] animate-in slide-in-from-left-2 duration-200 overflow-hidden"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {/* DO add comment: Dynamic background showing the last frame inside the compact rectangle. */}
+                              <div className="absolute inset-0 z-0 bg-black">
+                                {clip.type === 'video' ? (
+                                    <video 
+                                        src={formatAssetUrl(clip.url)} 
+                                        className="w-full h-full object-cover opacity-60" 
+                                        muted 
+                                        onLoadedMetadata={(e) => {
+                                            (e.target as HTMLVideoElement).currentTime = clip.duration - 0.1;
+                                        }}
+                                    />
+                                ) : (
+                                    <img src={formatAssetUrl(clip.url)} className="w-full h-full object-cover opacity-60" />
+                                )}
+                              </div>
+                              {/* DO add comment: Small rectangular blue overlay containing ONLY the logo/icon. */}
+                              <button 
+                                onClick={() => handleCaptureLastFrameAction(clip)}
+                                className="relative z-10 w-full h-full bg-blue-600/40 hover:bg-blue-500/60 text-white transition-all flex items-center justify-center group/btn"
+                                title="Take Last Frame"
+                              >
+                                <CameraIcon className="w-5 h-5 drop-shadow-md transition-transform group-hover/btn:scale-110" />
+                              </button>
+                            </div>
+                          )}
+
                           <div
                             className={`relative w-full h-full border-2 rounded-lg md:rounded-xl overflow-hidden bg-black transition-all ${isSelected ? "border-indigo-500 ring-2 ring-indigo-500/30" : "border-white/10 shadow-sm opacity-80"} ${isFlashing ? "bg-white" : ""}`}
                           >
@@ -1312,7 +1433,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                       );
                     })}
                 </div>
-              ))}
+              )})}
               <div className="relative w-full h-8 md:h-12 border-b border-white/5 group/track">
                 <div
                   className="absolute top-0 bottom-0 flex flex-col items-center justify-center bg-gray-950 border-r border-white/10 z-[120]"
@@ -1356,9 +1477,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                     >
                       <SpeakerWaveIcon className="w-2.5 h-2.5 text-white" />
                     </div>{" "}
-                    <span className="text-[6px] md:text-[8px] font-black uppercase truncate opacity-60">
-                      Audio
-                    </span>{" "}
+                    {/* DO add comment: Removed redundant 'Audio' text caption from audio clips to keep visual appearance clean as requested. */}
                     <div
                       className="handle absolute top-0 right-0 bottom-0 w-4 md:w-5 cursor-ew-resize z-50 flex justify-end"
                       onMouseDown={(e) => {
@@ -1410,10 +1529,21 @@ export const Timeline: React.FC<TimelineProps> = ({
         type="file"
         ref={audioInputRef}
         className="hidden"
-        accept="audio/*"
+        // Strict JS-level MIME-type check to block video files from the audio track.
+        accept=".mp3,.wav,.ogg,.m4a,audio/*"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) onAddAudioClip(URL.createObjectURL(file), 10, undefined);
+          if (file) {
+            // Reinforced validation: Only allow standard audio MIME types.
+            if (!file.type.startsWith("audio/")) {
+              console.warn(
+                "Operation Blocked: Audio slots only accept audio files. Video detected."
+              );
+              e.target.value = "";
+              return;
+            }
+            onAddAudioClip(file, 10, undefined);
+          }
           e.target.value = "";
         }}
       />

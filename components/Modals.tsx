@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   XIcon,
   DownloadIcon,
@@ -8,7 +8,12 @@ import {
   SparklesIcon,
   VideoIcon,
   FilmIcon,
-  CheckIcon
+  CheckIcon,
+  LoaderIcon,
+  GiftIcon,
+  PlayIcon,
+  ArrowsRightLeftIcon,
+  ExclamationTriangleIcon
 } from "./Icons";
 import { CAMERA_ANGLE_OPTIONS } from "../services/geminiService";
 import type { Character, Storybook, Outfit } from "../services/geminiService";
@@ -69,20 +74,21 @@ interface ModalsProps {
   onUpdateImage?: (base64: string) => void;
   onSwapOutfit?: (sceneIndex: number, outfit: Outfit) => Promise<void>;
   onAddAudioToTimeline?: (url: string, duration: number) => void;
-  onAddAudioClip?: (url: string, duration?: number, startTime?: number) => void;
+  onAddAudioClip?: (
+    url: string | File,
+    duration?: number,
+    startTime?: number
+  ) => void;
   onDeductAudioCredit?: () => boolean;
   onResetStorybook: () => void;
-  // DO add comment: Added onUndo to ModalsProps to resolve App.tsx type error.
   onUndo?: () => void;
   storySeed: string;
   setStorySeed: (val: string) => void;
   visualStyle?: string;
 
-  // Timeline Specific
   timelineClips?: any[];
   audioClips?: any[];
   textClips?: any[];
-  // DO add comment: Added missing bulk update props for Timeline sync.
   onUpdateClips?: (clips: any[]) => void;
   onUpdateAudioClips?: (clips: any[]) => void;
   onUpdateTextClips?: (clips: any[]) => void;
@@ -90,22 +96,19 @@ interface ModalsProps {
   onUpdateAudioClip?: (id: string, updates: any) => void;
   onDeleteTimelineClip?: (id: string) => void;
   onDeleteAudio?: (id: string) => void;
-  // DO add comment: Fixed onAddTimelineClip signature to match Timeline component's expectations.
   onAddTimelineClip?: (
-    url: string,
+    url: string | File,
     type: "video" | "image",
     duration?: number,
     startTime?: number,
     layer?: number
   ) => void;
-  // DO add comment: Fixed missing onAddTextClip in ModalsProps.
   onAddTextClip?: (text: string, startTime?: number) => void;
   onCaptureFrameFromTimeline?: (base64: string) => void;
-  onExportTimeline?: () => void;
   timelinePlaybackTime?: number;
   onUpdateTimelinePlaybackTime?: (time: number) => void;
+  onExportTimeline?: () => void;
 
-  // Storyboard Specific
   generationItem?: any;
   historyIndex?: number;
   activeVideoIndices?: number[];
@@ -130,11 +133,9 @@ interface ModalsProps {
   onUploadToSession?: (file: File, sessionId: number) => void;
   onDeleteScene?: (genId: number, sceneId: string) => void;
   onUndoEdit?: (genId: number, sceneId: string) => void;
-  // DO add comment above each fix. Added missing onRegenerateScene and onAngleSelect to ModalsProps.
   onRegenerateScene?: (genId: number, sceneId: string) => void;
   onAngleSelect?: (genId: number, sceneId: string) => void;
 
-  // Roster Specific
   setCharacters?: React.Dispatch<React.SetStateAction<Character[]>>;
   handleBuildCharacterVisual?: (id: number) => void;
   handleUploadNewCharacterImage?: (file: File) => void;
@@ -143,7 +144,6 @@ interface ModalsProps {
   removeCharacter?: (id: number) => void;
   onToggleHero?: (id: number) => void;
 
-  // Variant Management
   onAddSceneVariant?: (
     genId: number,
     sceneId: string,
@@ -174,15 +174,15 @@ const ModalWrapper = ({
   onClose: () => void;
 }) => (
   <div
-    className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-xl p-0 md:p-6"
+    className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 backdrop-blur-2xl p-0 md:p-6"
     onClick={onClose}
   >
     <div
-      className="w-full h-full md:max-w-[95vw] md:max-h-[92vh] bg-gray-950 md:rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden border border-white/5 animate-in fade-in zoom-in-[0.98] duration-500"
+      className="w-full h-full md:max-w-4xl md:max-h-[85vh] bg-[#070b14] md:rounded-[3rem] shadow-[0_0_150px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden border border-white/10 animate-in fade-in zoom-in-[0.98] duration-500 relative"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#0a0f1d] shrink-0">
-        <h2 className="text-sm font-black text-gray-500 uppercase tracking-[0.4em] ml-4">
+      <div className="p-5 border-b border-white/5 flex justify-between items-center bg-[#0a0f1d] shrink-0 z-10">
+        <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] ml-4">
           {title}
         </h2>
         <button
@@ -192,268 +192,429 @@ const ModalWrapper = ({
           <XIcon className="w-6 h-6" />
         </button>
       </div>
-      <div className="flex-1 overflow-hidden h-full flex flex-col">
+      <div className="flex-1 overflow-hidden h-full flex flex-col relative">
         {children}
       </div>
     </div>
   </div>
 );
 
-const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
-  <div className="flex-1 flex flex-col items-center justify-center p-4 bg-gray-950 overflow-hidden">
-    <div className="flex flex-col items-center max-w-5xl w-full animate-in fade-in zoom-in-95 duration-500">
-      <div className="text-center mb-6">
-        <h2 className="text-3xl font-black text-white italic tracking-tighter mb-1 uppercase leading-none">
-          Studio Top-Up
-        </h2>
-        <div className="inline-block px-3 py-1 bg-indigo-600/10 border border-indigo-500/30 rounded-full">
-          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest italic">
-            Pay-As-You-Go • No Monthly Fees
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-8">
-        <div className="bg-[#0f172a] border border-sky-500/20 rounded-3xl p-5 flex flex-col items-center text-center transition-all hover:scale-[1.02] group">
-          <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
-            Line Up
-          </h3>
-          <div className="flex items-baseline gap-1 mb-4">
-            <span className="text-3xl font-black text-white tracking-tighter">
-              $12
-            </span>
-            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
-              One-time
-            </span>
-          </div>
-          <a
-            href={PAYPAL_STARTER_LINK}
-            target="_blank"
-            className="w-full py-3 bg-sky-600 text-white font-black text-[10px] uppercase tracking-widest rounded-lg shadow-lg mb-6 hover:bg-sky-500 transition-colors"
-          >
-            Purchase Now
-          </a>
-          <div className="w-full border border-sky-500/40 rounded-xl p-4 flex flex-col gap-2 bg-sky-950/10 text-left">
-            <div className="flex items-center gap-2 text-sky-300">
-              <CheckIcon className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-[9px] font-black uppercase tracking-wider">
-                100 Production Credits
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white/[0.03] border-2 border-white/20 rounded-3xl p-5 flex flex-col items-center text-center scale-105 z-10 shadow-xl relative overflow-hidden group">
-          <div className="absolute top-0 left-0 right-0 bg-white text-[8px] font-black text-black py-1 uppercase tracking-[0.2em]">
-            MOST POPULAR
-          </div>
-          <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
-            Production
-          </h3>
-          <div className="flex items-baseline gap-1 mb-4">
-            <span className="text-3xl font-black text-white tracking-tighter">
-              $25
-            </span>
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest italic leading-none">
-              Best Value
-            </span>
-          </div>
-          <a
-            href={PAYPAL_PRO_LINK}
-            target="_blank"
-            className="w-full py-3 bg-white text-black font-black text-[10px] uppercase tracking-widest rounded-lg shadow-lg mb-6 hover:bg-gray-200 transition-all hover:scale-105"
-          >
-            Get 300 Credits
-          </a>
-          <div className="w-full border border-white/10 rounded-xl p-4 flex flex-col gap-2 bg-white/5 text-left">
-            <div className="flex items-center gap-2 text-white">
-              <CheckIcon className="w-3.5 h-3.5 shrink-0 text-white" />
-              <span className="text-[9px] font-black uppercase tracking-wider">
-                300 Production Credits
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-[#0f172a] border border-amber-500/20 rounded-3xl p-5 flex flex-col items-center text-center transition-all hover:scale-[1.02] group">
-          <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
-            Studio
-          </h3>
-          <div className="flex items-baseline gap-1 mb-4">
-            <span className="text-3xl font-black text-white tracking-tighter">
-              $50
-            </span>
-            <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">
-              Max Power
-            </span>
-          </div>
-          <a
-            href={PAYPAL_STUDIO_LINK}
-            target="_blank"
-            className="w-full py-3 bg-amber-600 text-white font-black text-[10px] uppercase tracking-widest rounded-lg shadow-lg mb-6 hover:bg-amber-500 transition-colors"
-          >
-            Purchase Now
-          </a>
-          <div className="w-full border border-amber-500/40 rounded-xl p-4 flex flex-col gap-2 bg-amber-900/5 text-left">
-            <div className="flex items-center gap-2 text-amber-400">
-              <CheckIcon className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-[9px] font-black uppercase tracking-wider">
-                700 Production Credits
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="w-full max-w-xl bg-white/[0.02] border border-white/5 rounded-2xl p-4 text-center">
-        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] italic">
-          New Account Welcome Gift: 5 Credits Applied Automatically
-        </span>
-      </div>
-    </div>
-  </div>
-);
-
+/**
+ * PRODUCTION VIDEO RENDER ENGINE v8.0 - ZERO-DELAY START
+ * Fixed: 'Black first frame' issue.
+ * Added: Pre-warming phase for MediaRecorder and robust composition logic.
+ */
 const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
   clips,
   onClose
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState("Starting render engine...");
-  const [isComplete, setIsComplete] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [currentClipIndex, setCurrentClipIndex] = useState(0);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const animationFrameRef = useRef<number | null>(null);
-  const [exportExt, setExportExt] = useState("webm");
+  const [projectName, setProjectName] = useState("");
+  const [exportSuccess, setExportSuccess] = useState(false);
+  const [exportBlob, setExportBlob] = useState<Blob | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const startExport = async () => {
-      if (!canvasRef.current || !videoRef.current || clips.length === 0) return;
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      const stream = canvas.captureStream(30);
-      let mimeType = "video/webm";
-      let ext = "webm";
-      if (MediaRecorder.isTypeSupported("video/mp4")) {
-        mimeType = "video/mp4";
-        ext = "mp4";
-      } else if (MediaRecorder.isTypeSupported("video/webm;codecs=h264")) {
-        mimeType = "video/webm;codecs=h264";
-        ext = "webm";
+  const handleExport = useCallback(async () => {
+    if (clips.length === 0) return;
+    setIsExporting(true);
+    setError(null);
+    setExportBlob(null);
+    setExportSuccess(false);
+    setProgress(0);
+
+    try {
+      // STEP 1: CALCULATE TOTAL TIMELINE DURATION
+      const totalDuration = Math.max(
+        ...clips.map(
+          (c) => (Number(c.startTime) || 0) + (Number(c.duration) || 0)
+        ),
+        0.1
+      );
+
+      // STEP 2: RESOLVE AND PRE-LOAD ALL ASSETS
+      const assetMap = new Map<string, HTMLImageElement | HTMLVideoElement>();
+      await Promise.all(
+        clips.map(async (clip) => {
+          const url =
+            typeof clip.url !== "string"
+              ? URL.createObjectURL(clip.url)
+              : clip.url.startsWith("data:") ||
+                  clip.url.startsWith("http") ||
+                  clip.url.startsWith("blob:")
+                ? clip.url
+                : `data:image/png;base64,${clip.url}`;
+
+          return new Promise<void>((resolve, reject) => {
+            if (clip.type === "video") {
+              const v = document.createElement("video");
+              v.src = url;
+              v.crossOrigin = "anonymous";
+              v.muted = true;
+              v.playsInline = true;
+              v.preload = "auto";
+              v.oncanplaythrough = () => {
+                assetMap.set(clip.id, v);
+                resolve();
+              };
+              v.onerror = () =>
+                reject(new Error("Video load failed: " + clip.id));
+              v.load();
+            } else {
+              const img = new Image();
+              img.src = url;
+              img.crossOrigin = "anonymous";
+              img.onload = () => {
+                assetMap.set(clip.id, img);
+                resolve();
+              };
+              img.onerror = () =>
+                reject(new Error("Image load failed: " + clip.id));
+            }
+          });
+        })
+      );
+
+      // STEP 3: SETUP DUAL-CANVAS SYSTEM
+      const compositionCanvas = document.createElement("canvas");
+      const captureCanvas = document.createElement("canvas");
+      compositionCanvas.width = captureCanvas.width = 1280;
+      compositionCanvas.height = captureCanvas.height = 720;
+
+      const compCtx = compositionCanvas.getContext("2d", { alpha: false });
+      const captCtx = captureCanvas.getContext("2d", { alpha: false });
+      if (!compCtx || !captCtx)
+        throw new Error("Hardware acceleration failed.");
+
+      // Helper to render a specific time point to the capture canvas
+      const renderFrameToCapture = async (time: number) => {
+        compCtx.fillStyle = "black";
+        compCtx.fillRect(
+          0,
+          0,
+          compositionCanvas.width,
+          compositionCanvas.height
+        );
+
+        // Slightly loose filter to avoid frame-skip on zero-boundaries
+        const activeClips = clips
+          .filter(
+            (c) =>
+              time >= c.startTime - 0.001 && time < c.startTime + c.duration
+          )
+          .sort((a, b) => (a.layer || 0) - (b.layer || 0));
+
+        for (const clip of activeClips) {
+          const asset = assetMap.get(clip.id);
+          if (!asset) continue;
+
+          if (asset instanceof HTMLVideoElement) {
+            const localTime = Math.min(
+              Math.max(0, time - clip.startTime),
+              asset.duration - 0.05
+            );
+            asset.currentTime = localTime;
+            await new Promise((res) => {
+              const onSeeked = () => {
+                asset.removeEventListener("seeked", onSeeked);
+                res(true);
+              };
+              asset.addEventListener("seeked", onSeeked);
+              setTimeout(res, 180);
+            });
+          }
+
+          const assetW =
+            asset instanceof HTMLVideoElement ? asset.videoWidth : asset.width;
+          const assetH =
+            asset instanceof HTMLVideoElement
+              ? asset.videoHeight
+              : asset.height;
+          const ratio = Math.min(
+            compositionCanvas.width / assetW,
+            compositionCanvas.height / assetH
+          );
+          const w = assetW * ratio;
+          const h = assetH * ratio;
+          const x = (compositionCanvas.width - w) / 2;
+          const y = (compositionCanvas.height - h) / 2;
+          compCtx.drawImage(asset, x, y, w, h);
+        }
+        captCtx.drawImage(compositionCanvas, 0, 0);
+      };
+
+      // PRE-WARM: Draw the first frame BEFORE capture starts
+      await renderFrameToCapture(0);
+
+      const stream = captureCanvas.captureStream(30);
+      const supportedTypes = [
+        "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+        "video/mp4;codecs=h264",
+        "video/webm;codecs=vp9",
+        "video/webm"
+      ];
+
+      let options: MediaRecorderOptions = { videoBitsPerSecond: 12000000 }; // 12Mbps for high fidelity
+      for (const type of supportedTypes) {
+        if (MediaRecorder.isTypeSupported(type)) {
+          options.mimeType = type;
+          break;
+        }
       }
-      setExportExt(ext);
-      const recorder = new MediaRecorder(stream, { mimeType: mimeType });
-      recorderRef.current = recorder;
-      chunksRef.current = [];
+
+      const recorder = new MediaRecorder(stream, options);
+      const chunks: Blob[] = [];
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data.size > 0) chunks.push(e.data);
       };
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        setDownloadUrl(url);
-        setIsComplete(true);
-        setStatus("Render Complete!");
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `timeline_export_${Date.now()}.${ext}`;
-        a.click();
-      };
+
+      const recordingPromise = new Promise<Blob>((resolve) => {
+        recorder.onstop = () =>
+          resolve(new Blob(chunks, { type: options.mimeType || "video/mp4" }));
+      });
+
+      // Start recorder and wait for codec initialization
       recorder.start();
-      setStatus("Rendering video... Do not close.");
-      for (let i = 0; i < clips.length; i++) {
-        setCurrentClipIndex(i);
-        const clip = clips[i];
-        setStatus(`Rendering Clip ${i + 1}/${clips.length}...`);
-        await new Promise<void>((resolve) => {
-          video.src = clip.url;
-          video.muted = true;
-          video.crossOrigin = "anonymous";
-          video.onloadedmetadata = () => {
-            canvas.width = video.videoWidth || 1280;
-            canvas.height = video.videoHeight || 720;
-          };
-          video.oncanplay = () => {
-            video.play();
-            drawFrame();
-          };
-          const drawFrame = () => {
-            if (video.paused || video.ended) return;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            animationFrameRef.current = requestAnimationFrame(drawFrame);
-          };
-          video.onended = () => {
-            if (animationFrameRef.current)
-              cancelAnimationFrame(animationFrameRef.current);
-            resolve();
-          };
-          video.onerror = () => {
-            console.error("Video load error for clip", i);
-            resolve();
-          };
-        });
-        setProgress(((i + 1) / clips.length) * 100);
+      await new Promise((r) => setTimeout(r, 250));
+
+      // STEP 4: TIMELINE FRAME-STEPPER LOOP
+      const fps = 30;
+      const totalFrames = Math.ceil(totalDuration * fps);
+
+      for (let f = 0; f < totalFrames; f++) {
+        const currentTime = f / fps;
+        await renderFrameToCapture(currentTime);
+
+        if (f % 10 === 0) {
+          setProgress(Math.round((f / totalFrames) * 100));
+          await new Promise((r) => requestAnimationFrame(r));
+        }
       }
+
+      // Finalizing... Ensure last frame is encoded
+      await new Promise((r) => setTimeout(r, 1000));
       recorder.stop();
-    };
-    startExport();
-    return () => {
-      if (animationFrameRef.current)
-        cancelAnimationFrame(animationFrameRef.current);
-      if (recorderRef.current && recorderRef.current.state === "recording")
-        recorderRef.current.stop();
-    };
-  }, []);
+      const finalBlob = await recordingPromise;
+      setExportBlob(finalBlob);
+      setExportSuccess(true);
+      setIsExporting(false);
+      setProgress(100);
+    } catch (err: any) {
+      console.error("Master Export Failure:", err);
+      setError(err.message || "Renderer resource exhaustion.");
+      setIsExporting(false);
+    }
+  }, [clips]);
+
+  const handleSaveToDevice = async () => {
+    if (!exportBlob) return;
+    const finalTitle = projectName.trim() || `Production_Master_${Date.now()}`;
+    const ext = exportBlob.type.includes("mp4") ? "mp4" : "webm";
+    const filename = `${finalTitle.replace(/\s+/g, "_")}.${ext}`;
+
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile && navigator.share && navigator.canShare) {
+      const file = new File([exportBlob], filename, { type: exportBlob.type });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: finalTitle });
+          return;
+        } catch (e) {
+          console.warn("Native share dismissed.");
+        }
+      }
+    }
+
+    const url = URL.createObjectURL(exportBlob);
+          const link = document.createElement("a");
+          link.href = url;
+    link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/95 backdrop-blur-2xl">
-      <div className="bg-gray-900 border border-gray-700 rounded-[2rem] p-8 max-w-lg w-full text-center shadow-2xl animate-in zoom-in-95 duration-300">
-        <h3 className="text-2xl font-black text-white mb-2 tracking-tighter italic">
-          Exporting Master
-        </h3>
-        <div className="relative aspect-video bg-black rounded-2xl overflow-hidden mb-6 border border-gray-800 shadow-inner">
-          <canvas ref={canvasRef} className="w-full h-full object-contain" />
-          <video ref={videoRef} className="hidden" />
-        </div>
-        <div className="w-full bg-gray-800 rounded-full h-2 mb-3">
-          <div
-            className="bg-indigo-600 h-2 rounded-full transition-all duration-300 shadow-[0_0_100px_rgba(99,102,241,0.5)]"
-            style={{ width: `${progress}%` }}
-          ></div>
-        </div>
-        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest animate-pulse mb-8">
-          {status}
-        </p>
-        {isComplete ? (
-          <div className="flex gap-3 justify-center">
-            <a
-              href={downloadUrl || "#"}
-              download={`timeline_export.${exportExt}`}
-              className="flex-1 flex items-center justify-center gap-2 py-4 bg-green-600 hover:bg-green-700 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg transition-all"
-            >
-              <DownloadIcon className="w-4 h-4" /> Get Video
-            </a>
-            <button
-              onClick={onClose}
-              className="px-8 py-4 bg-gray-800 hover:bg-gray-700 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all"
-            >
-              Done
-            </button>
-          </div>
+    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-950">
+      <div
+        className={`w-24 h-24 rounded-full flex items-center justify-center mb-8 border transition-all shadow-2xl ${exportSuccess ? "bg-green-600/10 border-green-500/20" : "bg-indigo-600/10 border-indigo-500/20"}`}
+      >
+        {exportSuccess ? (
+          <CheckIcon className="w-12 h-12 text-green-500" />
         ) : (
+          <FilmIcon className="w-12 h-12 text-indigo-500" />
+        )}
+      </div>
+
+      <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase mb-6">
+        {exportSuccess ? "Master Reel Ready" : "Finalize Production"}
+      </h3>
+
+      {exportSuccess ? (
+        <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
+          <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 max-w-sm">
+            <p className="text-green-400 text-sm font-black uppercase tracking-[0.2em] leading-relaxed">
+              Success: Your cinematic reel is ready for download. Click
+               'Save Video '.
+            </p>
+          </div>
+          <div className="flex flex-col gap-4 w-full">
+            <button
+              onClick={handleSaveToDevice}
+              className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.4em] rounded-[2rem] shadow-[0_20px_50px_rgba(79,70,229,0.3)] transition-all active:scale-95 text-[11px] border border-indigo-400/30 flex items-center justify-center gap-3"
+            >
+              <DownloadIcon className="w-5 h-5" /> Save Reel to Device
+            </button>
           <button
             onClick={onClose}
-            className="px-6 py-3 bg-red-900/20 hover:bg-red-800 border border-red-800/30 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+            className="px-16 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-[0.3em] rounded-2xl transition-all text-[10px] border border-white/5"
+          >
+              Return to Desk
+          </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="text-gray-500 text-[11px] max-w-md mb-12 font-bold uppercase tracking-widest leading-relaxed">
+            Rendering high-fidelity sequence using .
+          </p>
+
+          <div className="w-full max-w-sm space-y-8">
+            <div className="space-y-2 text-left">
+              <label className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-2">
+                Project Label
+              </label>
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="E.g. The_Lion_Of_Lagos"
+                className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-indigo-500 outline-none transition-all placeholder-gray-800 text-sm shadow-inner group-hover:border-indigo-500/50"
+              />
+              <p className="text-[8px] text-gray-600 font-bold uppercase tracking-widest ml-2 italic">
+                Leave blank to use cinematic defaults
+              </p>
+            </div>
+
+      {isExporting ? (
+              <div className="space-y-6">
+                <div className="h-2.5 bg-gray-900 rounded-full overflow-hidden border border-white/5">
+            <div
+              className="h-full bg-indigo-600 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+                <div className="flex items-center justify-center gap-3">
+                  <LoaderIcon className="w-4 h-4 animate-spin text-indigo-500" />
+                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] animate-pulse">
+            Rendering Master Reel... {progress}%
+          </p>
+                </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button
+            onClick={handleExport}
+                  className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.4em] rounded-[2rem] shadow-2xl transition-all active:scale-95 text-[12px] border border-indigo-400/20"
+          >
+                  Start Master Render
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-400 font-black uppercase tracking-widest rounded-xl transition-all text-[10px]"
           >
             Cancel
           </button>
-        )}
+        </div>
+      )}
+            {error && (
+              <div className="p-4 bg-red-900/10 border border-red-500/20 rounded-2xl flex items-start gap-3 animate-in shake">
+                <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0" />
+                <p className="text-red-400 text-[10px] font-black uppercase tracking-widest text-left leading-tight">
+                  {error}
+                </p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const [isGiftMode, setIsGiftMode] = useState(false);
+  const [giftRecipientEmail, setGiftRecipientEmail] = useState("");
+
+  return (
+    <div className="flex-1 h-full overflow-y-auto bg-gray-950 p-4 sm:p-8 scrollbar-thin scrollbar-thumb-gray-800">
+      <div className="max-w-5xl mx-auto flex flex-col items-center animate-in fade-in zoom-in-95 duration-500 origin-top">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-black text-white italic tracking-tighter mb-2 uppercase leading-none">
+            Studio Top-Up
+          </h2>
+          <div className="inline-flex flex-col items-center gap-4">
+            <div className="flex bg-white/5 rounded-2xl p-1 border border-white/10 shadow-inner">
+              <button
+                onClick={() => setIsGiftMode(false)}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isGiftMode ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+              >
+                Account Recharge
+              </button>
+              <button
+                onClick={() => setIsGiftMode(true)}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isGiftMode ? "bg-amber-500 text-black shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+              >
+                <GiftIcon className="w-4 h-4" /> Gift Someone
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-10">
+          <div
+            className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group`}
+          >
+            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase tracking-widest">
+              $12 (100C)
+            </h3>
+            <a
+              href={PAYPAL_STARTER_LINK}
+              target="_blank"
+              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-sky-600 text-white"}`}
+            >
+              Purchase
+            </a>
+          </div>
+          <div
+            className={`border-2 rounded-2xl flex flex-col items-center text-center shadow-xl p-6 ${isGiftMode ? "bg-[#221c0e] border-amber-500/30" : "bg-[#111827] border-white/20"}`}
+          >
+            <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
+              $25 (300C)
+            </h3>
+            <a
+              href={PAYPAL_PRO_LINK}
+              target="_blank"
+              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-white text-black"}`}
+            >
+              Best Value
+            </a>
+          </div>
+          <div
+            className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group`}
+          >
+            <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
+              $50 (700C)
+            </h3>
+            <a
+              href={PAYPAL_STUDIO_LINK}
+              target="_blank"
+              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-amber-600 text-white"}`}
+            >
+              Max Pack
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -511,9 +672,9 @@ export const Modals: React.FC<ModalsProps> = ({
   onAddTimelineClip,
   onAddTextClip,
   onCaptureFrameFromTimeline,
-  onExportTimeline,
   timelinePlaybackTime,
   onUpdateTimelinePlaybackTime,
+  onExportTimeline,
   generationItem,
   historyIndex,
   activeVideoIndices,
@@ -570,8 +731,13 @@ export const Modals: React.FC<ModalsProps> = ({
 
   if (!activeModal) return null;
 
-  if (activeModal === "export-video")
-    return <VideoExporter clips={modalData.clips} onClose={onClose} />;
+  if (activeModal === "export-video") {
+    return (
+      <ModalWrapper title="Final Production Render" onClose={onClose}>
+        <VideoExporter clips={modalData.clips} onClose={onClose} />
+      </ModalWrapper>
+    );
+  }
 
   if (activeModal === "image-preview")
     return (
@@ -640,7 +806,7 @@ export const Modals: React.FC<ModalsProps> = ({
           masterHistory={masterHistory}
           savedItems={savedItems}
           onClose={onClose}
-          // DO add comment above each fix. Change handleLoadHistory to onLoadHistory to correctly reference the prop.
+          // DO add comment: Fixed name error: 'handleLoadHistory' replaced with 'onLoadHistory' which is available from destructured props.
           onLoadHistory={onLoadHistory}
           onClearHistory={onClearHistory}
           onToggleSave={onToggleSave}
@@ -674,7 +840,7 @@ export const Modals: React.FC<ModalsProps> = ({
 
   if (activeModal === "timeline") {
     return (
-      <ModalWrapper title="Story Timeline" onClose={onClose}>
+      <ModalWrapper title="Sequence Timeline" onClose={onClose}>
         <Timeline
           clips={timelineClips || []}
           audioClips={audioClips || []}
@@ -695,7 +861,7 @@ export const Modals: React.FC<ModalsProps> = ({
           onCaptureFrame={onCaptureFrameFromTimeline}
           // DO add comment: Passed onUndo to Timeline component inside activeModal === 'timeline' block.
           onUndo={onUndo}
-          playbackTime={timelinePlaybackTime || 0}
+          playbackTime={timelinePlaybackTime ?? modalData.playbackTime ?? 0}
           onUpdatePlaybackTime={onUpdateTimelinePlaybackTime || (() => {})}
         />
       </ModalWrapper>
@@ -727,7 +893,6 @@ export const Modals: React.FC<ModalsProps> = ({
             });
             setActiveModal("edit-image");
           }}
-          // DO add comment above each fix. Passed onRegenerateScene and onAngleSelect to Storyboard.
           onRegenerateScene={onRegenerateScene || (() => {})}
           onAngleSelect={onAngleSelect || (() => {})}
           onOpenVideoCreator={onOpenVideoCreator || (() => {})}
@@ -740,7 +905,9 @@ export const Modals: React.FC<ModalsProps> = ({
           setVideoModel={setVideoModel || (() => {})}
           setVideoResolution={setVideoResolution || (() => {})}
           onPreviewImage={(src) => onUpdateModalData?.({ src })}
-          onSwitchSession={onSwitchSession || (() => {})}
+          onSwitchSession={onLoadHistory}
+          onDeleteScene={onDeleteScene}
+          onUndoEdit={onUndoEdit}
           onNewSession={onNewSession || (() => {})}
           onUpdateVideoDraft={onUpdateVideoDraft || (() => {})}
           creditBalance={creditBalance}
@@ -750,8 +917,6 @@ export const Modals: React.FC<ModalsProps> = ({
           setActiveI2ISlot={setActiveI2ISlot || (() => {})}
           onUploadStartImage={onUploadStartImage}
           onUploadToSession={onUploadToSession}
-          onDeleteScene={onDeleteScene}
-          onUndoEdit={onUndoEdit}
           onSceneVariantChange={onSceneVariantChange}
         />
       </ModalWrapper>
@@ -814,7 +979,6 @@ export const Modals: React.FC<ModalsProps> = ({
             </button>
           </div>
           <div className="p-4 max-h-[70vh] overflow-y-auto space-y-6">
-            {/* Sync Character Row */}
             <div>
               <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-3">
                 Sync Character (Focus Actor)
@@ -852,7 +1016,7 @@ export const Modals: React.FC<ModalsProps> = ({
 
             <div>
               <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-3">
-                Select Framing
+                Select Shot
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {CAMERA_ANGLE_OPTIONS.map((angle) => (
@@ -896,7 +1060,7 @@ export const Modals: React.FC<ModalsProps> = ({
               className={`px-6 py-2.5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-2xl transition-all flex items-center gap-2 active:scale-95 ${isConfirmingAngle ? "bg-green-600 hover:bg-green-700" : "bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-500"}`}
             >
               {isConfirmingAngle ? (
-                "Confirm Production"
+                "Confirm Shot"
               ) : (
                 <>
                   <CameraIcon className="w-4 h-4" /> Initiate Shot
