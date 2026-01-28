@@ -16,7 +16,7 @@ import { Storyboard } from "./components/Storyboard";
 import { Timeline } from "./components/Timeline";
 import { HistoryPanel } from "./components/History";
 import { Footage } from "./components/Footage";
-// DO add comment above each fix. Added missing TrashIcon to imports.
+import DirectorsCut from "./components/DirectorsCut";
 import {
   XIcon,
   SparklesIcon,
@@ -2244,6 +2244,12 @@ const App: React.FC = () => {
                       layout={layoutMode}
                     />
                 {renderFootageDesk()}
+                  </div>
+                )}
+
+                {activeView === "directors-cut" && (
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <DirectorsCut onClose={() => setActiveView("menu")} />
                   </div>
                 )}
               </div>

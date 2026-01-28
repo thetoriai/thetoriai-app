@@ -232,18 +232,8 @@ export const UploadIcon: React.FC<IconProps> = ({ className }) => (
 );
 
 export const ClapperboardIcon: React.FC<IconProps> = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M7 4V20M17 4V20M3 8H21M3 12H21M3 16H21"
-    />
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M22 6.5V17c0 1.66-1.34 3-3 3H5c-1.66 0-3-1.34-3-3V6.5c0-1.66 1.34-3 3-3h14c1.66 0 3 1.34 3 3zM10.12 5H5c-.83 0-1.5.67-1.5 1.5V7h5.12L10.12 5zm2.88 0l-1.4 2h3.8l1.4-2h-3.8zm5.2 0l-1.4 2H19c.83 0 1.5-.67 1.5-1.5V5h-3.8zM3.5 8.5V17c0 .83.67 1.5 1.5 1.5h14c.83 0 1.5-.67 1.5-1.5V8.5h-17z" />
   </svg>
 );
 

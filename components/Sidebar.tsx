@@ -11,7 +11,8 @@ import {
   CreditCardIcon,
   PlusIcon,
   XIcon,
-  FilmIcon
+  FilmIcon,
+  ClapperboardIcon
 } from "./Icons";
 import {
   HELLO_EMAIL,
@@ -33,6 +34,7 @@ interface SidebarProps {
   onLogout: () => void;
   creditBalance: number;
   session?: any;
+  onClose?: () => void;
 }
 
 export const VIEW_COLORS: Record<string, string> = {
@@ -42,7 +44,8 @@ export const VIEW_COLORS: Record<string, string> = {
   timeline: "#6366f1",
   footage: "#06b6d4",
   history: "#94a3b8",
-  "buy-credits": "#eab308"
+  "buy-credits": "#eab308",
+  "directors-cut": "#ef4444"
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -58,7 +61,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setSelectedCountry,
   onLogout,
   creditBalance,
-  session
+  session,
+  onClose
 }) => {
   const windowWidth = window.innerWidth;
   // UPDATED BREAKPOINTS: 500px and below is Phone. 501px-1023px is Standing Tablet. 1024px+ is Desktop/Rotating.
@@ -276,6 +280,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         <div className="flex-1 overflow-y-auto p-6 space-y-2">
           {navItems.map((item) => (
+            <div key={item.id} className="relative">
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}
@@ -292,6 +297,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {item.label}
               </span>
             </button>
+             {item.id === "timeline" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNavClick("directors-cut");
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-transform z-20 border border-red-500"
+                >
+                  <ClapperboardIcon className="w-5 h-5 text-white" />
+                </button>
+              )}
+            </div>
           ))}
         </div>
         <div className="p-8 border-t border-white/5 flex flex-col gap-4 bg-[#0a0f1d]">
