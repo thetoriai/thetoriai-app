@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { LOGO_URL } from "../utils/constants";
 
 export interface IconProps {
@@ -117,6 +117,9 @@ export const RefreshIcon: React.FC<IconProps> = ({ className }) => (
     />
   </svg>
 );
+
+// Alias RefreshIcon as ResetIcon for DirectorsCut
+export const ResetIcon: React.FC<IconProps> = RefreshIcon;
 
 export const BookmarkIcon: React.FC<IconProps> = ({ className, solid }) => (
   <svg
@@ -365,6 +368,9 @@ export const PhotoIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
+// Alias PhotoIcon as ImageIcon for DirectorsCut
+export const ImageIcon: React.FC<IconProps> = PhotoIcon;
+
 export const FilmIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -384,6 +390,12 @@ export const FilmIcon: React.FC<IconProps> = ({ className }) => (
 export const PlayIcon: React.FC<IconProps> = ({ className }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24">
     <path d="M8 5v14l11-7z" />
+  </svg>
+);
+
+export const PauseIcon: React.FC<IconProps> = ({ className }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
   </svg>
 );
 
@@ -495,17 +507,46 @@ export const EllipsisVerticalIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-export const Logo: React.FC<IconProps> = ({ className }) => (
+export const Logo: React.FC<IconProps> = ({ className }) => {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError) {
+    return (
+      <svg
+        className={className}
+        viewBox="0 0 100 100"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <circle
+          cx="50"
+          cy="50"
+          r="48"
+          fill="currentColor"
+          fillOpacity="0.1"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeDasharray="4 4"
+        />
+        <path d="M35 30H65V40H55V75H45V40H35V30Z" fill="currentColor" />
+        <path
+          d="M25 20C25 17.2386 27.2386 15 30 15H70C72.7614 15 75 17.2386 75 20V80C75 82.7614 72.7614 85 70 85H30C27.2386 85 25 82.7614 25 80V20ZM30 20V80H70V20H30Z"
+          fill="currentColor"
+          fillOpacity="0.3"
+        />
+      </svg>
+    );
+  }
+
+  return (
   <img
     src={LOGO_URL}
     className={`${className} object-contain`}
     alt="Thetori AI"
-    onError={(e) => {
-      (e.target as HTMLImageElement).src =
-        "https://raw.githubusercontent.com/user-attachments/assets/6580a6b6-f513-43f6-8c43-2287754d9294";
-    }}
+      onError={() => setHasError(true)}
   />
 );
+};
 
 export const LoaderIcon: React.FC<IconProps> = ({ className }) => (
   <svg
@@ -723,7 +764,9 @@ export const LockClosedIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
-// ADDED: LockOpenIcon
+// Alias LockClosedIcon as LockIcon
+export const LockIcon: React.FC<IconProps> = LockClosedIcon;
+
 export const LockOpenIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     className={className}
@@ -811,6 +854,38 @@ export const ClipboardIcon: React.FC<IconProps> = ({ className }) => (
       strokeLinecap="round"
       strokeLinejoin="round"
       d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+    />
+  </svg>
+);
+
+export const CompressIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M9 9L4.5 4.5M9 9V4.5M9 9H4.5M15 15L19.5 19.5M15 15V19.5M15 15H19.5M9 15L4.5 19.5M9 15V19.5M9 15H4.5M15 9L19.5 4.5M15 9V4.5M15 9H19.5"
+    />
+  </svg>
+);
+
+export const ExpandIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
     />
   </svg>
 );
