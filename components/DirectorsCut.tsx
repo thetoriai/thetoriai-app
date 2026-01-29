@@ -14,7 +14,7 @@ import {
   ImageIcon,
   PlusIcon,
   ClapperboardIcon,
-  Logo
+  ArrowsRightLeftIcon
 } from "./Icons";
 
 /**
@@ -63,6 +63,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   
   const [webcamActive, setWebcamActive] = useState(false);
+  const [webcamFlipped, setWebcamFlipped] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isAssetPlaying, setIsAssetPlaying] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -282,7 +283,14 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
         sx = 0;
         sy = (v.videoHeight - sh) / 2;
       }
+
+      ctx.save();
+      if (webcamFlipped) {
+        ctx.translate(w, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h);
+      ctx.restore();
     }
 
     const renderOrder = [...visibleAssetIds].sort((a, b) =>
@@ -395,6 +403,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
     assets,
     selectedAssetId,
     webcamActive,
+    webcamFlipped,
     isLocked,
     isFullFrame
   ]);
@@ -768,9 +777,17 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
         >
           <XIcon className="text-lg" />
         </button>
-
+        {/* FLIP BUTTON: Added feature to flip camera feed to the other side */}
+        <button
+          onClick={() => setWebcamFlipped(!webcamFlipped)}
+          className={`absolute top-6 right-6 z-5z w-12 h-12 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full transition-all shadow-xl active:scale-90 ${webcamFlipped ? "text-indigo-400 border-indigo-500/50 shadow-indigo-500/10" : "text-white/60 hover:text-white"}`}
+        >
+          <ArrowsRightLeftIcon className="text-[10px]" />
+          <span className="text-[4px] font-black uppercase mt-0.5 tracking-tighter">
+            
+          </span>
+        </button>
         {/* --- LEFT  SIDEBAR (MODES) --- */}
-
         <div
           className="absolute left-2 top-58 flex flex-col space-y-4 z-30"
           onPointerDown={(e) => e.stopPropagation()}
@@ -831,7 +848,6 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
               SIGHT
             </span>
           </button>
-
           {selectedAssetId && (
             <>
               <button
@@ -941,7 +957,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
       {assets.length === 0 && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 text-center space-y-8">
           <div className="w-20 h-20 bg-red-600 rounded-2xl flex items-center justify-center transform -rotate-12 shadow-[0_20px_40px_rgba(220,38,38,0.4)] overflow-hidden">
-            <Logo className="w-12 h-12 text-white" />
+            <ClapperboardIcon className="w-12 h-12 text-white" />
           </div>
           <div className="space-y-1">
             <h1 className="text-3xl font-black italic tracking-tighter uppercase text-white leading-none">
