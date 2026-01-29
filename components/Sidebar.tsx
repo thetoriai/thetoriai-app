@@ -130,12 +130,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       <div className="space-y-6">
         <div>
-          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+          <span className="text-[10px] font-black text-indigo-400  tracking-[0.2em] block mb-3 ml-1">
             Visual Directives
           </span>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-[8px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+              <label className="text-[8px] font-black text-gray-500  tracking-widest block ml-1">
                 Style
               </label>
               <div className="relative">
@@ -153,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[8px] font-black text-gray-500 uppercase tracking-widest block ml-1">
+              <label className="text-[8px] font-black text-gray-500  tracking-widest block ml-1">
                 Aspect
               </label>
               <div className="relative">
@@ -174,20 +174,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="h-px bg-white/5"></div>
 
         <div>
-          <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+          <span className="text-[10px] font-black text-indigo-400  tracking-[0.2em] block mb-3 ml-1">
             Production Context
           </span>
           <div className="space-y-3">
             <div className="flex bg-black/40 p-1 rounded-xl border border-white/5">
               <button
                 onClick={() => handleContextChange("Afro-toon")}
-                className={`flex-1 py-1.5 text-[9px] font-black transition-all uppercase rounded-lg ${characterStyle === "Afro-toon" ? "bg-indigo-600 text-white" : "text-gray-500"}`}
+                className={`flex-1 py-1.5 text-[9px] font-black transition-all  rounded-lg ${characterStyle === "Afro-toon" ? "bg-indigo-600 text-white" : "text-gray-500"}`}
               >
                 Afro
               </button>
               <button
                 onClick={() => handleContextChange("General")}
-                className={`flex-1 py-1.5 text-[9px] font-black transition-all uppercase rounded-lg ${characterStyle === "General" ? "bg-indigo-600 text-white" : "text-gray-500"}`}
+                className={`flex-1 py-1.5 text-[9px] font-black transition-all  rounded-lg ${characterStyle === "General" ? "bg-indigo-600 text-white" : "text-gray-500"}`}
               >
                 Global
               </button>
@@ -217,37 +217,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "roster",
       icon: <UserPlusIcon className="w-5 h-5" />,
-      label: "Character roster"
+      label: "Roster"
     },
     {
       id: "storybook",
       icon: <BookOpenIcon className="w-5 h-5" />,
-      label: "Story writer"
+      label: "Storybook"
     },
     {
       id: "storyboard",
       icon: <VideoIcon className="w-5 h-5" />,
-      label: "Production stage"
+      label: "Storyboard"
     },
     {
       id: "footage",
       icon: <FilmIcon className="w-5 h-5" />,
-      label: "Quick footage desk"
+      label: "Quick Footage "
     },
     {
       id: "timeline",
       icon: <TimelineIcon className="w-5 h-5" />,
-      label: "Story timeline"
+      label: "Timeline"
     },
     {
       id: "history",
       icon: <HistoryIcon className="w-5 h-5" />,
-      label: "Production history"
+      label: "History"
     },
     {
       id: "buy-credits",
       icon: <CreditCardIcon className="w-5 h-5" />,
-      label: "Get credits"
+      label: "Get Credits"
     }
   ];
 
@@ -293,7 +293,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 {item.icon}
               </span>
-              <span className="text-[12px] font-black uppercase tracking-[0.2em]">
+              <span className="text-[14px] font-black  tracking-[0.2em]">
                 {item.label}
               </span>
             </button>
@@ -314,11 +314,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-8 border-t border-white/5 flex flex-col gap-4 bg-[#0a0f1d]">
           <button
             onClick={onLogout}
-            className="w-full py-4 rounded-2xl bg-red-900/10 text-red-400 font-black uppercase tracking-widest text-[10px] border border-red-900/20"
+            className="w-full py-4 rounded-2xl bg-red-900/10 text-red-400 font-black  tracking-widest text-[10px] border border-red-900/20"
           >
             Sign Out Session
           </button>
-          <p className="text-[8px] font-black text-gray-600 text-center uppercase tracking-[0.3em]">
+          <p className="text-[8px] font-black text-gray-600 text-center  tracking-[0.3em]">
             v2.5.3 Production Terminal
           </p>
         </div>
@@ -357,7 +357,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ))}
         </nav>
         <div className="mt-auto pb-4 flex flex-col gap-4 items-center">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex flex-col items-center justify-center text-[8px] font-black text-indigo-400 uppercase">
+          <div className="w-10 h-10 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex flex-col items-center justify-center text-[8px] font-black text-indigo-400 ">
             {creditBalance}
           </div>
           <button
@@ -423,7 +423,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 {item.icon}
               </span>
-              <span className="text-[11px] font-black tracking-[0.15em] uppercase truncate">
+              <span className="text-[14px] font-black tracking-[0.15em]  truncate">
                 {item.label}
               </span>
             </button>
@@ -433,14 +433,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="mt-auto pt-6 border-t border-white/5 flex flex-col items-center gap-3 shrink-0">
           <button
             onClick={onLogout}
-            className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-400 border border-red-900/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98]"
+            className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-400 border border-red-900/30 rounded-xl text-[10px] font-black  tracking-widest transition-all active:scale-[0.98]"
           >
             Sign Out Session
           </button>
           <p className="text-[7px] font-black text-center text-gray-500 tracking-[0.15em] italic">
             Contact: {HELLO_EMAIL}
           </p>
-          <p className="text-[8px] font-black text-center text-gray-700 tracking-[0.4em] uppercase">
+          <p className="text-[8px] font-black text-center text-gray-700 tracking-[0.4em] ">
             Thetori Ai Engine v2.5.3
           </p>
         </div>

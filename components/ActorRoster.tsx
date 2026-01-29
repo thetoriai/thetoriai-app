@@ -204,7 +204,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
               />
               {char.description && !isProcessing && (
                 <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/100 via-black/80 to-transparent pointer-events-none">
-                  <p className="text-[10px] font-black text-white uppercase tracking-widest line-clamp-2 drop-shadow-md">
+                  <p className="text-[10px] font-black text-white  tracking-widest line-clamp-2 drop-shadow-md">
                     {char.description.replace(/Who: |Age: |Clothes: /g, "")}
                   </p>
                 </div>
@@ -215,7 +215,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
               <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center mb-3 border border-amber-500/30">
                 <ExclamationTriangleIcon className="w-5 h-5 text-amber-500" />
               </div>
-              <h4 className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-1">
+              <h4 className="text-[8px] font-black text-amber-500  tracking-widest mb-1">
                 {char.detectedImageStyle === "BLOCK_MINOR"
                   ? "Minor Detected"
                   : "Content Rejected"}
@@ -230,7 +230,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                   });
                   setShowRefineId(char.id);
                 }}
-                className="px-4 py-1.5 bg-amber-600 text-black text-[8px] font-black uppercase tracking-widest rounded transition-all active:scale-95"
+                className="px-4 py-1.5 bg-amber-600 text-black text-[8px] font-black  tracking-widest rounded transition-all active:scale-95"
               >
                 Reset Artist
               </button>
@@ -240,7 +240,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
               {isProcessing ? (
                 <div className="flex flex-col items-center">
                   <LoaderIcon className="w-8 h-8 text-indigo-500 animate-spin" />
-                  <span className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.4em] mt-4">
+                  <span className="text-[8px] font-black text-indigo-400  tracking-[0.4em] mt-4">
                     Analysing...
                   </span>
                 </div>
@@ -249,7 +249,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                   <div className="w-14 h-14 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center mb-4 group-hover/empty:scale-110 transition-transform">
                     <UserPlusIcon className="w-5 h-5 text-gray-400 group-hover/empty:text-indigo-500" />
                   </div>
-                  <span className="text-[9px] font-black text-gray-300 uppercase tracking-[0.25em] text-center px-6 leading-relaxed group-hover/empty:text-white transition-colors">
+                  <span className="text-[9px] font-black text-gray-300  tracking-[0.25em] text-center px-6 leading-relaxed group-hover/empty:text-white transition-colors">
                     Double-click to
                     <br />
                     Describe Artist
@@ -319,7 +319,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                     props.handleBuildCharacterVisual(char.id);
                     setShowRefineId(null);
                   }}
-                  className={`flex-1 py-2 text-[8px] font-black uppercase tracking-[0.2em] rounded-lg border transition-all active:scale-95 shadow-lg ${hasName ? "bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-400/20" : "bg-gray-800 text-gray-600 border-transparent cursor-not-allowed"}`}
+                  className={`flex-1 py-2 text-[8px] font-black  tracking-[0.2em] rounded-lg border transition-all active:scale-95 shadow-lg ${hasName ? "bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-400/20" : "bg-gray-800 text-gray-600 border-transparent cursor-not-allowed"}`}
                 >
                   {hasName ? (hasImage ? `REFINE` : `CREATE`) : "NAME REQ"}
                 </button>
@@ -332,7 +332,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                 value={char.name}
                 onBlur={() => handleNameBlur(char)}
                 onChange={(e) => handleNameChange(char.id, e.target.value)}
-                className={`flex-1 bg-transparent border-none p-0 font-black text-left text-white outline-none tracking-tighter uppercase placeholder-gray-500 ${isLead ? "text-lg" : "text-[11px]"} ${!hasName ? "ring-1 ring-amber-500/20 px-2 py-0.5 rounded" : ""}`}
+                className={`flex-1 bg-transparent border-none p-0 font-black text-left text-white outline-none tracking-tighter  placeholder-gray-500 ${isLead ? "text-lg" : "text-[11px]"} ${!hasName ? "ring-1 ring-amber-500/20 px-2 py-0.5 rounded" : ""}`}
                 placeholder="ACTOR NAME"
               />
               {!isRefining &&
@@ -366,7 +366,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
         <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
           <div className="flex items-center gap-3">
             <HeroStarIcon solid className="w-3 h-3 text-amber-500" />
-            <span className="text-[10px] font-black text-amber-500 uppercase tracking-[0.4em]">
+            <span className="text-[10px] font-black text-amber-500  tracking-[0.4em]">
               Master Lead
             </span>
             <div className="h-px bg-amber-500/10 flex-1"></div>
@@ -376,7 +376,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
             <div className="space-y-6">
               <div className="bg-[#0f172a] border border-white/5 p-8 rounded-[2rem] shadow-xl themed-artline">
                 <div className="flex items-center justify-between mb-8">
-                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest opacity-80">
+                  <span className="text-[9px] font-bold text-gray-400  tracking-widest opacity-80">
                     Studio Visual Key
                   </span>
                 </div>
@@ -406,7 +406,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest">
+                          <span className="text-[7px] font-black text-gray-400  tracking-widest">
                             {label}
                           </span>
                         )}
@@ -416,10 +416,10 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                 </div>
               </div>
               <div className="p-5 border border-indigo-500/20 rounded-3xl bg-indigo-600/5 themed-artline">
-                <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest mb-1.5">
+                <p className="text-[9px] font-black text-indigo-300  tracking-widest mb-1.5">
                   Production Mandate
                 </p>
-                <p className="text-[9px] text-gray-300 font-medium uppercase leading-relaxed italic">
+                <p className="text-[9px] text-gray-300 font-medium  leading-relaxed italic">
                   Double-click any artist to open refinement tools. Names are
                   used to link actors to scripts.
                 </p>
@@ -430,7 +430,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
       )}
       <div className="space-y-8 pt-4">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em]">
+          <span className="text-[10px] font-black text-gray-400  tracking-[0.4em]">
             Supporting Roster
           </span>
           <div className="h-px bg-white/5 flex-1"></div>
@@ -453,7 +453,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
               <div className="w-10 h-10 border border-white/10 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <PlusIcon className="w-4 h-4 text-gray-400 group-hover:text-indigo-500" />
               </div>
-              <span className="text-[8px] font-black text-gray-300 uppercase tracking-[0.4em] group-hover:text-indigo-400">
+              <span className="text-[8px] font-black text-gray-300  tracking-[0.4em] group-hover:text-indigo-400">
                 New Actor
               </span>
             </button>
@@ -462,7 +462,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
               className="flex items-center justify-center gap-2 py-3 border border-white/10 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] transition-all"
             >
               <UploadIcon className="w-3 h-3 text-gray-300" />
-              <span className="text-[8px] font-black text-gray-300 uppercase tracking-widest">
+              <span className="text-[8px] font-black text-gray-300  tracking-widest">
                 Import Artist
               </span>
             </button>

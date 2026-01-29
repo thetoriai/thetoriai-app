@@ -55,7 +55,7 @@ const FootageCard: React.FC<FootageCardProps> = ({
         {item.status === "pending" || item.status === "generating" ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/50 backdrop-blur-sm">
             <LoaderIcon className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
-            <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest animate-pulse">
+            <span className="text-[10px] font-black text-gray-300  tracking-widest animate-pulse">
               Producing...
             </span>
           </div>
@@ -80,7 +80,7 @@ const FootageCard: React.FC<FootageCardProps> = ({
             )}
             <div className="absolute top-2 left-2">
               <span
-                className={`px-1.5 py-0.5 rounded text-[6px] font-black uppercase tracking-widest border shadow-lg ${isVideo ? "bg-emerald-600 border-emerald-400 text-white" : "bg-indigo-600 border-indigo-400 text-white"}`}
+                className={`px-1.5 py-0.5 rounded text-[6px] font-black  tracking-widest border shadow-lg ${isVideo ? "bg-emerald-600 border-emerald-400 text-white" : "bg-indigo-600 border-indigo-400 text-white"}`}
               >
                 {isVideo ? "Motion" : "Frame"}
               </span>
@@ -111,7 +111,7 @@ const FootageCard: React.FC<FootageCardProps> = ({
           {!isVideo && item.status === "complete" && (
             <button
               onClick={onToVideo}
-              className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-indigo-600 text-gray-400 hover:text-white rounded-lg text-[7px] font-black uppercase tracking-widest transition-all"
+              className="flex items-center gap-1 px-2 py-1 bg-white/5 hover:bg-indigo-600 text-gray-400 hover:text-white rounded-lg text-[7px] font-black  tracking-widest transition-all"
             >
               <VideoIcon className="w-3 h-3" /> Motion
             </button>
@@ -119,7 +119,7 @@ const FootageCard: React.FC<FootageCardProps> = ({
           <button
             disabled={item.status !== "complete"}
             onClick={onAddToTimeline}
-            className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[7px] font-black uppercase tracking-widest transition-all shadow-lg disabled:opacity-30"
+            className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-[7px] font-black  tracking-widest transition-all shadow-lg disabled:opacity-30"
           >
             <FilmIcon className="w-3 h-3" /> Timeline
           </button>
@@ -269,22 +269,22 @@ export const Footage: React.FC<FootageProps> = ({
         <div className="max-w-2xl mx-auto px-4 md:px-6">
           <div className="flex items-center justify-between mb-3">
             <div className="flex flex-col">
-              <h2 className="text-lg font-black text-white italic tracking-tighter uppercase leading-none">
-                Quick Footage Desk
+              <h2 className="text-lg font-black text-white italic tracking-tighter  leading-none">
+                Quick Footage 
               </h2>
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-1 h-1 rounded-full bg-red-600 animate-pulse"></div>
-                <p className="text-[7px] font-black text-gray-500 uppercase tracking-[0.4em]">
+                <p className="text-[7px] font-black text-gray-500  tracking-[0.4em]">
                   Rapid Terminal
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex gap-1.5">
-                <div className="px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/20 rounded text-[7px] font-black text-indigo-400 uppercase tracking-widest">
+                <div className="px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/20 rounded text-[7px] font-black text-indigo-400  tracking-widest">
                   {visualStyle}
                 </div>
-                <div className="px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/20 rounded text-[7px] font-black text-indigo-400 uppercase tracking-widest">
+                <div className="px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/20 rounded text-[7px] font-black text-indigo-400  tracking-widest">
                   {selectedCountry}
                 </div>
               </div>
@@ -298,7 +298,7 @@ export const Footage: React.FC<FootageProps> = ({
                 {showContextDropdown && (
                   <div className="absolute top-full right-0 mt-2 w-48 bg-[#0a0f1d] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[100] animate-in slide-in-from-top-1">
                     <div className="p-2 border-b border-white/5 bg-white/[0.02]">
-                      <span className="text-[8px] font-black text-gray-500 uppercase">
+                      <span className="text-[8px] font-black text-gray-500  ">
                         Country Scope
                       </span>
                     </div>
@@ -310,7 +310,7 @@ export const Footage: React.FC<FootageProps> = ({
                             onUpdateCountry(c);
                             setShowContextDropdown(false);
                           }}
-                          className={`w-full text-left p-2.5 text-[9px] font-black uppercase tracking-widest transition-colors ${selectedCountry === c ? "bg-indigo-600 text-white" : "text-gray-400 hover:bg-white/5"}`}
+                          className={`w-full text-left p-2.5 text-[9px] font-black tracking-widest transition-colors ${selectedCountry === c ? "bg-indigo-600 text-white" : "text-gray-400 hover:bg-white/5"}`}
                         >
                           {c}
                         </button>
@@ -358,7 +358,7 @@ export const Footage: React.FC<FootageProps> = ({
                             setActiveSlotIdx(idx);
                             setShowHistoryPicker(true);
                           }}
-                          className="w-full flex-1 flex items-center justify-center bg-white/5 hover:bg-indigo-600 text-[6px] font-black text-gray-400 hover:text-white uppercase transition-all tracking-tighter"
+                          className="w-full flex-1 flex items-center justify-center bg-white/5 hover:bg-indigo-600 text-[6px] font-black text-gray-400 hover:text-white  transition-all tracking-tighter"
                         >
                           Hist
                         </button>
@@ -367,7 +367,7 @@ export const Footage: React.FC<FootageProps> = ({
                             setActiveSlotIdx(idx);
                             fileInputRef.current?.click();
                           }}
-                          className="w-full flex-1 flex items-center justify-center bg-white/5 hover:bg-indigo-600 text-[6px] font-black text-gray-400 hover:text-white uppercase transition-all tracking-tighter"
+                          className="w-full flex-1 flex items-center justify-center bg-white/5 hover:bg-indigo-600 text-[6px] font-black text-gray-400 hover:text-white  transition-all tracking-tighter"
                         >
                           Comp
                         </button>
@@ -385,18 +385,18 @@ export const Footage: React.FC<FootageProps> = ({
               <div className="flex-1 w-full bg-black/50 rounded-lg p-0.5 flex items-center gap-0.5">
                 <button
                   onClick={() => setFootageMode("image")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[8px] font-black uppercase tracking-widest transition-all ${footageMode === "image" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[8px] font-black  tracking-widest transition-all ${footageMode === "image" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
                 >
                   <PhotoIcon className="w-3 h-3" /> Image
                 </button>
                 <button
                   onClick={() => setFootageMode("video")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[8px] font-black uppercase tracking-widest transition-all ${footageMode === "video" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[8px] font-black  tracking-widest transition-all ${footageMode === "video" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
                 >
                   <VideoIcon className="w-3 h-3" /> Video
                 </button>
                 {hasRefImages && (
-                  <div className="flex-1 bg-indigo-900/40 rounded-md py-1.5 flex items-center justify-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-indigo-300">
+                  <div className="flex-1 bg-indigo-900/40 rounded-md py-1.5 flex items-center justify-center gap-1.5 text-[8px] font-black  tracking-widest text-indigo-300">
                     <SparklesIcon className="w-3 h-3" /> I2I
                   </div>
                 )}
@@ -406,7 +406,7 @@ export const Footage: React.FC<FootageProps> = ({
                 <button
                   onClick={handleProduce}
                   disabled={isGenerating || !footagePrompt.trim()}
-                  className="w-full sm:w-40 h-10 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest rounded-lg transition-all active:scale-95 disabled:bg-gray-800 disabled:text-gray-600 flex items-center justify-center gap-3 border border-indigo-400/20"
+                  className="w-full sm:w-40 h-10 bg-indigo-600 hover:bg-indigo-500 text-white font-black  tracking-widest rounded-lg transition-all active:scale-95 disabled:bg-gray-800 disabled:text-gray-600 flex items-center justify-center gap-3 border border-indigo-400/20"
                 >
                   {isGenerating ? (
                     <LoaderIcon className="w-4 h-4 animate-spin" />
@@ -451,7 +451,7 @@ export const Footage: React.FC<FootageProps> = ({
                           else setFootageVideoTier(tier.id);
                           setShowTierMenu(false);
                         }}
-                        className={`w-full flex items-center justify-between p-2.5 text-[8px] font-black uppercase tracking-widest transition-colors ${(footageMode === "image" ? footageImageTier : footageVideoTier) === tier.id ? "bg-indigo-600 text-white" : "text-gray-400 hover:bg-white/5"}`}
+                        className={`w-full flex items-center justify-between p-2.5 text-[8px] font-black  tracking-widest transition-colors ${(footageMode === "image" ? footageImageTier : footageVideoTier) === tier.id ? "bg-indigo-600 text-white" : "text-gray-400 hover:bg-white/5"}`}
                       >
                         <span>{tier.l}</span>
                         <span className="opacity-60">{tier.c}C</span>
@@ -468,7 +468,7 @@ export const Footage: React.FC<FootageProps> = ({
       <div className="flex-1 overflow-y-auto scrollbar-none relative bg-[#030712] p-4 md:p-8">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-3 mb-6">
-            <h3 className="text-[8px] font-black text-gray-600 uppercase tracking-[0.4em] whitespace-nowrap">
+            <h3 className="text-[8px] font-black text-gray-600  tracking-[0.4em] whitespace-nowrap">
               Studio Floor
             </h3>
             <div className="h-px bg-white/5 flex-1"></div>
@@ -480,7 +480,7 @@ export const Footage: React.FC<FootageProps> = ({
           {footageHistory.length === 0 && !isGenerating ? (
             <div className="flex flex-col items-center justify-center py-20 opacity-10">
               <ClapperboardIcon className="w-12 h-12 text-gray-600" />
-              <h4 className="text-[9px] font-black uppercase tracking-[0.3em] mt-4">
+              <h4 className="text-[9px] font-black  tracking-[0.3em] mt-4">
                 Gallery Empty
               </h4>
             </div>
@@ -513,7 +513,7 @@ export const Footage: React.FC<FootageProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-white/5 flex justify-between items-center bg-[#0a0f1d]">
-              <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">
+              <h3 className="text-xs font-black text-gray-400  tracking-widest">
                 Select Reference
               </h3>
               <button

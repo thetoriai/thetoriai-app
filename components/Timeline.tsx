@@ -722,7 +722,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     >
       <Icon className="w-3 md:w-3.5 h-3 md:h-3.5" />
       {label && (
-        <span className="text-[6px] md:text-[7px] font-black uppercase tracking-widest">
+        <span className="text-[6px] md:text-[7px] font-black  tracking-widest">
           {label}
         </span>
       )}
@@ -735,7 +735,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       onMouseDown={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
     >
-      <span className="text-[6px] md:text-[7px] font-black text-gray-500 uppercase tracking-tighter mb-0.5 md:mb-1 select-none">
+      <span className="text-[6px] md:text-[7px] font-black text-gray-500  tracking-tighter mb-0.5 md:mb-1 select-none">
         {label}
       </span>
       <input
@@ -787,7 +787,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
         <div className="flex flex-1 items-center justify-center px-1 md:px-8">
           <div className="flex items-center gap-1 md:gap-4 bg-black/40 px-2 md:px-6 py-0.5 md:py-1.5 rounded-full border border-white/5 w-full max-w-[90px] md:max-w-md">
-            <span className="text-[5px] md:text-[8px] font-black text-gray-600 uppercase tracking-tighter hidden xs:block">
+            <span className="text-[5px] md:text-[8px] font-black text-gray-600  tracking-tighter hidden xs:block">
               Zoom
             </span>
             <input
@@ -798,7 +798,7 @@ export const Timeline: React.FC<TimelineProps> = ({
               onChange={(e) => setPixelsPerSecond(parseInt(e.target.value))}
               className="flex-1 accent-indigo-600 bg-white/5 h-0.5 md:h-1 rounded-full appearance-none cursor-pointer"
             />
-            <span className="text-[6px] md:text-[8px] font-black text-gray-500 uppercase tracking-tighter ml-1">
+            <span className="text-[6px] md:text-[8px] font-black text-gray-500  tracking-tighter ml-1">
               {pixelsPerSecond}
             </span>
           </div>
@@ -836,7 +836,7 @@ export const Timeline: React.FC<TimelineProps> = ({
               <div className="w-8 md:w-16 h-8 md:h-16 rounded-full border-2 md:border-4 border-dashed border-gray-600 flex items-center justify-center mb-2 md:mb-4">
                 <FilmIcon className="w-4 md:w-8 h-4 md:h-8 text-gray-600" />
               </div>
-              <span className="text-[7px] md:text-[10px] font-black text-gray-500 uppercase tracking-widest">
+              <span className="text-[7px] md:text-[10px] font-black text-gray-500  tracking-widest">
                 Track Offline
               </span>
             </div>
@@ -1042,7 +1042,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                 {selectedClip.type === "text" && (
                   <>
                     <div className="flex flex-col">
-                      <span className="text-[6px] font-black text-gray-500 uppercase tracking-tighter mb-0.5 ml-1">
+                      <span className="text-[6px] font-black text-gray-500  tracking-tighter mb-0.5 ml-1">
                         Motion
                       </span>
                       <div className="relative">
@@ -1067,7 +1067,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                       </div>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[6px] font-black text-gray-500 uppercase tracking-tighter mb-0.5 ml-1">
+                      <span className="text-[6px] font-black text-gray-500  tracking-tighter mb-0.5 ml-1">
                         Text
                       </span>
                       <input
@@ -1091,7 +1091,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                   (selectedClip.type === "visual" &&
                     currentSelected.type === "video")) && (
                   <div className="flex flex-col">
-                    <span className="text-[6px] font-black text-gray-500 uppercase tracking-tighter mb-0.5 ml-1">
+                    <span className="text-[6px] font-black text-gray-500  tracking-tighter mb-0.5 ml-1">
                       Mute
                     </span>
                     <ControlButton
@@ -1161,7 +1161,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           ) : (
             <div className="flex items-center gap-2 opacity-30">
               <SparklesIcon className="w-3 md:w-4 h-3 md:h-4 text-indigo-400" />
-              <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest">
+              <span className="text-[8px] font-black text-gray-600  tracking-widest">
                 Deck Ready
               </span>
             </div>
@@ -1264,7 +1264,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                     }}
                   >
                     {" "}
-                    <span className="text-[8px] md:text-[10px] font-black truncate uppercase">
+                    <span className="text-[8px] md:text-[10px] font-black truncate ">
                       {t.text}
                     </span>{" "}
                     <div

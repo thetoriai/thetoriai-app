@@ -31,15 +31,15 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, masterHisto
     return (
         <div className="w-full max-w-6xl mx-auto flex flex-col h-full bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in duration-500">
             <div className="p-6 border-b border-gray-800 flex justify-between items-center shrink-0 bg-[#0a0f1d]">
-                <h2 className="text-sm font-black text-gray-400 flex items-center gap-3 uppercase tracking-[0.4em]"><HistoryIcon className="w-5 h-5 text-indigo-500"/> Production History</h2>
-                <span className="text-[10px] font-black text-gray-600 bg-gray-800/50 px-3 py-1 rounded-full uppercase tracking-widest">{flatHistory.length} Assets Found</span>
+                <h2 className="text-sm font-black text-gray-400 flex items-center gap-3  tracking-[0.4em]"><HistoryIcon className="w-5 h-5 text-indigo-500"/> Production History</h2>
+                <span className="text-[10px] font-black text-gray-600 bg-gray-800/50 px-3 py-1 rounded-full  tracking-widest">{flatHistory.length} Assets Found</span>
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-gray-800">
                 {flatHistory.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-32 opacity-20">
                         <HistoryIcon className="w-20 h-20 mb-4" />
-                        <p className="text-sm font-black uppercase tracking-[0.4em]">Gallery Empty</p>
+                        <p className="text-sm font-black  tracking-[0.4em]">Gallery Empty</p>
                     </div>
                 )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -65,7 +65,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, masterHisto
                                 <div className="flex-1 p-4 flex flex-col justify-between min-w-0">
                                     <div className="flex justify-between items-start gap-4">
                                         <div className="flex flex-col gap-1.5 min-w-0">
-                                            <span className={`inline-block px-2 py-0.5 rounded border text-[8px] font-black uppercase tracking-widest w-max ${getSectionBadge(sectionLabel)}`}>
+                                            <span className={`inline-block px-2 py-0.5 rounded border text-[8px] font-black  tracking-widest w-max ${getSectionBadge(sectionLabel)}`}>
                                                 {sectionLabel}
                                             </span>
                                             <p className="text-[12px] font-bold text-gray-200 line-clamp-1 group-hover:text-white transition-colors">
@@ -82,7 +82,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, masterHisto
                                     <div className="flex items-center justify-between">
                                         <span className="text-[9px] text-gray-600 font-mono tracking-tighter">REF_ID: {card.sceneId?.split('-').pop()}</span>
                                         {!isActiveOnBoard && (
-                                            <span className="text-[8px] font-black text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 uppercase tracking-widest animate-pulse">ARCHIVED</span>
+                                            <span className="text-[8px] font-black text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20  tracking-widest animate-pulse">ARCHIVED</span>
                                         )}
                                     </div>
                                 </div>
@@ -93,10 +93,10 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, masterHisto
             </div>
 
             <div className="p-6 border-t border-gray-800 shrink-0 bg-[#0a0f1d]/80 flex flex-col items-center gap-4">
-                <button onClick={onClearHistory} className="w-full max-w-sm py-4 bg-red-900/10 hover:bg-red-900/30 text-red-400 text-[10px] font-black uppercase tracking-[0.3em] rounded-2xl border border-red-900/30 transition-all shadow-xl active:scale-95">
+                <button onClick={onClearHistory} className="w-full max-w-sm py-4 bg-red-900/10 hover:bg-red-900/30 text-red-400 text-[10px] font-black  tracking-[0.3em] rounded-2xl border border-red-900/30 transition-all shadow-xl active:scale-95">
                     Selective Archival Cleanup
                 </button>
-                <p className="text-[9px] text-gray-600 text-center uppercase font-bold tracking-widest opacity-60 max-w-md leading-relaxed">
+                <p className="text-[9px] text-gray-600 text-center  font-bold tracking-widest opacity-60 max-w-md leading-relaxed">
                     MANAGES STORAGE BY PURGING UNSAVED ITEMS.<br/>
                     ACTIVE PRODUCTION ASSETS AND BOOKMARKS REMAIN PROTECTED.
                 </p>

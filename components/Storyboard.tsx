@@ -110,7 +110,8 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
             onClick={() => props.onSwitchSession(session.originalIndex)}
             className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-xl cursor-pointer border-t border-l border-r border-transparent min-w-[140px] transition-all ${props.historyIndex === session.originalIndex ? "bg-gray-800 border-white/10 text-white" : "bg-gray-900/40 hover:bg-gray-800/80 text-gray-500"}`}
           >
-            <span className="text-[9px] font-black truncate flex-1 uppercase tracking-widest">
+            <span className="text-[9px] font-black truncate flex-1 
+             tracking-widest">
               {session.prompt || "Session"}
             </span>
             <button
@@ -155,7 +156,8 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
           <div className="flex items-center gap-4 mb-8">
                     <div className="flex items-center gap-2">
                         {icon}
-              <h3 className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">
+              <h3 className="text-[10px] font-black text-gray-300 
+               tracking-[0.3em]">
                 {title}
               </h3>
                     </div>
@@ -269,7 +271,8 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
                 className="bg-gray-900/30 border-2 border-dashed border-gray-800 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500/50 hover:bg-indigo-900/5 transition-all group aspect-video"
               >
                             <PlusIcon className="w-10 h-10 text-gray-700 group-hover:text-indigo-500 mb-2 transition-colors" />
-                <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest group-hover:text-indigo-400">
+                <span className="text-[10px] font-black text-gray-600 
+                 tracking-widest group-hover:text-indigo-400">
                   Add more
                 </span>
                         </div>
@@ -311,13 +314,15 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
               <div className="w-20 h-20 bg-gray-900/80 backdrop-blur-md rounded-full flex items-center justify-center mb-8 border border-gray-800 shadow-2xl">
                 <ClapperboardIcon className="w-10 h-10 text-gray-800" />
                         </div>
-              <h2 className="text-xl font-black text-gray-500 mb-10 uppercase tracking-[0.4em]">
+              <h2 className="text-xl font-black text-gray-500 mb-10 
+               tracking-[0.4em]">
                 Ready for Production
               </h2>
                         <div className="flex flex-col sm:flex-row gap-4">
                 <button
                   onClick={() => uploadInputRef.current?.click()}
-                  className="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl shadow-2xl transition-all active:scale-95 text-[10px] uppercase tracking-widest border border-indigo-400/20"
+                  className="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl shadow-2xl transition-all active:scale-95 text-[10px] 
+                   tracking-widest border border-indigo-400/20"
                 >
                   <UploadIcon className="w-4 h-4" /> Import Image
                 </button>
@@ -341,7 +346,8 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
                         {props.isGenerating && (
                 <div className="flex items-center gap-3 mt-8 px-2 opacity-80 relative z-10">
                   <LoaderIcon className="w-4 h-4 animate-spin text-indigo-500" />
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">
+                  <span className="text-[10px] font-black text-gray-500 
+                   tracking-[0.4em]">
                     Rendering production...
                   </span>
                             </div>

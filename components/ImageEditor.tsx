@@ -442,7 +442,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
               {/* Brush Settings */}
               {tool === "brush" && (
                 <div className="space-y-2">
-                  <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] flex justify-between">
+                  <label className="text-[9px] font-black text-gray-500  tracking-[0.2em] flex justify-between">
                     Brush Size <span>{brushSize}px</span>
                   </label>
                   <input
@@ -458,7 +458,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
 
               {/* Selection Mode */}
               <div className="space-y-2">
-                <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">
+                <label className="text-[9px] font-black text-gray-500  tracking-[0.2em]">
                   Selection Mode
                 </label>
                 <div className="flex gap-2">
@@ -469,7 +469,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                     <div className="w-3 h-3 md:w-4 md:h-4 rounded-full border-2 border-current flex items-center justify-center">
                       <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-current rounded-full"></div>
                     </div>
-                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest">
+                    <span className="text-[8px] md:text-[9px] font-black  tracking-widest">
                       Add
                     </span>
                   </button>
@@ -478,7 +478,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                     className={`flex-1 py-2 md:py-3 rounded-xl flex flex-col items-center gap-1 border transition-all ${drawingMode === "remove" ? "bg-red-900/30 border-red-500 text-red-400 shadow-lg" : "bg-gray-800 border-gray-700 text-gray-500 hover:text-gray-300"}`}
                   >
                     <div className="w-3 h-3 md:w-4 md:h-4 rounded-full bg-red-500"></div>
-                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest">
+                    <span className="text-[8px] md:text-[9px] font-black  tracking-widest">
                       Remove
                     </span>
                   </button>
@@ -487,7 +487,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
 
               {/* Instruction & Reference */}
               <div className="space-y-2">
-                <label className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">
+                <label className="text-[9px] font-black text-gray-500  tracking-[0.2em]">
                   Instruction & Reference
                 </label>
                 <div className="flex flex-col gap-2">
@@ -518,14 +518,14 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                           className="w-full h-full bg-gray-800/50 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center hover:border-amber-500 text-gray-600 hover:text-amber-500 transition-all group shadow-sm"
                         >
                           <UploadIcon className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
-                          <span className="text-[6px] font-black uppercase mt-0.5">
+                          <span className="text-[6px] font-black  mt-0.5">
                             Ref
                           </span>
                         </button>
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className="text-[7px] text-gray-600 font-bold uppercase leading-tight italic">
+                      <p className="text-[7px] text-gray-600 font-bold  leading-tight italic">
                         Select an area on the left first for precision.
                       </p>
                     </div>
@@ -555,7 +555,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                   isProcessing ||
                   (!editPrompt.trim() && !hasDrawn && drawingMode !== "remove")
                 }
-                className="w-full py-2.5 md:py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-black uppercase tracking-widest rounded-xl text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 shadow-2xl transition-all active:scale-95"
+                className="w-full py-2.5 md:py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-black  tracking-widest rounded-xl text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 shadow-2xl transition-all active:scale-95"
               >
                 {isProcessing ? (
                   <>
@@ -568,7 +568,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
                   </>
                 )}
               </button>
-              <p className="text-[7px] md:text-[8px] text-gray-600 text-center mt-2 font-black uppercase tracking-[0.2em]">
+              <p className="text-[7px] md:text-[8px] text-gray-600 text-center mt-2 font-black  tracking-[0.2em]">
                 Cost: 2 Credits
               </p>
             </div>

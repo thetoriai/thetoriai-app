@@ -136,7 +136,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
               onClick={handleEnterClick}
               className="group relative px-12 py-5 bg-[#4f46e5] hover:bg-[#4338ca] text-white shadow-[0_20px_60px_rgba(79,70,229,0.3)] transition-all active:scale-[0.97] flex items-center justify-center gap-6 overflow-hidden rounded-full border border-white/10"
             >
-              <span className="text-base md:text-lg font-black uppercase tracking-[0.4em] italic ml-[0.4em]">
+              <span className="text-base md:text-lg font-black  tracking-[0.4em] italic ml-[0.4em]">
                 Enter Studio
               </span>
               <ChevronRightIcon className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
@@ -173,10 +173,10 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
               <feature.icon
                 className={`w-5 h-5 ${feature.color} mb-2 group-hover:scale-110 transition-transform`}
               />
-              <h3 className="text-[9px] font-black text-white uppercase tracking-widest mb-1">
+              <h3 className="text-[9px] font-black text-white  tracking-widest mb-1">
                 {feature.title}
               </h3>
-              <p className="text-[7px] text-gray-500 font-bold leading-relaxed uppercase">
+              <p className="text-[7px] text-gray-500 font-bold leading-relaxed ">
                 {feature.desc}
               </p>
             </div>
@@ -204,14 +204,14 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
                   <div className="w-8 h-8 rounded-full border border-white/5 flex items-center justify-center mb-2">
                     <ClapperboardIcon className="w-3 h-3 text-gray-800" />
                   </div>
-                  <span className="text-[7px] font-black text-gray-800 uppercase tracking-[0.4em]">
+                  <span className="text-[7px] font-black text-gray-800  tracking-[0.4em]">
                     Empty Holder
                   </span>
                 </div>
               ))}
             </div>
 
-            <p className="text-[8px] font-black text-gray-700 uppercase tracking-[1.2em] text-center mt-8 ml-[1.2em] opacity-30">
+            <p className="text-[8px] font-black text-gray-700  tracking-[1.2em] text-center mt-8 ml-[1.2em] opacity-30">
               Professional Creative Environment
             </p>
           </div>
@@ -242,7 +242,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-black/20">
                     <ClapperboardIcon className="w-4 h-4 text-gray-800 mb-2" />
-                    <span className="text-[6px] font-black text-gray-800 uppercase">
+                    <span className="text-[6px] font-black text-gray-800 ">
                       Reserved
                     </span>
                   </div>
@@ -250,7 +250,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
               </div>
             ))}
           </div>
-          <p className="text-[6px] font-black text-gray-700 uppercase tracking-[0.8em] text-center opacity-30">
+          <p className="text-[6px] font-black text-gray-700  tracking-[0.8em] text-center opacity-30">
             Professional Creative Environment
           </p>
         </div>

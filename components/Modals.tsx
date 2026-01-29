@@ -79,7 +79,8 @@ interface ModalsProps {
     duration?: number,
     startTime?: number
   ) => void;
-  onDeductAudioCredit?: () => boolean;
+  // DO add comment: Updated to Promise<boolean> to match async credit consumption in App.tsx
+  onDeductAudioCredit?: () => Promise<boolean>;
   onResetStorybook: () => void;
   onUndo?: () => void;
   storySeed: string;
@@ -182,7 +183,7 @@ const ModalWrapper = ({
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-5 border-b border-white/5 flex justify-between items-center bg-[#0a0f1d] shrink-0 z-10">
-        <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em] ml-4">
+        <h2 className="text-[10px] font-black text-gray-500  tracking-[0.4em] ml-4">
           {title}
         </h2>
         <button
@@ -447,14 +448,14 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
         )}
       </div>
 
-      <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase mb-6">
+      <h3 className="text-2xl font-black text-white italic tracking-tighter  mb-6">
         {exportSuccess ? "Master Reel Ready" : "Finalize Production"}
       </h3>
 
       {exportSuccess ? (
         <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
           <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 max-w-sm">
-            <p className="text-green-400 text-sm font-black uppercase tracking-[0.2em] leading-relaxed">
+            <p className="text-green-400 text-sm font-black  tracking-[0.2em] leading-relaxed">
               Success: Your cinematic reel is ready for download. Click
                'Save Video '.
             </p>
@@ -462,13 +463,13 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
           <div className="flex flex-col gap-4 w-full">
             <button
               onClick={handleSaveToDevice}
-              className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.4em] rounded-[2rem] shadow-[0_20px_50px_rgba(79,70,229,0.3)] transition-all active:scale-95 text-[11px] border border-indigo-400/30 flex items-center justify-center gap-3"
+              className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black  tracking-[0.4em] rounded-[2rem] shadow-[0_20px_50px_rgba(79,70,229,0.3)] transition-all active:scale-95 text-[11px] border border-indigo-400/30 flex items-center justify-center gap-3"
             >
               <DownloadIcon className="w-5 h-5" /> Save Reel to Device
             </button>
           <button
             onClick={onClose}
-            className="px-16 py-4 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-[0.3em] rounded-2xl transition-all text-[10px] border border-white/5"
+            className="px-16 py-4 bg-white/5 hover:bg-white/10 text-white font-black  tracking-[0.3em] rounded-2xl transition-all text-[10px] border border-white/5"
           >
               Return to Desk
           </button>
@@ -476,13 +477,13 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
         </div>
       ) : (
         <>
-          <p className="text-gray-500 text-[11px] max-w-md mb-12 font-bold uppercase tracking-widest leading-relaxed">
+          <p className="text-gray-500 text-[11px] max-w-md mb-12 font-bold  tracking-widest leading-relaxed">
             Rendering high-fidelity sequence using .
           </p>
 
           <div className="w-full max-w-sm space-y-8">
             <div className="space-y-2 text-left">
-              <label className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] ml-2">
+              <label className="text-[10px] font-black text-indigo-400  tracking-[0.3em] ml-2">
                 Project Label
               </label>
               <input
@@ -492,7 +493,7 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
                 placeholder="E.g. The_Lion_Of_Lagos"
                 className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-indigo-500 outline-none transition-all placeholder-gray-800 text-sm shadow-inner group-hover:border-indigo-500/50"
               />
-              <p className="text-[8px] text-gray-600 font-bold uppercase tracking-widest ml-2 italic">
+              <p className="text-[8px] text-gray-600 font-bold  tracking-widest ml-2 italic">
                 Leave blank to use cinematic defaults
               </p>
             </div>
@@ -507,7 +508,7 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
           </div>
                 <div className="flex items-center justify-center gap-3">
                   <LoaderIcon className="w-4 h-4 animate-spin text-indigo-500" />
-                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] animate-pulse">
+                  <p className="text-[10px] font-black text-indigo-400  tracking-[0.4em] animate-pulse">
             Rendering Master Reel... {progress}%
           </p>
                 </div>
@@ -516,13 +517,13 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <button
             onClick={handleExport}
-                  className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-[0.4em] rounded-[2rem] shadow-2xl transition-all active:scale-95 text-[12px] border border-indigo-400/20"
+                  className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black  tracking-[0.4em] rounded-[2rem] shadow-2xl transition-all active:scale-95 text-[12px] border border-indigo-400/20"
           >
                   Start Master Render
           </button>
           <button
             onClick={onClose}
-            className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-400 font-black uppercase tracking-widest rounded-xl transition-all text-[10px]"
+            className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-400 font-black  tracking-widest rounded-xl transition-all text-[10px]"
           >
             Cancel
           </button>
@@ -531,7 +532,7 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
             {error && (
               <div className="p-4 bg-red-900/10 border border-red-500/20 rounded-2xl flex items-start gap-3 animate-in shake">
                 <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0" />
-                <p className="text-red-400 text-[10px] font-black uppercase tracking-widest text-left leading-tight">
+                <p className="text-red-400 text-[10px] font-black  tracking-widest text-left leading-tight">
                   {error}
                 </p>
               </div>
@@ -551,20 +552,20 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     <div className="flex-1 h-full overflow-y-auto bg-gray-950 p-4 sm:p-8 scrollbar-thin scrollbar-thumb-gray-800">
       <div className="max-w-5xl mx-auto flex flex-col items-center animate-in fade-in zoom-in-95 duration-500 origin-top">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-black text-white italic tracking-tighter mb-2 uppercase leading-none">
+          <h2 className="text-3xl font-black text-white italic tracking-tighter mb-2  leading-none">
             Studio Top-Up
           </h2>
           <div className="inline-flex flex-col items-center gap-4">
             <div className="flex bg-white/5 rounded-2xl p-1 border border-white/10 shadow-inner">
               <button
                 onClick={() => setIsGiftMode(false)}
-                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isGiftMode ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black  tracking-widest transition-all ${!isGiftMode ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
               >
                 Account Recharge
               </button>
               <button
                 onClick={() => setIsGiftMode(true)}
-                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isGiftMode ? "bg-amber-500 text-black shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black  tracking-widest transition-all ${isGiftMode ? "bg-amber-500 text-black shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
               >
                 <GiftIcon className="w-4 h-4" /> Gift Someone
               </button>
@@ -575,13 +576,13 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <div
             className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group`}
           >
-            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase tracking-widest">
+            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter  tracking-widest">
               $12 (100C)
             </h3>
             <a
               href={PAYPAL_STARTER_LINK}
               target="_blank"
-              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-sky-600 text-white"}`}
+              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-sky-600 text-white"}`}
             >
               Purchase
             </a>
@@ -595,7 +596,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <a
               href={PAYPAL_PRO_LINK}
               target="_blank"
-              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-white text-black"}`}
+              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-white text-black"}`}
             >
               Best Value
             </a>
@@ -609,7 +610,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <a
               href={PAYPAL_STUDIO_LINK}
               target="_blank"
-              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-amber-600 text-white"}`}
+              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-amber-600 text-white"}`}
             >
               Max Pack
             </a>
@@ -1009,13 +1010,13 @@ export const Modals: React.FC<ModalsProps> = ({
                   </button>
                 ))}
               </div>
-              <p className="text-[8px] text-gray-600 font-bold uppercase mt-2 tracking-widest italic">
+              <p className="text-[8px] text-gray-600 font-bold  mt-2 tracking-widest italic">
                 Locks visual identity to specific actor
               </p>
             </div>
 
             <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-3">
+              <label className="text-[10px] font-black text-gray-500  tracking-[0.2em] block mb-3">
                 Select Shot
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -1025,7 +1026,7 @@ export const Modals: React.FC<ModalsProps> = ({
                     onClick={() => setSelectedAngle(angle.name)}
                     className={`p-2 text-left rounded-lg border transition-all ${selectedAngle === angle.name ? "bg-indigo-900/50 border-indigo-500 text-white shadow-lg" : "bg-gray-950 border-gray-800 text-gray-400 hover:border-gray-600 hover:bg-gray-900"}`}
                   >
-                    <div className="text-[11px] font-black uppercase tracking-tight">
+                    <div className="text-[11px] font-black  tracking-tight">
                       {angle.name}
                     </div>
                     <div className="text-[8px] opacity-60 leading-tight mt-0.5 font-bold">
@@ -1038,14 +1039,14 @@ export const Modals: React.FC<ModalsProps> = ({
           </div>
           <div className="p-4 border-t border-gray-800 flex justify-end items-center gap-3 bg-[#0a0f1d]">
             {isConfirmingAngle && (
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+              <span className="text-[10px] font-black text-gray-500  tracking-widest">
                 Cost: 2 Credits
               </span>
             )}
             {isConfirmingAngle && (
               <button
                 onClick={() => setIsConfirmingAngle(false)}
-                className="text-[10px] font-black text-gray-500 hover:text-gray-300 uppercase tracking-widest mr-2"
+                className="text-[10px] font-black text-gray-500 hover:text-gray-300  tracking-widest mr-2"
               >
                 Cancel
               </button>
@@ -1057,7 +1058,7 @@ export const Modals: React.FC<ModalsProps> = ({
                   : setIsConfirmingAngle(true)
               }
               disabled={!selectedAngle}
-              className={`px-6 py-2.5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-2xl transition-all flex items-center gap-2 active:scale-95 ${isConfirmingAngle ? "bg-green-600 hover:bg-green-700" : "bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-500"}`}
+              className={`px-6 py-2.5 text-white text-[10px] font-black  tracking-widest rounded-xl shadow-2xl transition-all flex items-center gap-2 active:scale-95 ${isConfirmingAngle ? "bg-green-600 hover:bg-green-700" : "bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-500"}`}
             >
               {isConfirmingAngle ? (
                 "Confirm Shot"

@@ -63,7 +63,11 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   
   const [webcamActive, setWebcamActive] = useState(false);
-  const [webcamFlipped, setWebcamFlipped] = useState(false);
+  const [webcamFlipped, setWebcamFlipped] = useState(false); // UI Mirroring
+  const [cameraFacing, setCameraFacing] = useState<"user" | "environment">(
+    "user"
+  ); // Hardware Lens switching
+
   const [isRecording, setIsRecording] = useState(false);
   const [isAssetPlaying, setIsAssetPlaying] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -98,7 +102,9 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
   // Cache for static assets (images)
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
 
-  // Computed
+  // TRACKING REF: To ensure camera hardware is fully stopped on unmount
+  const activeStreamRef = useRef<MediaStream | null>(null);
+
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
   // --- Helpers ---
@@ -234,52 +240,84 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
     };
   }, []);
 
-  // --- Media Initialization ---
+  /**
+   * REFINED WEBCAM LIFECYCLE
+   * This effect ensures that all tracks are closed when navigating away (unmounting).
+   */
   useEffect(() => {
-    let currentStream: MediaStream | null = null;
+    const stopTracks = () => {
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach((track) => {
+          track.stop();
+          console.log(`Director's Cut: Stopped hardware track [${track.kind}]`);
+        });
+        activeStreamRef.current = null;
+      }
+      if (webcamRef.current) webcamRef.current.srcObject = null;
+    };
 
     const startWebcam = async () => {
-      // Clear previous stream if any
-      if (webcamRef.current?.srcObject) {
-        (webcamRef.current.srcObject as MediaStream)
-          .getTracks()
-          .forEach((t) => t.stop());
-      }
+      stopTracks();
 
-      try {
-        currentStream = await navigator.mediaDevices.getUserMedia({ 
+      const constraintStages = [
+        // Stage 1: Ideal facing + Audio + High-res
+        {
           video: {
-            facingMode: "user",
+            facingMode: cameraFacing,
             width: { ideal: 1280 },
             height: { ideal: 720 }
           },
           audio: true 
-        });
-      } catch (err) {
+        },
+        // Stage 2: Ideal facing + Audio (Auto resolution)
+        { video: { facingMode: cameraFacing }, audio: true },
+        // Stage 3: Facing only (No audio)
+        { video: { facingMode: cameraFacing }, audio: false },
+        // Stage 4: Basic any video device
+        { video: true, audio: false }
+      ];
+
+      let stream: MediaStream | null = null;
+      let lastError: any = null;
+
+      for (const constraints of constraintStages) {
         try {
-          currentStream = await navigator.mediaDevices.getUserMedia({
-            video: true
-          });
-        } catch (e) {
-          setWebcamActive(false);
+          console.log(
+            "Director's Cut: Attempting camera access with:",
+            constraints
+          );
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (stream) break;
+        } catch (err) {
+          console.warn(`Director's Cut: Camera stage failed:`, err);
+          lastError = err;
         }
       }
 
-      if (currentStream && webcamRef.current) {
-        webcamRef.current.srcObject = currentStream;
-        webcamRef.current.play().catch(() => {});
-      }
+      if (stream) {
+          activeStreamRef.current = stream;
+          if (webcamRef.current) {
+            webcamRef.current.srcObject = stream;
+            webcamRef.current.play().catch(() => {});
+          }
+      } else {
+        console.error(
+          "Director's Cut: All camera access stages failed:",
+          lastError
+        );
+          setWebcamActive(false);
+        }
     };
 
-    if (webcamActive) startWebcam();
-    else {
-      const stream = webcamRef.current?.srcObject as MediaStream;
-      stream?.getTracks().forEach((track) => track.stop());
-      if (webcamRef.current) webcamRef.current.srcObject = null;
+    if (webcamActive) {
+      startWebcam();
+    } else {
+      stopTracks();
     }
 
-    return () => currentStream?.getTracks().forEach((track) => track.stop());
-  }, [webcamActive]);
+    // MANDATORY CLEANUP ON UNMOUNT (NAVIGATING AWAY)
+    return () => stopTracks();
+  }, [webcamActive, cameraFacing]);
 
   const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
@@ -653,10 +691,11 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
           MediaRecorder.isTypeSupported(m)
         ) || "video/webm";
       const recorder = new MediaRecorder(compositeStream, { mimeType: mime });
+      const chunks: Blob[] = [];
+
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
       };
-      const chunks: Blob[] = [];
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: mime }),
           url = URL.createObjectURL(blob),
@@ -802,19 +841,22 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
           onClick={resetApp}
           className="absolute top-6 left-6 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl active:scale-90"
         >
-          <XIcon className="text-lg" />
+          <XIcon className="text-xs" />
         </button>
-        {/* FLIP BUTTON: Added feature to flip camera feed to the other side */}
+
+        {/* LENS SWITCHER: Fixes "Requested device not found" by allowing hardware lens toggle */}
         <button
-          onClick={() => setWebcamFlipped(!webcamFlipped)}
-          className={`absolute top-6 right-6 z-5z w-12 h-12 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full transition-all shadow-xl active:scale-90 ${webcamFlipped ? "text-indigo-400 border-indigo-500/50 shadow-indigo-500/10" : "text-white/60 hover:text-white"}`}
+          onClick={() =>
+            setCameraFacing((prev) =>
+              prev === "user" ? "environment" : "user"
+            )
+          }
+          className={`absolute top-6 right-6 z-50 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full transition-all shadow-xl active:scale-90 ${cameraFacing === "environment" ? "text-green-400 border-green-500/50" : "text-white/60 hover:text-white"}`}
+          title="Switch Camera Lens"
         >
-          <ArrowsRightLeftIcon className="text-[10px]" />
-          <span className="text-[4px] font-black uppercase mt-0.5 tracking-tighter">
-            
-          </span>
+          <ArrowsRightLeftIcon className="text-xs" />
         </button>
-        {/* --- LEFT  SIDEBAR (MODES) --- */}
+            
         <div
           className="absolute left-2 top-58 flex flex-col space-y-4 z-30"
           onPointerDown={(e) => e.stopPropagation()}
@@ -828,13 +870,14 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
             ) : (
               <LockOpenIcon className="text-lg" />
             )}
-            <span className="text-[5px] font-black uppercase mt-0.5 tracking-tighter">
+            <span className="text-[5px] font-black  mt-0.5 tracking-tighter">
               {isLocked ? "LOCKED" : "LOCK"}
             </span>
           </button>
 
-          {currentVisibleVideo && (
-            <div className="flex flex-col space-y-4 animate-in fade-in slide-in-from-left-4">
+          {/* CONTEXTUAL UI: Playback controls only appear when a video asset is selected */}
+          {selectedAsset?.type === "video" && (
+            <div className="flex flex-col space-y-3 animate-in fade-in zoom-in-95 duration-200">
               <button
                 onClick={() => toggleAssetPlayback()}
                 className={`w-12 h-12 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${isAssetPlaying ? "text-white" : "text-white/40"}`}
@@ -844,7 +887,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
                 ) : (
                   <PlayIcon className="text-lg" />
                 )}
-                <span className="text-[7px] font-black uppercase mt-1 tracking-tighter">
+                <span className="text-[7px] font-black  mt-1 tracking-tighter">
                   PLAY
                 </span>
               </button>
@@ -853,7 +896,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
                 className="w-12 h-12 bg-white/5 backdrop-blur-3xl border border-white/10 rounded-2xl flex flex-col items-center justify-center active:scale-90 text-white/40"
               >
                 <ResetIcon className="text-lg" />
-                <span className="text-[7px] font-black uppercase mt-1 tracking-tighter">
+                <span className="text-[7px] font-black  mt-1 tracking-tighter">
                   RESET
                 </span>
               </button>
@@ -871,10 +914,21 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
             className={`w-12 h-12 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${webcamActive ? "text-white" : "text-white/30"}`}
           >
             <CameraIcon className="text-lg" />
-            <span className="text-[7px] font-black uppercase mt-1 tracking-widest">
+            <span className="text-[7px] font-black  mt-1 tracking-widest">
               SIGHT
             </span>
           </button>
+
+          <button
+            onClick={() => setWebcamFlipped(!webcamFlipped)}
+            className={`w-7 h-7 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-lg flex flex-col items-center justify-center transition-all active:scale-90 ${webcamFlipped ? "text-indigo-400" : "text-white/30"}`}
+          >
+            <ArrowsRightLeftIcon className="text-[10px]" />
+            <span className="text-[4px] font-black uppercase mt-0.5 tracking-tighter">
+              FLIP
+            </span>
+          </button>
+
           {selectedAssetId && (
             <>
               <button
@@ -886,7 +940,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
                 ) : (
                   <ExpandIcon className="text-lg" />
                 )}
-                <span className="text-[7px] font-black uppercase mt-1 tracking-tighter">
+                <span className="text-[7px] font-black  mt-1 tracking-tighter">
                   VIEW
                 </span>
               </button>
@@ -896,7 +950,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
                 className="w-12 h-12 bg-red-600/20 hover:bg-red-600 backdrop-blur-3xl border border-red-500/30 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 text-red-500 hover:text-white"
               >
                 <TrashIcon className="text-xs" />
-                <span className="text-[5px] font-black uppercase mt-0.5 tracking-tighter">
+                <span className="text-[5px] font-black  mt-0.5 tracking-tighter">
                   REMOVE
                 </span>
               </button>
@@ -987,14 +1041,14 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
             <ClapperboardIcon className="w-12 h-12 text-white" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-3xl font-black italic tracking-tighter uppercase text-white leading-none">
+            <h1 className="text-3xl font-black italic tracking-tighter  text-white leading-none">
               Direct CUT
             </h1>
-            <p className="text-white/20 text-[9px] font-bold uppercase tracking-[0.4em]">
+            <p className="text-white/20 text-[9px] font-bold  tracking-[0.4em]">
               REACTION ASSEMBLY STUDIO
             </p>
           </div>
-          <label className="block w-full max-w-xs bg-white text-black py-4 rounded-2xl font-black uppercase cursor-pointer active:scale-95 text-center text-sm tracking-widest shadow-2xl transition-transform">
+          <label className="block w-full max-w-xs bg-white text-black py-4 rounded-2xl font-black  cursor-pointer active:scale-95 text-center text-sm tracking-widest shadow-2xl transition-transform">
             IMPORT MEDIA
             <input
               type="file"

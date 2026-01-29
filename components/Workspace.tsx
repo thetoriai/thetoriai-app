@@ -289,7 +289,7 @@ const SceneCard: React.FC<SceneCardProps> = (props) => {
         <div className="flex justify-between items-start mb-2">
           {scene.prompt !== "Image Load Section" &&
           scene.prompt !== "Uploaded Image" ? (
-            <span className="px-2 py-0.5 bg-gray-700 text-gray-300 text-[10px] font-bold rounded uppercase">
+            <span className="px-2 py-0.5 bg-gray-700 text-gray-300 text-[10px] font-bold rounded ">
               {scene.angleName || `Scene ${index + 1}`}
             </span>
           ) : (
@@ -404,7 +404,7 @@ const SceneCard: React.FC<SceneCardProps> = (props) => {
               </div>
               <div>
                 <div className="flex justify-between items-center mb-0.5">
-                  <label className="text-[9px] font-bold text-gray-400 uppercase">
+                  <label className="text-[9px] font-bold text-gray-400 ">
                     {props.isMusicVideo
                       ? "Director's Notes"
                       : props.isHistory
@@ -433,7 +433,7 @@ const SceneCard: React.FC<SceneCardProps> = (props) => {
               </div>
               <div className="flex items-end gap-1.5">
                 <div className="flex-1 min-w-0">
-                  <label className="text-[8px] font-bold text-gray-500 uppercase mb-0.5 block">
+                  <label className="text-[8px] font-bold text-gray-500  mb-0.5 block">
                     Camera
                   </label>
                   <div className="relative">
@@ -457,7 +457,7 @@ const SceneCard: React.FC<SceneCardProps> = (props) => {
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <div className="flex flex-col">
-                    <label className="text-[8px] font-bold text-gray-500 uppercase mb-0.5 block">
+                    <label className="text-[8px] font-bold text-gray-500  mb-0.5 block">
                       Model
                     </label>
                     <select
@@ -472,7 +472,7 @@ const SceneCard: React.FC<SceneCardProps> = (props) => {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label className="text-[8px] font-bold text-gray-500 uppercase mb-0.5 block">
+                    <label className="text-[8px] font-bold text-gray-500  mb-0.5 block">
                       Res
                     </label>
                     <select
@@ -692,12 +692,12 @@ export const Workspace = React.memo(
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-white">Storyboard</h2>
                 {isMusicVideo && (
-                  <span className="px-2 py-0.5 bg-indigo-900 text-indigo-200 text-[10px] uppercase font-bold rounded border border-indigo-700">
+                  <span className="px-2 py-0.5 bg-indigo-900 text-indigo-200 text-[10px]  font-bold rounded border border-indigo-700">
                     Music Video Mode
                   </span>
                 )}
                 {isHistory && (
-                  <span className="px-2 py-0.5 bg-amber-900 text-amber-200 text-[10px] uppercase font-bold rounded border border-amber-700">
+                  <span className="px-2 py-0.5 bg-amber-900 text-amber-200 text-[10px]  font-bold rounded border border-amber-700">
                     History Mode
                   </span>
                 )}

@@ -93,7 +93,7 @@ const ViewHeader: React.FC<{
       <div className="w-8 h-8 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-1.5 shadow-lg">
         <Logo className="w-full h-full" />
       </div>
-        <h2 className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em] italic">
+        <h2 className="text-[10px] font-black text-gray-300  tracking-[0.3em] italic">
           {title}
         </h2>
           </div>
@@ -101,7 +101,7 @@ const ViewHeader: React.FC<{
       onClick={onBack}
       className="p-2 bg-gray-800/50 hover:bg-red-900/20 rounded-xl text-gray-400 hover:text-red-400 transition-all flex items-center gap-2 border border-white/5 group"
     >
-      <span className="text-[8px] font-black uppercase tracking-widest hidden sm:block group-hover:translate-x-[-2px] transition-transform">
+      <span className="text-[8px] font-black  tracking-widest hidden sm:block group-hover:translate-x-[-2px] transition-transform">
         Close Page
                 </span>
       <XIcon className="w-5 h-5" />
@@ -1872,7 +1872,7 @@ const App: React.FC = () => {
     <div className="flex-1 h-full overflow-y-auto bg-gray-950 p-4 sm:p-8 scrollbar-thin scrollbar-thumb-gray-800">
       <div className="max-w-5xl mx-auto flex flex-col items-center animate-in fade-in zoom-in-95 duration-500 origin-top">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-black text-white italic tracking-tighter mb-2 uppercase leading-none">
+          <h2 className="text-3xl font-black text-white italic tracking-tighter mb-2  leading-none">
             Studio Top-Up
           </h2>
           <div className="inline-flex flex-col items-center gap-4">
@@ -1881,13 +1881,13 @@ const App: React.FC = () => {
               {/* DO add comment: Corrected state variable 'isGifting' to 'isGiftMode' */}
               <button
                 onClick={() => setIsGiftMode(false)}
-                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${!isGiftMode ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black  tracking-widest transition-all ${!isGiftMode ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
               >
                 Account Recharge
               </button>
               <button
                 onClick={() => setIsGiftMode(true)}
-                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isGiftMode ? "bg-amber-500 text-black shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black  tracking-widest transition-all ${isGiftMode ? "bg-amber-500 text-black shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
               >
                 <GiftIcon className="w-4 h-4" /> Gift Someone
               </button>
@@ -1896,7 +1896,7 @@ const App: React.FC = () => {
             {isGiftMode && (
               <div className="w-full max-w-md animate-in slide-in-from-top-4 duration-500">
                 <div className="space-y-1.5">
-                  <label className="text-[9px] font-black text-amber-500 uppercase tracking-[0.2em] block ml-2">
+                  <label className="text-[9px] font-black text-amber-500  tracking-[0.2em] block ml-2">
                     Recipient Email Address
                   </label>
                   <div className="relative group">
@@ -1908,7 +1908,7 @@ const App: React.FC = () => {
                       className="w-full bg-black/40 border border-amber-500/30 rounded-2xl px-6 py-4 text-white focus:border-amber-500 outline-none transition-all placeholder-gray-800 text-sm shadow-inner group-hover:border-amber-500/50"
                     />
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-                      <span className="text-[8px] font-black text-amber-500/50 uppercase tracking-widest">
+                      <span className="text-[8px] font-black text-amber-500/50  tracking-widest">
                         Registered User Required
                       </span>
                     </div>
@@ -1919,7 +1919,7 @@ const App: React.FC = () => {
 
             {!isGiftMode && (
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-600/10 border border-indigo-500/30 rounded-full">
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest italic">
+                <span className="text-[10px] font-black text-indigo-400  tracking-widest italic">
               Pay-As-You-Produce • NOT a subscription
             </span>
               </div>
@@ -1936,21 +1936,21 @@ const App: React.FC = () => {
             >
               <CreditCardIcon className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
+            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter  leading-none">
               {isGiftMode ? "Gift Pack: Line Up" : "Line Up"}
             </h3>
             <div className="flex items-baseline gap-1 mb-3">
               <span className="text-2xl font-black text-white tracking-tighter">
                 $12
               </span>
-              <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">
+              <span className="text-[8px] font-bold text-gray-500  tracking-widest">
                 One-time
               </span>
             </div>
             <a
               href={PAYPAL_STARTER_LINK}
               target="_blank"
-              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-sky-600 text-white hover:bg-sky-500"}`}
+              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-sky-600 text-white hover:bg-sky-500"}`}
             >
               {isGiftMode ? "Gift 100 Credits" : "Purchase Now"}
             </a>
@@ -1959,7 +1959,7 @@ const App: React.FC = () => {
                 className={`flex items-center gap-2 ${isGiftMode ? "text-amber-400" : "text-sky-300"}`}
               >
                 <CheckIcon className="w-4 h-4 shrink-0" />
-                <span className="text-[10px] font-black uppercase tracking-wider">
+                <span className="text-[10px] font-black  tracking-wider">
                   100 Credits
                 </span>
               </div>
@@ -1970,7 +1970,7 @@ const App: React.FC = () => {
             className={`border-2 rounded-2xl flex flex-col items-center text-center shadow-[0_0_40px_rgba(255,255,255,0.05)] relative overflow-hidden group transition-all ${isGiftMode ? "bg-[#221c0e] border-amber-500/30" : "bg-[#111827] border-white/20"}`}
           >
             <div
-              className={`w-full text-[8px] font-black py-1.5 uppercase tracking-[0.2em] shrink-0 ${isGiftMode ? "bg-amber-500 text-black" : "bg-white text-black"}`}
+              className={`w-full text-[8px] font-black py-1.5  tracking-[0.2em] shrink-0 ${isGiftMode ? "bg-amber-500 text-black" : "bg-white text-black"}`}
             >
               MOST POPULAR GIFT
             </div>
@@ -1984,21 +1984,21 @@ const App: React.FC = () => {
                   <SparklesIcon className="w-6 h-6" />
                 )}
             </div>
-              <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
+              <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter  leading-none">
                 {isGiftMode ? "Gift Pack: Production" : "Production"}
             </h3>
               <div className="flex items-baseline gap-1 mb-4">
                 <span className="text-3xl font-black text-white tracking-tighter">
                 $25
               </span>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">
+                <span className="text-[10px] font-bold text-gray-400  tracking-widest italic">
                 Best Value
               </span>
             </div>
             <a
                 href={PAYPAL_PRO_LINK}
               target="_blank"
-                className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg mb-6 transition-all ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-white text-black hover:bg-gray-200"}`}
+                className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-all ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-white text-black hover:bg-gray-200"}`}
             >
                 {isGiftMode ? "Gift 300 Credits" : "Fuel Vision"}
             </a>
@@ -2009,7 +2009,7 @@ const App: React.FC = () => {
                   <CheckIcon
                     className={`w-4 h-4 shrink-0 ${isGiftMode ? "text-amber-400" : "text-white"}`}
                   />
-                  <span className="text-[10px] font-black uppercase tracking-wider">
+                  <span className="text-[10px] font-black  tracking-wider">
                     300 Credits
                 </span>
                 </div>
@@ -2025,28 +2025,28 @@ const App: React.FC = () => {
             >
               <VideoIcon className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter uppercase leading-none">
+            <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter  leading-none">
               {isGiftMode ? "Gift Pack: Studio" : "Studio"}
             </h3>
             <div className="flex items-baseline gap-1 mb-4">
               <span className="text-3xl font-black text-white tracking-tighter">
                 $50
               </span>
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              <span className="text-[10px] font-bold text-gray-500  tracking-widest">
                 Max Power
               </span>
             </div>
             <a
               href={PAYPAL_STUDIO_LINK}
               target="_blank"
-              className={`w-full py-4 font-black text-[10px] uppercase tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-amber-600 text-white hover:bg-amber-500"}`}
+              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-amber-600 text-white hover:bg-amber-500"}`}
             >
               {isGiftMode ? "Gift 700 Credits" : "Purchase Now"}
             </a>
             <div className="w-full space-y-2 text-left border-t border-white/5 pt-4">
               <div className="flex items-center gap-2 text-amber-400">
                 <CheckIcon className="w-4 h-4 shrink-0" />
-                <span className="text-[10px] font-black uppercase tracking-wider">
+                <span className="text-[10px] font-black  tracking-wider">
                   700 Credits
                 </span>
               </div>
@@ -2064,7 +2064,7 @@ const App: React.FC = () => {
             That's why Thetori Ai is here for you. a trial will convince you.
           </p>
           <div className="pt-2 border-t border-white/5 mt-2">
-            <span className="text-[9px] font-black text-indigo-500 uppercase tracking-[0.4em]">
+            <span className="text-[9px] font-black text-indigo-500  tracking-[0.4em]">
               New Account Welcome Bonus: 5 Credits Applied Automatically
             </span>
           </div>
@@ -2079,7 +2079,7 @@ const App: React.FC = () => {
   }> = ({ children, title }) => (
     <div className="fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-in slide-in-from-bottom duration-300">
       <div className="p-4 border-b border-white/5 bg-[#0a0f1d] flex justify-between items-center shrink-0">
-        <h2 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] ml-2">
+        <h2 className="text-[10px] font-bold text-gray-400  tracking-[0.3em] ml-2">
           {title}
         </h2>
         <button

@@ -277,7 +277,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                 )}
                 {scene.prompt && (
                   <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/60 to-transparent pointer-events-none">
-                    <p className="text-[9px] font-black text-white uppercase tracking-widest line-clamp-1 drop-shadow-md opacity-90">
+                    <p className="text-[9px] font-black text-white  tracking-widest line-clamp-1 drop-shadow-md opacity-90">
                       {scene.prompt}
                     </p>
                   </div>
@@ -288,7 +288,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                 <div className="w-12 h-12 bg-amber-500/20 rounded-full flex items-center justify-center mb-4 border border-amber-500/30">
                   <ExclamationTriangleIcon className="w-6 h-6 text-amber-500" />
                 </div>
-                <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-2 leading-none">
+                <h4 className="text-[10px] font-black text-amber-500  tracking-[0.2em] mb-2 leading-none">
                   {isMinorBlock
                     ? "Production Advisory: Minor Detected"
                     : "Content Rejected: Explicit"}
@@ -300,7 +300,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                 </p>
                 <button
                   onClick={() => props.onDelete()}
-                  className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-black text-[9px] font-black uppercase tracking-widest rounded-lg transition-all shadow-xl active:scale-95"
+                  className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-black text-[9px] font-black  tracking-widest rounded-lg transition-all shadow-xl active:scale-95"
                 >
                   Reset Card
                 </button>
@@ -381,7 +381,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
         <button
           onClick={props.onToggleVideoCreator}
-          className="w-full flex items-center justify-center gap-2 mt-auto py-3.5 text-[10px] font-black tracking-[0.3em] uppercase transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border border-white/5 shadow-inner rounded-xl group"
+          className="w-full flex items-center justify-center gap-2 mt-auto py-3.5 text-[10px] font-black tracking-[0.3em]  transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border border-white/5 shadow-inner rounded-xl group"
         >
           <VideoIcon className="w-4 h-4" /> Create Video
         </button>
@@ -432,7 +432,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
             <div className="space-y-1.5 flex-1 min-h-0">
               <div className="flex justify-between items-center px-0.5">
                 <div className="flex items-center gap-1.5">
-                  <label className="text-[10px] font-black text-gray-200 tracking-[0.2em] uppercase">
+                  <label className="text-[10px] font-black text-gray-200 tracking-[0.2em] ">
                     {props.isMusicVideo ? "Notes" : "The Story"}
                   </label>
                   {props.hasScriptToImport && !isUploaded && (
@@ -441,7 +441,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                       className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-lg hover:from-indigo-500 hover:to-indigo-400 transition-all shadow-[0_0_15px_rgba(79,70,229,0.4)] border border-white/10"
                     >
                       <SparklesIcon className="w-3 h-3 text-amber-300" />
-                      <span className="text-[8px] font-black uppercase">
+                      <span className="text-[8px] font-black ">
                         Magic Script
                       </span>
                     </button>
@@ -469,7 +469,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
             <div className="flex items-end gap-1.5 shrink-0">
               <div className="flex-1">
-                <label className="text-[9px] font-bold text-gray-300 mb-0.5 block tracking-widest px-1 uppercase">
+                <label className="text-[9px] font-bold text-gray-300 mb-0.5 block tracking-widest px-1 ">
                   Camera Movement
                 </label>
                 <div className="relative">
@@ -495,7 +495,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
               </div>
               {props.isConfirmingVideo && (
                 <div className="flex flex-col animate-in slide-in-from-right-1">
-                  <label className="text-[9px] font-bold text-indigo-200 mb-0.5 block tracking-widest px-1 uppercase">
+                  <label className="text-[9px] font-bold text-indigo-200 mb-0.5 block tracking-widest px-1 ">
                     Engine
                   </label>
                   <select
@@ -520,7 +520,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                   )
                 }
                 disabled={props.isDisabled || isVideoLoading}
-                className={`flex-1 flex items-center justify-center gap-2 py-4 text-xs font-black tracking-[0.2em] uppercase transition-all text-white shadow-xl rounded-xl ${props.isConfirmingVideo ? "bg-green-600 hover:bg-green-700 scale-[1.02]" : "bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-600"}`}
+                className={`flex-1 flex items-center justify-center gap-2 py-4 text-xs font-black tracking-[0.2em]  transition-all text-white shadow-xl rounded-xl ${props.isConfirmingVideo ? "bg-green-600 hover:bg-green-700 scale-[1.02]" : "bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-600"}`}
               >
                 {isVideoLoading ? (
                   "Producing..."
