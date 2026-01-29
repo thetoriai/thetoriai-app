@@ -450,20 +450,38 @@ export const Timeline: React.FC<TimelineProps> = ({
           ref.current.src = url;
           ref.current.load();
         }
-        if (Math.abs(ref.current.currentTime - entry.internalTime) > 0.04)
+
+        // OPTIMIZED FOR AUDIO STABILITY:
+        // We now use a 1.5s drift threshold. This prevents constant snapping which kills audio playback.
+        // The browser's native audio buffer will now play smoothly unless it gets significantly out of sync.
+        const driftThreshold =
+          isPlaying && !isScrubbingRef.current ? 1.5 : 0.05;
+        if (
+          Math.abs(ref.current.currentTime - entry.internalTime) >
+          driftThreshold
+        ) {
           ref.current.currentTime = entry.internalTime;
-        if (isPlaying) ref.current.play().catch(() => {});
-        else ref.current.pause();
+        }
+
+        if (isPlaying) {
+          if (ref.current.paused) ref.current.play().catch(() => {});
+        } else {
+          if (!ref.current.paused) ref.current.pause();
+        }
+
+        // FIX: Enabled audio for video elements. Previously hardcoded to true.
         ref.current.muted = entry.clip.isMuted ?? false;
         if (ref.current instanceof HTMLVideoElement) {
           ref.current.style.opacity = entry.opacity.toString();
           ref.current.style.transform = `translate(${entry.clip.posX || 0}%, ${entry.clip.posY || 0}%) scale(${entry.clip.zoom || 1})`;
           ref.current.style.visibility = "visible";
+          ref.current.volume =
+            (entry.clip.isMuted ? 0 : (entry.clip.volume ?? 1)) * entry.opacity;
         } else if (ref.current instanceof HTMLAudioElement)
           ref.current.volume =
             (entry.clip.isMuted ? 0 : (entry.clip.volume ?? 1)) * entry.opacity;
       } else if (ref.current) {
-        ref.current.pause();
+        if (!ref.current.paused) ref.current.pause();
         if (ref.current instanceof HTMLVideoElement)
           ref.current.style.visibility = "hidden";
       }
@@ -483,13 +501,14 @@ export const Timeline: React.FC<TimelineProps> = ({
         // MAGNET SNAPPING LOGIC
         const SNAP_THRESHOLD = 0.2;
         const boundaries = [
-            0, contentDuration,
-            ...clips.map(c => c.startTime),
-            ...clips.map(c => c.startTime + c.duration),
-            ...audioClips.map(a => a.startTime),
-            ...audioClips.map(a => a.startTime + a.duration),
-            ...textClips.map(t => t.startTime),
-            ...textClips.map(t => t.startTime + t.duration)
+        0,
+        contentDuration,
+        ...clips.map((c) => c.startTime),
+        ...clips.map((c) => c.startTime + c.duration),
+        ...audioClips.map((a) => a.startTime),
+        ...audioClips.map((a) => a.startTime + a.duration),
+        ...textClips.map((t) => t.startTime),
+        ...textClips.map((t) => t.startTime + t.duration)
         ];
         
         let snappedTime = newTime;

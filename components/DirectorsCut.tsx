@@ -174,9 +174,28 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
     });
   };
 
-  const toggleAssetPlayback = useCallback((forceReset = false) => {
+  const toggleAssetPlayback = useCallback(async (forceReset = false) => {
     const v = videoRef.current;
     if (!v || !v.src) return;
+
+    // AUDIO STABILITY: Maintain high-priority routing for both preview and recording.
+    if (!audioContextRef.current)
+      audioContextRef.current = new (
+        window.AudioContext || (window as any).webkitAudioContext
+      )();
+    const audioCtx = audioContextRef.current;
+
+    if (audioCtx.state === "suspended") {
+      await audioCtx.resume();
+    }
+
+    // Ensure Routing: If not recording, we still need to route through the context
+    // to prevent the "1-second skip" which happens when the browser mutes unhandled nodes.
+    if (!videoSourceNodeRef.current) {
+      videoSourceNodeRef.current = audioCtx.createMediaElementSource(v);
+      videoSourceNodeRef.current.connect(audioCtx.destination);
+    }
+
     if (forceReset) {
       v.currentTime = 0;
       v.pause();
@@ -184,7 +203,15 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
       return;
     }
     if (v.paused || v.ended) {
-      v.play().catch(console.warn);
+      // Explicitly check volume and mute status to bypass aggressive autoplay blocks.
+      v.muted = false;
+      v.volume = 1;
+      const playPromise = v.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) =>
+          console.warn("Native Playback Logic Interrupted:", err)
+        );
+      }
       setIsAssetPlaying(true);
     } else {
       v.pause();
