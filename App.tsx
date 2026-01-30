@@ -115,7 +115,40 @@ const App: React.FC = () => {
   const [activeView, setActiveView] = useState("welcome");
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("desktop");
 
-  // ALIGNMENT PROTOCOL: Ensures 'Standing' iPads use compact sidebars while 'Rotating' iPads get the full console.
+  // --- BROWSER NAVIGATION LOGIC ---
+  const isInternalNavRef = useRef(false);
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state && event.state.view) {
+        isInternalNavRef.current = true;
+        setActiveView(event.state.view);
+      } else {
+        isInternalNavRef.current = true;
+        setActiveView("welcome");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    // Initialize history with current view on mount
+    if (!window.history.state) {
+      window.history.replaceState({ view: activeView }, "");
+    }
+
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    // If the view changed because of an internal click (not browser back/forward)
+    // we push the new state to history.
+    if (!isInternalNavRef.current) {
+      window.history.pushState({ view: activeView }, "");
+    }
+    isInternalNavRef.current = false;
+  }, [activeView]);
+  // --------------------------------
+
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
