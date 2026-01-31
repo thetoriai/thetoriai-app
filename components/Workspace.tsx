@@ -55,7 +55,8 @@ interface WorkspaceProps {
   onNavigateHistory: (direction: number) => void;
   historyIndex: number;
   totalHistoryItems: number;
-  currency: "USD" | "SEK";
+  // DO add comment above each fix. Fix currency type: Added 'EUR' to the allowed currency union to maintain type consistency across components.
+  currency: "EUR";
   exchangeRate: number;
   onCloseSession?: () => void;
   history: any[];

@@ -507,6 +507,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Story Title..."
             className="w-full bg-transparent border-none py-1 text-lg font-black text-white focus:outline-none placeholder-gray-800 text-center tracking-tighter italic shrink-0"
+            
           />
 
           <div className="flex flex-wrap justify-center gap-1 p-1 bg-black/20 rounded-lg border border-white/5 shadow-inner min-h-[50px] shrink-0">
@@ -564,9 +565,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                       ) : (
                         <PlayIcon className="w-2 h-2" />
                       )}
-                      <span className="text-[5px] font-black ">
-                        Play
-                      </span>
+                      <span className="text-[5px] font-black ">Play</span>
                     </button>
                   </div>
                 )}
@@ -699,6 +698,15 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* MOBILE ACCESSIBLE RESET BUTTON */}
+            <button
+              onClick={handleClearEverything}
+              className="w-full py-2.5 bg-red-500/10 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20 rounded-xl text-[8px] font-black tracking-[0.2em] transition-all flex items-center justify-center gap-2 mt-2 uppercase"
+            >
+              <TrashIcon className="w-3.5 h-3.5" />
+              Reset Production
+            </button>
           </div>
         </div>
 

@@ -45,7 +45,8 @@ export const VIEW_COLORS: Record<string, string> = {
   footage: "#06b6d4",
   history: "#94a3b8",
   "buy-credits": "#eab308",
-  "directors-cut": "#ef4444"
+  "directors-cut": "#ef4444",
+  welcome: "#fff"
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -70,7 +71,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isTablet = windowWidth >= 501 && windowWidth < 1024;
 
   const [showDirectivesDropdown, setShowDirectivesDropdown] = useState(false);
+  const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
 
   // CLICK-AWAY PROTOCOL: Ensures the master directives menu closes when focus is lost.
   useEffect(() => {
@@ -80,6 +83,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         !dropdownRef.current.contains(e.target as Node)
       ) {
         setShowDirectivesDropdown(false);
+      }
+      if (
+        accountRef.current &&
+        !accountRef.current.contains(e.target as Node)
+      ) {
+        setShowAccountDropdown(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -91,7 +100,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleNavClick = (view: string) => {
     setActiveView(view);
-    if (isPhone) setShowDirectivesDropdown(false);
+    if (isPhone) {
+      setShowDirectivesDropdown(false);
+      setShowAccountDropdown(false);
+    }
   };
 
   const handleContextChange = (style: string) => {
@@ -100,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const containerClasses = isPhone
-    ? "w-full h-full bg-[#0a0f1d] flex flex-col z-[100] animate-in slide-in-from-bottom duration-300"
+    ? "w-full h-full bg-[#0a0f1d]/40 backdrop-blur-md flex flex-col z-[100] animate-in slide-in-from-bottom duration-300"
     : isTablet
       ? "w-[80px] h-full bg-[#0a0f1d] border-r border-white/5 flex flex-col items-center py-6 gap-6 shrink-0 transition-all duration-300"
       : "w-[350px] h-full bg-[#0a0f1d] border-r border-white/5 flex flex-col shrink-0 overflow-hidden";
@@ -254,15 +266,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   if (isPhone) {
     return (
       <div className={containerClasses}>
-        <div className="p-8 flex items-center justify-between border-b border-white/5 bg-[#0a0f1d] sticky top-0 z-[110]">
+        <div className="p-4 flex items-center justify-between border-b border-white/5 bg-[#0a0f1d]/40 sticky top-0 z-[110]">
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-center">
-              <div className="w-10 h-10 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-2 mb-1">
+              <div
+                onClick={() => handleNavClick("welcome")}
+                className="w-10 h-10 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-2 mb-1 cursor-pointer active:scale-95 transition-all"
+              >
                 <Logo className="w-full h-full" />
               </div>
               <DotsTrigger />
             </div>
-            <h1 className="text-xl font-black italic tracking-tighter ml-1">
+            <h1 className="text-xl font-black italic tracking-tighter ml-1 text-white">
               Thetori Ai
             </h1>
           </div>
@@ -271,56 +286,84 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <DirectivesDropdown positionClasses="absolute top-[90px] left-8" />
           )}
 
-          <div className="bg-indigo-600/20 px-3 py-1.5 rounded-xl border border-indigo-500/30 flex items-center gap-2">
-            <CreditCardIcon className="w-4 h-4 text-indigo-400" />
-            <span className="text-[10px] font-black text-indigo-300">
-              {creditBalance}
-            </span>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-2">
-          {navItems.map((item) => (
-            <div key={item.id} className="relative">
+          <div className="relative" ref={accountRef}>
             <button
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              className="w-full flex items-center gap-6 p-5 rounded-2xl bg-white/[0.02] border border-white/5 text-gray-400 active:bg-indigo-600 active:text-white transition-all"
+              onClick={() => setShowAccountDropdown(!showAccountDropdown)}
+              className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 transition-all active:scale-95 ${showAccountDropdown ? "bg-indigo-600 border-indigo-400 shadow-lg" : "bg-indigo-600/20 border-indigo-500/30"}`}
             >
+              <CreditCardIcon
+                className={`w-4 h-4 ${showAccountDropdown ? "text-white" : "text-indigo-400"}`}
+              />
               <span
-                style={{
-                  color: activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
-                }}
+                className={`text-[10px] font-black ${showAccountDropdown ? "text-white" : "text-indigo-300"}`}
               >
-                {item.icon}
-              </span>
-              <span className="text-[14px] font-black  tracking-[0.2em]">
-                {item.label}
+                {creditBalance}
               </span>
             </button>
-             {item.id === "timeline" && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleNavClick("directors-cut");
-                  }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-transform z-20 border border-red-500"
-                >
-                  <ClapperboardIcon className="w-5 h-5 text-white" />
-                </button>
-              )}
-            </div>
-          ))}
+
+            {/* ACCOUNT DROP-DOWN - "FOLDER DROPOUT" REPLACEMENT FOR FOOTER */}
+            {showAccountDropdown && (
+              <div className="absolute top-[120%] right-0 w-64 bg-[#111827] border border-indigo-500/30 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] p-4 animate-in zoom-in-95 slide-in-from-top-2 duration-300 z-[200]">
+                <div className="flex flex-col items-center text-center gap-3">
+                  <div className="w-full">
+                    <p className="text-[10px] font-black text-indigo-400 tracking-[0.2em] uppercase mb-1">
+                      Session Identity
+                    </p>
+                    <p className="text-[11px] font-bold text-gray-200 truncate px-2">
+                      {session?.user?.email || HELLO_EMAIL}
+                    </p>
+                  </div>
+                  <div className="h-px w-full bg-white/5"></div>
+                  <button
+                    onClick={onLogout}
+                    className="w-full py-3 rounded-xl bg-red-600/20 text-red-400 font-black tracking-widest text-[9px] border border-red-500/30 active:bg-red-600/40 transition-all uppercase"
+                  >
+                    Sign Out Session
+                  </button>
+                  <p className="text-[7px] font-black text-gray-600 tracking-[0.4em] uppercase mt-1">
+                    v2.5.3 Studio Terminal
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="p-8 border-t border-white/5 flex flex-col gap-4 bg-[#0a0f1d]">
-          <button
-            onClick={onLogout}
-            className="w-full py-4 rounded-2xl bg-red-900/10 text-red-400 font-black  tracking-widest text-[10px] border border-red-900/20"
-          >
-            Sign Out Session
-          </button>
-          <p className="text-[8px] font-black text-gray-600 text-center  tracking-[0.3em]">
-            v2.5.3 Production Terminal
-          </p>
+
+        {/* Navigation area fits content naturally, scrolls only if viewport is too short */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-2 pb-32 scrollbar-none">
+          <div className="flex flex-col gap-3 max-w-sm mx-auto">
+            {navItems.map((item) => (
+              <div key={item.id} className="relative">
+                <button
+                  onClick={() => handleNavClick(item.id)}
+                  className={`w-full flex items-center gap-6 p-5 rounded-2xl border transition-all ${activeView === item.id ? "bg-indigo-600 border-indigo-500 text-white shadow-xl" : "bg-white/5 border-white/5 text-gray-400 active:bg-indigo-600 active:text-white"}`}
+                >
+                  <span
+                    style={{
+                      color:
+                        activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
+                    }}
+                  >
+                    {item.icon}
+                  </span>
+                  <span className="text-[15px] font-black tracking-[0.15em]">
+                    {item.label}
+                  </span>
+                </button>
+                {item.id === "timeline" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleNavClick("directors-cut");
+                    }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-transform z-20 border border-red-500"
+                  >
+                    <ClapperboardIcon className="w-5 h-5 text-white" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -330,7 +373,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return (
       <aside className={containerClasses}>
         <div className="flex flex-col items-center">
-          <div className="w-12 h-12 bg-indigo-600/10 border border-indigo-500/20 rounded-xl flex items-center justify-center p-2 mb-2">
+          <div
+            onClick={() => setActiveView("welcome")}
+            className="w-12 h-12 bg-indigo-600/10 border border-indigo-500/20 rounded-xl flex items-center justify-center p-2 mb-2 cursor-pointer active:scale-95 transition-transform"
+          >
             <Logo className="w-full h-full" />
           </div>
           <DotsTrigger />
@@ -378,7 +424,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-2 shadow-lg">
+              <div
+                onClick={() => setActiveView("welcome")}
+                className="w-10 h-10 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-2 shadow-lg cursor-pointer active:scale-95 transition-transform"
+              >
                 <Logo className="w-full h-full" />
               </div>
               <h1 className="text-2xl font-black text-white tracking-tighter italic">
@@ -393,9 +442,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </div>
           </div>
-          <div className="bg-indigo-600/20 px-3 py-1.5 rounded-xl border border-indigo-500/30 flex items-center gap-2 h-max">
-            <CreditCardIcon className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="text-[10px] font-black text-indigo-300 tracking-widest">
+          {/* ENLARGED DESKTOP CREDIT PILL */}
+          <div className="bg-indigo-600/20 px-5 py-2.5 rounded-2xl border border-indigo-500/30 flex items-center gap-3 h-max shadow-lg">
+            <CreditCardIcon className="w-4.5 h-4.5 text-indigo-400" />
+            <span className="text-[12px] font-black text-indigo-300 tracking-widest">
               {creditBalance.toLocaleString()}
             </span>
           </div>
@@ -403,7 +453,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="flex flex-col flex-1 px-8 pb-8 overflow-hidden">
-        <nav className="flex-1 flex flex-col gap-1.5 min-h-0 overflow-y-auto pr-1 scrollbar-none">
+        <nav className="flex-1 flex flex-col gap-2 min-h-0 overflow-y-auto pr-1 scrollbar-none">
           {navItems.map((item) => (
             <button
               key={item.id}
@@ -413,7 +463,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   "--glow-color": VIEW_COLORS[item.id] || "#6366f1"
                 } as React.CSSProperties
               }
-              className={`sidebar-glow-btn w-full flex items-center gap-4 px-4 py-3.5 transition-all border-2 border-transparent rounded-xl ${activeView === item.id ? "active" : "text-gray-400 hover:bg-white/[0.03] hover:text-gray-200"}`}
+              className={`sidebar-glow-btn w-full flex items-center gap-5 px-5 py-4 transition-all border-2 border-transparent rounded-[1.25rem] ${activeView === item.id ? "active" : "text-gray-400 hover:bg-white/[0.03] hover:text-gray-200"}`}
             >
               <span
                 className={`transition-colors duration-300 ${activeView === item.id ? "text-white" : ""}`}
@@ -423,7 +473,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 {item.icon}
               </span>
-              <span className="text-[14px] font-black tracking-[0.15em]  truncate">
+              <span className="text-[15px] font-black tracking-[0.15em] truncate">
                 {item.label}
               </span>
             </button>

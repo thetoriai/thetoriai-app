@@ -189,7 +189,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
 
     return (
       <div
-        className={`group bg-[#0f172a] border relative transition-all shadow-2xl overflow-hidden flex flex-col refine-zone ${isLead ? "border-amber-500/20 rounded-[2rem]" : "border-white/5 rounded-xl"} ${isRefining ? "themed-artline" : ""} ${isAnySafetyBlock ? "border-amber-500/50 animate-pulse-amber" : ""}`}
+        className={`group bg-[#0f172a] border relative transition-all shadow-20xl overflow-hidden flex flex-col refine-zone ${isLead ? "border-amber-500/20 rounded-[2rem]" : "border-white/5 rounded-xl"} ${isRefining ? "themed-artline" : ""} ${isAnySafetyBlock ? "border-amber-500/50 animate-pulse-amber" : ""}`}
       >
         <div
           onClick={() => isRefining && setShowRefineId(null)}
@@ -249,10 +249,11 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                   <div className="w-14 h-14 rounded-full bg-white/[0.02] border border-white/5 flex items-center justify-center mb-4 group-hover/empty:scale-110 transition-transform">
                     <UserPlusIcon className="w-5 h-5 text-gray-400 group-hover/empty:text-indigo-500" />
                   </div>
-                  <span className="text-[9px] font-black text-gray-300  tracking-[0.25em] text-center px-6 leading-relaxed group-hover/empty:text-white transition-colors">
+                  <span className="text-[12px] font-black text-gray-300  tracking-[0.25em] text-center px-6 leading-relaxed group-hover/empty:text-white transition-colors">
                     Double-click to
                     <br />
-                    Describe Artist
+                    Describe <br />
+                    Artist
                   </span>
                 </>
               )}
@@ -289,10 +290,10 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                   e.stopPropagation();
                   props.onToggleHero?.(char.id);
                 }}
-                className={`p-3.5 rounded-full shadow-2xl pointer-events-auto transition-transform hover:scale-110 ${char.isHero ? "bg-amber-500 text-black" : "bg-white/10 text-white backdrop-blur-md"}`}
+                className={`p-2.5 rounded-full shadow-2xl pointer-events-auto transition-transform hover:scale-110 ${char.isHero ? "bg-amber-500 text-black" : "bg-white/10 text-white backdrop-blur-md"}`}
                 title="Set as Lead Actor"
               >
-                <HeroStarIcon solid={char.isHero} className="w-4.5 h-4.5" />
+                <HeroStarIcon solid={char.isHero} className="w-2.5 h-2.5" />
               </button>
             </div>
           )}
@@ -309,7 +310,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                   })
                 }
                 placeholder="Describe physical traits, clothing, age..."
-                className="w-full h-14 bg-black/40 border border-white/10 rounded-lg p-2 text-[11px] font-medium text-white placeholder-gray-400 focus:border-indigo-500 outline-none resize-none leading-tight mt-2"
+                className="w-full h-14 bg-black/40 border border-white/10 rounded-lg p-2 text-[12px] font-medium text-white placeholder-gray-400 focus:border-indigo-500 outline-none resize-none leading-tight mt-2"
               />
               <div className="flex gap-2 mt-2">
                 <button
@@ -332,7 +333,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                 value={char.name}
                 onBlur={() => handleNameBlur(char)}
                 onChange={(e) => handleNameChange(char.id, e.target.value)}
-                className={`flex-1 bg-transparent border-none p-0 font-black text-left text-white outline-none tracking-tighter  placeholder-gray-500 ${isLead ? "text-lg" : "text-[11px]"} ${!hasName ? "ring-1 ring-amber-500/20 px-2 py-0.5 rounded" : ""}`}
+                className={`flex-1 bg-transparent border-none p-0 font-black text-left text-white outline-none tracking-tighter  placeholder-gray-500 ${isLead ? "text-lg" : "text-[20px]"} ${!hasName ? "ring-1 ring-amber-500/20 px-2 py-0.5 rounded" : ""}`}
                 placeholder="ACTOR NAME"
               />
               {!isRefining &&
@@ -363,10 +364,10 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
   return (
     <div ref={containerRef} className="space-y-10 pb-60 px-4">
       {hero && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
           <div className="flex items-center gap-3">
-            <HeroStarIcon solid className="w-3 h-3 text-amber-500" />
-            <span className="text-[10px] font-black text-amber-500  tracking-[0.4em]">
+            <HeroStarIcon solid className="w-12 h-12 text-amber-500" />
+            <span className="text-[12px] font-black text-amber-500  tracking-[0.4em]">
               Master Lead
             </span>
             <div className="h-px bg-amber-500/10 flex-1"></div>
@@ -374,9 +375,9 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-start">
             {renderCharacterCard(hero, true)}
             <div className="space-y-6">
-              <div className="bg-[#0f172a] border border-white/5 p-8 rounded-[2rem] shadow-xl themed-artline">
+              <div className="bg-[#0f172a] border border-white/5 p-8 rounded-[1rem] shadow-xl themed-artline">
                 <div className="flex items-center justify-between mb-8">
-                  <span className="text-[9px] font-bold text-gray-400  tracking-widest opacity-80">
+                  <span className="text-[12px] font-bold text-gray-400  tracking-widest opacity-80">
                     Studio Visual Key
                   </span>
                 </div>

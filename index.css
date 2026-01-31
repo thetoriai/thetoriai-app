@@ -19,7 +19,7 @@ body {
   color: #f9fafb;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow: hidden;
-  height: 100vh;
+  height: 100dvh; /* DO add comment: Fixed mobile height clipping by using dynamic viewport height. */
 }
 
 /* --- Responsive Breakpoint Logic --- */

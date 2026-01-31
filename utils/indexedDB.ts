@@ -1,5 +1,5 @@
 
-const DB_NAME = 'StoryWeaverDB';
+const DB_NAME = 'ThetoriAiDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'appData';
 

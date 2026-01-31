@@ -19,7 +19,12 @@ import {
   UndoIcon,
   ChevronDownIcon,
   LoaderIcon,
-  CameraIcon
+  CameraIcon,
+  CheckIcon,
+  ArrowsRightLeftIcon,
+  // DO add comment: Added missing icon imports to fix 'Cannot find name' errors.
+  ExpandIcon,
+  CompressIcon
 } from "./Icons";
 
 interface TimelineClip {
@@ -38,6 +43,7 @@ interface TimelineClip {
   zoom?: number;
   posX?: number;
   posY?: number;
+  isNew?: boolean;
 }
 
 interface AudioClip {
@@ -158,6 +164,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   const [masterAspectRatio, setMasterAspectRatio] = useState<"16:9" | "9:16">(
     "16:9"
   );
+  const hasManuallyChangedAspect = useRef(false);
 
   const [flashingClipId, setFlashingClipId] = useState<string | null>(null);
   const [isProcessingFrame, setIsProcessingFrame] = useState(false);
@@ -193,6 +200,31 @@ export const Timeline: React.FC<TimelineProps> = ({
       onUpdatePlaybackTime(localPlaybackTime);
     };
   }, [localPlaybackTime, onUpdatePlaybackTime]);
+
+  // AUTOMATIC ASPECT DETECTION FOR FIRST CLIP
+  useEffect(() => {
+    if (clips.length === 1 && !hasManuallyChangedAspect.current) {
+      const firstClip = clips[0];
+      const url = formatAssetUrl(firstClip.url);
+
+      if (firstClip.type === "video") {
+        const v = document.createElement("video");
+        v.src = url;
+        v.onloadedmetadata = () => {
+          if (v.videoHeight > v.videoWidth) setMasterAspectRatio("9:16");
+          else setMasterAspectRatio("16:9");
+        };
+      } else {
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+          if (img.naturalHeight > img.naturalWidth)
+            setMasterAspectRatio("9:16");
+          else setMasterAspectRatio("16:9");
+        };
+      }
+    }
+  }, [clips.length]);
 
   const contentDuration = Math.max(
     ...(clips || []).map(
@@ -456,11 +488,17 @@ export const Timeline: React.FC<TimelineProps> = ({
         // The browser's native audio buffer will now play smoothly unless it gets significantly out of sync.
         const driftThreshold =
           isPlaying && !isScrubbingRef.current ? 1.5 : 0.05;
+
+        // BLACK FRAME PREVENTION: When loading or seeking to start, skip the first 0.05s to ensure a decoded frame.
+        const targetSeekTime =
+          entry.internalTime === 0 && entry.clip.type === "video"
+            ? 0.05
+            : entry.internalTime;
+
         if (
-          Math.abs(ref.current.currentTime - entry.internalTime) >
-          driftThreshold
+          Math.abs(ref.current.currentTime - targetSeekTime) > driftThreshold
         ) {
-          ref.current.currentTime = entry.internalTime;
+          ref.current.currentTime = targetSeekTime;
         }
 
         if (isPlaying) {
@@ -521,14 +559,24 @@ export const Timeline: React.FC<TimelineProps> = ({
         
         setLocalPlaybackTime(snappedTime);
         onUpdatePlaybackTime(snappedTime);
-    }, [contentDuration, pixelsPerSecond, labelWidth, onUpdatePlaybackTime, clips, audioClips, textClips]);
+    },
+    [
+      contentDuration,
+      pixelsPerSecond,
+      labelWidth,
+      onUpdatePlaybackTime,
+      clips,
+      audioClips,
+      textClips
+    ]
+  );
 
   useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent | TouchEvent) => {
+    const handleGlobalMouseMove = (e: MouseEvent | React.TouchEvent) => {
       const isTouch = "touches" in e;
       const clientX = isTouch
-        ? (e as TouchEvent).touches[0].clientX
-        : (e as MouseEvent).clientX;
+        ? (e as any).touches[0].clientX
+        : (e as any).clientX;
       if (isScrubbingRef.current) performScrub(clientX);
       else if (dragging) {
         const deltaX = clientX - dragging.startX;
@@ -615,16 +663,16 @@ export const Timeline: React.FC<TimelineProps> = ({
       isScrubbingRef.current = false;
       setDragging(null);
     };
-    window.addEventListener("mousemove", handleGlobalMouseMove);
+    window.addEventListener("mousemove", handleGlobalMouseMove as any);
     window.addEventListener("mouseup", handleGlobalMouseUp);
-    window.addEventListener("touchmove", handleGlobalMouseMove, {
+    window.addEventListener("touchmove", handleGlobalMouseMove as any, {
       passive: false
     });
     window.addEventListener("touchend", handleGlobalMouseUp);
     return () => {
-      window.removeEventListener("mousemove", handleGlobalMouseMove);
+      window.removeEventListener("mousemove", handleGlobalMouseMove as any);
       window.removeEventListener("mouseup", handleGlobalMouseUp);
-      window.removeEventListener("touchmove", handleGlobalMouseMove);
+      window.removeEventListener("touchmove", handleGlobalMouseMove as any);
       window.removeEventListener("touchend", handleGlobalMouseUp);
     };
   }, [
@@ -766,6 +814,13 @@ export const Timeline: React.FC<TimelineProps> = ({
       });
   };
 
+  // REFINED: Placeholder logic to disappear if ANY track (visual, audio, text) has items.
+  const hasTimelineContent =
+    (clips?.length || 0) +
+      (audioClips?.length || 0) +
+      (textClips?.length || 0) >
+    0;
+
   return (
     <div
       className="flex-1 flex flex-col h-full bg-[#0a0f1d] overflow-hidden select-none font-sans relative"
@@ -809,6 +864,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             onClick={(e) => {
               e.stopPropagation();
               setMasterAspectRatio("16:9");
+              hasManuallyChangedAspect.current = true;
             }}
             className={`px-1.5 md:px-3 py-0.5 md:py-1 rounded-md md:rounded-lg text-[6px] md:text-[9px] font-black transition-all ${masterAspectRatio === "16:9" ? "bg-indigo-600 text-white" : "text-gray-500"}`}
           >
@@ -818,6 +874,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             onClick={(e) => {
               e.stopPropagation();
               setMasterAspectRatio("9:16");
+              hasManuallyChangedAspect.current = true;
             }}
             className={`px-1.5 md:px-3 py-0.5 md:py-1 rounded-md md:rounded-lg text-[6px] md:text-[9px] font-black transition-all ${masterAspectRatio === "9:16" ? "bg-indigo-600 text-white" : "text-gray-500"}`}
           >
@@ -831,8 +888,9 @@ export const Timeline: React.FC<TimelineProps> = ({
         <div
           className={`relative bg-black transition-all duration-500 overflow-hidden shadow-2xl border-4 themed-artline ${masterAspectRatio === "16:9" ? "w-full md:w-auto md:h-full aspect-video" : "w-auto h-full aspect-[9/16]"}`}
         >
-          {!activeData.main && (
-            <div className="absolute inset-0 z-0 flex flex-col items-center justify-center bg-[#111827] grayscale opacity-40">
+          {/* REFINED: Show placeholder ONLY if the entire timeline is empty. Presence of text or audio now hides it. */}
+          {!hasTimelineContent && (
+            <div className="absolute inset-0 z-0 flex flex-col items-center justify-center bg-[#111827] grayscale opacity-40 animate-in fade-in duration-500">
               <div className="w-8 md:w-16 h-8 md:h-16 rounded-full border-2 md:border-4 border-dashed border-gray-600 flex items-center justify-center mb-2 md:mb-4">
                 <FilmIcon className="w-4 md:w-8 h-4 md:h-8 text-gray-600" />
               </div>
@@ -918,7 +976,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                     ? "transparent"
                     : hexToRgba(
                         activeData.text.clip.bgColor || "#000000",
-                        activeData.text.clip.bgOpacity ?? 0.8
+                        activeData.text.clip.bgOpacity ?? 0
                       ),
                   ...getMotionStyle(activeData.text.clip, localPlaybackTime)
                 }}
@@ -1041,6 +1099,67 @@ export const Timeline: React.FC<TimelineProps> = ({
               <div className="flex items-center gap-2">
                 {selectedClip.type === "text" && (
                   <>
+                    <div className="flex flex-col">
+                      <span className="text-[6px] font-black text-gray-500  tracking-tighter mb-0.5 ml-1">
+                        BG Mode
+                      </span>
+                      <ControlButton
+                        icon={
+                          currentSelected.fullBackground
+                            ? ExpandIcon
+                            : CompressIcon
+                        }
+                        title="Toggle Full/Box Background"
+                        onClick={() =>
+                          onUpdateTextClips(
+                            (textClips || []).map((t) =>
+                              t.id === selectedClip.id
+                                ? { ...t, fullBackground: !t.fullBackground }
+                                : t
+                            )
+                          )
+                        }
+                        active={currentSelected.fullBackground}
+                        colorClass="bg-indigo-600 text-white"
+                      />
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-[6px] font-black text-gray-500 tracking-tighter mb-0.5">
+                        Color
+                      </span>
+                      <div className="relative w-6 h-6 rounded-lg overflow-hidden border border-white/20">
+                        <input
+                          type="color"
+                          value={currentSelected.bgColor || "#312e81"}
+                          onChange={(e) =>
+                            onUpdateTextClips(
+                              (textClips || []).map((t) =>
+                                t.id === selectedClip.id
+                                  ? { ...t, bgColor: e.target.value }
+                                  : t
+                              )
+                            )
+                          }
+                          className="absolute inset-[-4px] w-[200%] h-[200%] cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                    <ControlSlider
+                      label="Opacity"
+                      value={currentSelected.bgOpacity ?? 0.7}
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      onChange={(e: any) =>
+                        onUpdateTextClips(
+                          (textClips || []).map((t) =>
+                            t.id === selectedClip.id
+                              ? { ...t, bgOpacity: parseFloat(e.target.value) }
+                              : t
+                          )
+                        )
+                      }
+                    />
                     <div className="flex flex-col">
                       <span className="text-[6px] font-black text-gray-500  tracking-tighter mb-0.5 ml-1">
                         Motion
@@ -1182,26 +1301,6 @@ export const Timeline: React.FC<TimelineProps> = ({
         <div
           ref={scrollAreaRef}
           className="flex-1 overflow-x-auto overflow-y-hidden scrollbar-professional relative pt-4 md:pt-6 touch-none scroll-smooth"
-          onMouseDown={(e) => {
-            if (
-              !(e.target as HTMLElement).closest(".clip-block") &&
-              !(e.target as HTMLElement).closest(".handle")
-            ) {
-              isScrubbingRef.current = true;
-              performScrub(e.clientX);
-              e.stopPropagation();
-            }
-          }}
-          onTouchStart={(e) => {
-            if (
-              !(e.target as HTMLElement).closest(".clip-block") &&
-              !(e.target as HTMLElement).closest(".handle")
-            ) {
-              isScrubbingRef.current = true;
-              performScrub(e.touches[0].clientX);
-              e.stopPropagation();
-            }
-          }}
         >
           <div
             className="relative"
@@ -1210,7 +1309,20 @@ export const Timeline: React.FC<TimelineProps> = ({
               marginLeft: `${labelWidth}px`
             }}
           >
-            <div className="h-6 md:h-7 border-b border-white/10 sticky top-0 bg-[#030712]/95 backdrop-blur-sm z-[110] flex items-end">
+            {/* RULER: Scrubbing is now restricted to this div only */}
+            <div
+              className="h-6 md:h-7 border-b border-white/10 sticky top-0 bg-[#030712]/95 backdrop-blur-sm z-[110] flex items-end cursor-pointer"
+          onMouseDown={(e) => {
+                e.stopPropagation(); // Prevent root deselection
+              isScrubbingRef.current = true;
+              performScrub(e.clientX);
+          }}
+          onTouchStart={(e) => {
+                e.stopPropagation(); // Prevent root deselection
+              isScrubbingRef.current = true;
+              performScrub(e.touches[0].clientX);
+            }}
+          >
               {Array.from({ length: Math.ceil(viewportDuration / 5) + 1 }).map(
                 (_, i) => (
                   <div
@@ -1286,8 +1398,15 @@ export const Timeline: React.FC<TimelineProps> = ({
               </div>
               {[1, 0].map((layer) => {
                 // DO add comment: Identify the most recently added clip on this layer chronologically to restrict double-click logic.
-                const layerClips = (clips || []).filter(c => Number(c.layer) === layer);
-                const lastClipInLayer = layerClips.length > 0 ? layerClips.reduce((prev, current) => (prev.startTime > current.startTime) ? prev : current) : null;
+                const layerClips = (clips || []).filter(
+                  (c) => Number(c.layer) === layer
+                );
+                const lastClipInLayer =
+                  layerClips.length > 0
+                    ? layerClips.reduce((prev, current) =>
+                        prev.startTime > current.startTime ? prev : current
+                      )
+                    : null;
 
                 return (
                 <div
@@ -1367,7 +1486,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                           {isSidePanelOpen && (
                             <div 
                               className="absolute top-0 bottom-0 left-full ml-1.5 z-[200] bg-gray-950 border border-indigo-500 rounded-md w-12 flex items-center justify-center shadow-[0_0_15px_rgba(79,70,229,0.4)] animate-in slide-in-from-left-2 duration-200 overflow-hidden"
-                              onClick={e => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
                             >
                               {/* DO add comment: Dynamic background showing the last frame inside the compact rectangle. */}
                               <div className="absolute inset-0 z-0 bg-black">
@@ -1377,16 +1496,23 @@ export const Timeline: React.FC<TimelineProps> = ({
                                         className="w-full h-full object-cover opacity-60" 
                                         muted 
                                         onLoadedMetadata={(e) => {
-                                            (e.target as HTMLVideoElement).currentTime = clip.duration - 0.1;
+                                      (
+                                        e.target as HTMLVideoElement
+                                      ).currentTime = clip.duration - 0.1;
                                         }}
                                     />
                                 ) : (
-                                    <img src={formatAssetUrl(clip.url)} className="w-full h-full object-cover opacity-60" />
+                                  <img
+                                    src={formatAssetUrl(clip.url)}
+                                    className="w-full h-full object-cover opacity-60"
+                                  />
                                 )}
                               </div>
                               {/* DO add comment: Small rectangular blue overlay containing ONLY the logo/icon. */}
                               <button 
-                                onClick={() => handleCaptureLastFrameAction(clip)}
+                                onClick={() =>
+                                  handleCaptureLastFrameAction(clip)
+                                }
                                 className="relative z-10 w-full h-full bg-blue-600/40 hover:bg-blue-500/60 text-white transition-all flex items-center justify-center group/btn"
                                 title="Take Last Frame"
                               >
@@ -1396,14 +1522,16 @@ export const Timeline: React.FC<TimelineProps> = ({
                           )}
 
                           <div
-                            className={`relative w-full h-full border-2 rounded-lg md:rounded-xl overflow-hidden bg-black transition-all ${isSelected ? "border-indigo-500 ring-2 ring-indigo-500/30" : "border-white/10 shadow-sm opacity-80"} ${isFlashing ? "bg-white" : ""}`}
+                            className={`relative w-full h-full border-2 rounded-lg md:rounded-xl overflow-hidden bg-black transition-all ${isSelected ? "border-indigo-500 ring-2 ring-indigo-500/30" : clip.isNew ? "border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]" : "border-white/10 shadow-sm opacity-80"} ${isFlashing ? "bg-white" : ""}`}
                           >
                             {clip.type === "video" ? (
                               <video
                                 src={formatAssetUrl(clip.url)}
                                 className={`absolute inset-0 w-full h-full object-cover transition-opacity ${isFlashing ? "opacity-0" : "opacity-100"}`}
                                 muted
-                                onLoadedData={(e) =>
+                                preload="auto"
+                                playsInline
+                                onLoadedMetadata={(e) =>
                                   ((e.target as HTMLVideoElement).currentTime =
                                     0.1)
                                 }
@@ -1413,6 +1541,11 @@ export const Timeline: React.FC<TimelineProps> = ({
                                 src={formatAssetUrl(clip.url)}
                                 className={`absolute inset-0 w-full h-full object-cover transition-opacity ${isFlashing ? "opacity-0" : "opacity-100"}`}
                               />
+                            )}
+                            {clip.isNew && (
+                              <div className="absolute top-1 left-1 bg-green-600 rounded-full p-0.5 animate-in zoom-in">
+                                <CheckIcon className="w-2 h-2 text-white" />
+                              </div>
                             )}
                           </div>
                           {isSelected && canMoveLayer(clip) && (
@@ -1452,7 +1585,8 @@ export const Timeline: React.FC<TimelineProps> = ({
                       );
                     })}
                 </div>
-              )})}
+                );
+              })}
               <div className="relative w-full h-8 md:h-12 border-b border-white/5 group/track">
                 <div
                   className="absolute top-0 bottom-0 flex flex-col items-center justify-center bg-gray-950 border-r border-white/10 z-[120]"

@@ -4,7 +4,7 @@
 // Added Strict Actor Mapping: Narrative text is a plot outline; Characters are the fixed actors. Mapping generic descriptions to specific cast traits is mandatory.
 // Added Immersive Narration Protocol: Forbidden meta-mentions of visual styles (Nollywood/Hollywood) in the story text for clean audio playback.
 // Added Background Extraction & Body Synthesis: AI now ignores reference backgrounds and automatically completes partial bodies into full-length figures.
-// Added Synthesis Mandate: Explicit instructions to prioritize story action/pose over reference image pose while maintaining facial/clothing identity.
+// Added Synthesis Mandate: Explicit instructions to prioritize story action/pose over reference image delete while maintaining facial/clothing identity.
 // Added STRICT CONTINUITY PROTOCOL: Forces the same character face and same exact outfit across every single frame/scene to avoid "shifting" character visuals.
 // Added MEDIUM TRANSFORMATION PROTOCOL: Force-converts character source assets into the target visual style (e.g., Human to 3D, 3D to Illustrator, Anime to 3D) while retaining 1:1 identity features.
 // Added LIGHTING & FULL-BODY SYNTHESIS: Mandates characters face the light and always generates complete figures from partial source images.
@@ -35,7 +35,7 @@
 // Added 8-SECOND DIALOGUE CAP: Force-limits dialogue length to ensure text can be spoken within the 8s window (approx 25 words max).
 // Added SPEAKER PREFIX MANDATE: Explicitly mandates that every scene script MUST begin with "Name:" to identify the speaker from the selected cast.
 // 3D ANTI-PHOTOREALISM LOCK: Injected strictly non-photographic instructions into 3D styles.
-// ETHNICITY & WARDROBE MANDATE: Implemented "Afro-Identity" lock for Afro-toon style and "Smart Casual" wardrobe logic based on country context.
+// ETHNICITY & WARDROBE MANDATE: Implemented "Afro-toon" lock for Afro-toon style and "Smart Casual" wardrobe logic based on country context.
 // ADDED SAFETY PARSING PROTOCOL: Intercepts Gemini safety blocks to return blunt, instructive error codes for minor safety and explicit content.
 
 import {
@@ -339,8 +339,10 @@ function getStyleInstructions(
   const transformationProtocol = `
         STRICT MEDIUM TRANSFORMATION (ZERO STYLE LEAKAGE):
         - You MUST strictly adhere to the requested visual medium: [${style}]. 
-        - [3D Render]: TARGET Pixar/Dreamworks stylized CGI animation. This means sculpted, volumetric shapes, smooth porcelain-like skin, vibrant saturated colors, and cinematic volumetric lighting. 
-        - [ANTI-REALISM LOCK]: You are STRICTLY FORBIDDEN from using real human skin pores, photographic realism, or realistic 8K textures. It MUST look like a high-budget animated 3D film. 
+        - [3D Render]: DEPTH MANDATE. Target high-budget stylized CGI animation (Pixar/Dreamworks). 
+          * USE: Volumetric lighting, global illumination, ambient occlusion, and subsurface scattering on skin.
+          * CHARACTER: Volumetric sculpted forms with rounded 3D depth. Smooth porcelain-like skin textures.
+          * FORBIDDEN: You are STRICTLY FORBIDDEN from using flat 2D colors, flat vector outlines, or realistic 8K photos. No 2D sketches. It must have significant Z-depth and dimensional shadows.
         - [Realistic Photo]: TARGET Cinematic 8K photography. Real physics, true human skin texture.
         - [Illustrator]: TARGET Flat vector art. Zero gradients, zero depth, clear solid colors, sharp clean outlines.
         - [Anime]: TARGET 2D Cel-shaded animation. Bold expressive outlines, big eyes, stylized hand-drawn features.
@@ -353,7 +355,7 @@ function getStyleInstructions(
 
   switch (style) {
     case "3D Render":
-      return `Aesthetic: Stylized Disney/Pixar dimensional CGI animation. STRICTLY NON-PHOTOGRAPHIC. ${common}`;
+      return `Aesthetic: Stylized dimensional CGI animation. STRICTLY DIMENSIONAL AND VOLUMETRIC. ${common}`;
     case "Realistic Photo":
       return `Aesthetic: Lifelike cinematic photograph. ${common}`;
     case "Illustrator":

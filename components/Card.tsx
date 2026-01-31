@@ -20,7 +20,9 @@ import {
   CreditCardIcon,
   ChevronDownIcon,
   PhotoIcon,
-  SpeakerWaveIcon
+  SpeakerWaveIcon,
+  FilmIcon,
+  CheckIcon
 } from "./Icons";
 import { CAMERA_MOVEMENT_PROMPTS } from "../services/geminiService";
 import { PAYPAL_LINK } from "../utils/constants";
@@ -73,6 +75,7 @@ export interface SceneCardProps {
   status: string;
   draftScript: string;
   draftMovement: string;
+  aspectRatio: string;
   onPreviewImage: (src: string) => void;
   onSave: () => void;
   onAngle: () => void;
@@ -89,7 +92,12 @@ export interface SceneCardProps {
     movement: string,
     withAudio?: boolean
   ) => void;
-  onAddToTimeline: (url: string, duration?: number, obj?: any) => void;
+  onAddToTimeline: (
+    url: string,
+    type: "video" | "image",
+    duration?: number,
+    obj?: any
+  ) => void;
   onImportScript: () => void;
   hasScriptToImport: boolean;
   videoModel: string;
@@ -118,11 +126,23 @@ const formatImageSrc = (src: string) => {
 export const SceneCard: React.FC<SceneCardProps> = (props) => {
   const { scene, index, isActive, videoState, status } = props;
   const [displayMode, setDisplayMode] = useState<"image" | number>("image");
+  const [isAddedToTimeline, setIsAddedToTimeline] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(props.aspectRatio === "9:16");
   const isVideoLoading = videoState?.status === "loading";
 
   const [withAudio, setWithAudio] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // AUTOMATIC ASPECT DETECTION: Card morphs based on content, not just session settings.
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { naturalWidth, naturalHeight } = e.currentTarget;
+    if (naturalHeight > naturalWidth) {
+      setIsPortrait(true);
+    } else {
+      setIsPortrait(false);
+    }
+  };
 
   useEffect(() => {
     if (props.draftScript.trim().length > 0) setWithAudio(true);
@@ -168,6 +188,20 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
     }
   };
 
+  const handleAddFrameToTimeline = () => {
+    if (status !== "complete") return;
+
+    // UI FEEDBACK: Toggle state for visual blue-to-green switch
+    const newState = !isAddedToTimeline;
+    setIsAddedToTimeline(newState);
+
+    if (newState) {
+      const src = formatImageSrc(scene.src);
+      // REINFORCED: Explicitly routing through TrackManager (Layer 0)
+      props.onAddToTimeline(src, "image", 5);
+    }
+  };
+
   const isMinorBlock = scene.error === "BLOCK_MINOR";
   const isExplicitBlock = scene.error === "BLOCK_SAFETY_GENERAL";
   const isAnySafetyBlock = isMinorBlock || isExplicitBlock;
@@ -176,9 +210,11 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
     <div
       draggable={!!scene.src && status === "complete"}
       onDragStart={handleDragStart}
-      className={`bg-[#1e293b] rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col cursor-grab active:cursor-grabbing themed-artline min-h-[420px] ${scene.isCameraAngleFor !== undefined ? "ring-2 ring-indigo-500" : ""} ${isAnySafetyBlock ? "border-2 border-amber-500/50 animate-pulse-amber" : ""}`}
+      className={`bg-[#1e293b] rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col cursor-grab active:cursor-grabbing themed-artline transition-all duration-500 h-fit ${isPortrait ? "min-h-[580px]" : ""} ${scene.isCameraAngleFor !== undefined ? "ring-2 ring-indigo-500" : ""} ${isAnySafetyBlock ? "border-2 border-amber-500/50 animate-pulse-amber" : ""}`}
     >
-      <div className="relative aspect-video bg-black rounded-t-[1rem] flex items-center justify-center group overflow-hidden shrink-0">
+      <div
+        className={`relative ${isPortrait ? "aspect-[9/16]" : "aspect-video"} bg-black rounded-t-[1rem] flex items-center justify-center group overflow-hidden shrink-0`}
+      >
         {status === "generating" ? (
           <SceneProgressOverlay
             onStop={props.onStopScene}
@@ -216,6 +252,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                   onClick={() =>
                     props.onAddToTimeline(
                       currentVideo.videoUrl,
+                      "video",
                       videoRef.current?.duration,
                       currentVideo.videoObject
                     )
@@ -237,6 +274,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                     src={formatImageSrc(scene.src)}
                     className="w-full h-full object-cover"
                     draggable={false}
+                    onLoad={handleImageLoad}
                   />
                 </div>
                 {hasVariants && (
@@ -318,7 +356,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
       <div
         className={`p-4 bg-[#111827] flex-1 flex flex-col justify-between rounded-b-[1rem] ${isActive ? "hidden" : "flex"}`}
       >
-        <div className="flex justify-between items-start">
+        <div className="flex justify-between items-start mb-4">
           <span className="px-2.5 py-1 bg-indigo-600/30 text-indigo-100 rounded-lg text-[10px] font-black tracking-wider border border-indigo-500/40">
             {isFromStorybook ? `SCENE ${index + 1}` : `CLIP ${index + 1}`}
             {scene.angleName ? ` | ${scene.angleName}` : ""}
@@ -379,12 +417,26 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
           </div>
         </div>
 
+        <div className={`flex gap-2 ${isPortrait ? "flex-col" : "mt-0"}`}>
+          <button
+            disabled={status !== "complete"}
+            onClick={handleAddFrameToTimeline}
+            className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all shadow-inner rounded-xl group disabled:opacity-30 disabled:cursor-not-allowed ${isAddedToTimeline ? "bg-green-600 text-white border border-green-500 scale-[1.02]" : "bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/20"}`}
+          >
+            {isAddedToTimeline ? (
+              <CheckIcon className="w-4 h-4" />
+            ) : (
+              <FilmIcon className="w-4 h-4" />
+            )}
+            {isAddedToTimeline ? "Added" : "Add Frame"}
+          </button>
         <button
           onClick={props.onToggleVideoCreator}
-          className="w-full flex items-center justify-center gap-2 mt-auto py-3.5 text-[10px] font-black tracking-[0.3em]  transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border border-white/5 shadow-inner rounded-xl group"
+            className="flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border border-white/5 shadow-inner rounded-xl group"
         >
-          <VideoIcon className="w-4 h-4" /> Create Video
+            <VideoIcon className="w-4 h-4" /> Motion
         </button>
+        </div>
       </div>
 
       {(status === "complete" || (status === "error" && scene.src)) &&

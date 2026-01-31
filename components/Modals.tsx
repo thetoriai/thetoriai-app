@@ -121,7 +121,13 @@ interface ModalsProps {
     cameraMovement?: string,
     withAudio?: boolean
   ) => void;
-  onAddToTimeline?: (url: string, duration?: number, videoObject?: any) => void;
+  // DO add comment: Fix onAddToTimeline type signature to include the 'type' parameter for compatibility with SceneCard and App.
+  onAddToTimeline?: (
+    url: string,
+    type: "video" | "image",
+    duration?: number,
+    videoObject?: any
+  ) => void;
   videoModel?: string;
   setVideoModel?: (val: string) => void;
   setVideoResolution?: (val: string) => void;
@@ -456,8 +462,7 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
         <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center">
           <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 max-w-sm">
             <p className="text-green-400 text-sm font-black  tracking-[0.2em] leading-relaxed">
-              Success: Your cinematic reel is ready for download. Click
-               'Save Video '.
+              Success: Your cinematic reel is ready for download.
             </p>
           </div>
           <div className="flex flex-col gap-4 w-full">
@@ -478,10 +483,10 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
       ) : (
         <>
           <p className="text-gray-500 text-[11px] max-w-md mb-12 font-bold  tracking-widest leading-relaxed">
-            Rendering high-fidelity sequence using .
+            Finalizing high-fidelity export for your sequence.
           </p>
 
-          <div className="w-full max-w-sm space-y-8">
+          <div className="w-full max-sm space-y-8">
             <div className="space-y-2 text-left">
               <label className="text-[10px] font-black text-indigo-400  tracking-[0.3em] ml-2">
                 Project Label
@@ -548,6 +553,13 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [isGiftMode, setIsGiftMode] = useState(false);
   const [giftRecipientEmail, setGiftRecipientEmail] = useState("");
 
+  const getPurchaseLink = (baseLink: string) => {
+    if (isGiftMode && giftRecipientEmail.trim()) {
+      return `${baseLink}&custom=${encodeURIComponent(giftRecipientEmail.trim())}`;
+    }
+    return baseLink;
+  };
+
   return (
     <div className="flex-1 h-full overflow-y-auto bg-gray-950 p-4 sm:p-8 scrollbar-thin scrollbar-thumb-gray-800">
       <div className="max-w-5xl mx-auto flex flex-col items-center animate-in fade-in zoom-in-95 duration-500 origin-top">
@@ -570,49 +582,73 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <GiftIcon className="w-4 h-4" /> Gift Someone
               </button>
             </div>
+
+            {isGiftMode && (
+              <div className="w-full max-w-md animate-in slide-in-from-top-4 duration-300">
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black text-amber-500  tracking-[0.2em] block ml-2">
+                    Recipient Email Address
+                  </label>
+                  <div className="relative group">
+                    <input
+                      type="email"
+                      value={giftRecipientEmail}
+                      onChange={(e) => setGiftRecipientEmail(e.target.value)}
+                      placeholder="registered-user@studio.com"
+                      className="w-full bg-black/40 border border-amber-500/30 rounded-2xl px-6 py-4 text-white focus:border-amber-500 outline-none transition-all placeholder-gray-800 text-sm shadow-inner group-hover:border-amber-500/50"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                      <span className="text-[8px] font-black text-amber-500/50  tracking-widest">
+                        Required
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-10">
           <div
-            className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group`}
+            className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group transition-all hover:scale-[1.02]`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter  tracking-widest">
-              $12 (100C)
+              €10 (100C)
             </h3>
             <a
-              href={PAYPAL_STARTER_LINK}
+              href={getPurchaseLink(PAYPAL_STARTER_LINK)}
               target="_blank"
-              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-sky-600 text-white"}`}
+              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors text-center ${isGiftMode ? "bg-amber-600 text-black" : "bg-sky-600 text-white"}`}
             >
-              Purchase
+              {isGiftMode ? "Send Gift" : "Purchase"}
             </a>
           </div>
           <div
-            className={`border-2 rounded-2xl flex flex-col items-center text-center shadow-xl p-6 ${isGiftMode ? "bg-[#221c0e] border-amber-500/30" : "bg-[#111827] border-white/20"}`}
+            className={`border-2 rounded-2xl flex flex-col items-center text-center shadow-xl p-6 transition-all hover:scale-[1.02] ${isGiftMode ? "bg-[#221c0e] border-amber-500/30" : "bg-[#111827] border-white/20"}`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
-              $25 (300C)
+              €20 (300C)
             </h3>
             <a
-              href={PAYPAL_PRO_LINK}
+              href={getPurchaseLink(PAYPAL_PRO_LINK)}
               target="_blank"
-              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-white text-black"}`}
+              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors text-center ${isGiftMode ? "bg-amber-600 text-black" : "bg-white text-black"}`}
             >
-              Best Value
+              {isGiftMode ? "Send Gift" : "Best Value"}
             </a>
           </div>
           <div
-            className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group`}
+            className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group transition-all hover:scale-[1.02]`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
-              $50 (700C)
+              €40 (700C)
             </h3>
             <a
-              href={PAYPAL_STUDIO_LINK}
+              href={getPurchaseLink(PAYPAL_STUDIO_LINK)}
               target="_blank"
-              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors ${isGiftMode ? "bg-amber-600 text-black" : "bg-amber-600 text-white"}`}
+              className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl transition-colors text-center ${isGiftMode ? "bg-amber-600 text-black" : "bg-amber-600 text-white"}`}
             >
-              Max Pack
+              {isGiftMode ? "Send Gift" : "Max Pack"}
             </a>
           </div>
         </div>
@@ -913,7 +949,7 @@ export const Modals: React.FC<ModalsProps> = ({
           onUpdateVideoDraft={onUpdateVideoDraft || (() => {})}
           creditBalance={creditBalance}
           onStop={() => {}}
-          currency="USD"
+          currency="EUR"
           activeI2ISlot={activeI2ISlot || null}
           setActiveI2ISlot={setActiveI2ISlot || (() => {})}
           onUploadStartImage={onUploadStartImage}

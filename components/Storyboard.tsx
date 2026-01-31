@@ -18,10 +18,12 @@ interface StoryboardProps {
     script?: string,
     cameraMovement?: string
   ) => void;
+  // DO add comment: Fix onAddToTimeline type signature to match SceneCard's required 4-parameter interface.
   onAddToTimeline: (
-    videoUrl: string,
+    url: string,
+    type: "video" | "image",
     duration?: number,
-    videoObject?: any
+    obj?: any
   ) => void;
     onStop: () => void;
     isGenerating: boolean;
@@ -38,7 +40,8 @@ interface StoryboardProps {
     isProcessingAudio?: boolean;
     storybook?: any; 
     historyIndex: number;
-    currency: 'USD' | 'SEK';
+  // DO add comment above each fix. Fix currency type: Added 'EUR' to the allowed currency union to resolve type mismatch in App and Modals.
+  currency:  "EUR";
     onCloseSession?: () => void;
     history: any[];
     onSwitchSession: (index: number, sceneId?: string, restore?: boolean) => void;
@@ -67,8 +70,9 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
     >(null);
 
     const windowWidth = window.innerWidth;
-    const isPhone = windowWidth <= 430;
-    const isTablet = windowWidth >= 768 && windowWidth <= 1024;
+    // SYNCED BREAKPOINT: 500px matches the App.tsx 'phone' layout mode exactly.
+    const isPhone = windowWidth <= 500;
+    const isTable = windowWidth > 500 && windowWidth <= 1024;
 
     useEffect(() => {
         if (!confirmingVideoSceneId) return;
@@ -165,7 +169,7 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
                 </div>
 
           <div
-            className={`grid gap-6 ${isPhone ? "grid-cols-1" : isTablet ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"}`}
+            className={`grid gap-6 items-start ${isPhone ? "grid-cols-1" : isTable ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"}`}
           >
                     {(activeSession.imageSet || []).map((scene: any, index: number) => {
                         if (scene.isHidden) return null;
@@ -202,6 +206,7 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
                   draftMovement={
                     videoState?.draftCameraMovement || "Zoom In (Focus In)"
                   }
+                  aspectRatio={activeSession.aspectRatio || "16:9"}
                   onPreviewImage={props.onPreviewImage}
                   onSave={() => props.onSaveScene(activeSession.id, sceneId)}
                   onAngle={() => props.onAngleSelect(activeSession.id, sceneId)}

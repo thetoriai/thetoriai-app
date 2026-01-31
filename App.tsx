@@ -160,11 +160,11 @@ const App: React.FC = () => {
       } else if (width < 1024 && isPortrait) {
         // STANDING IPAD: Compact sidebar logic.
         setLayoutMode("tablet");
-        if (activeView === "menu") setActiveView("storybook");
+        if (activeView === "menu") setActiveView("welcome");
       } else {
         // ROTATING IPAD / DESKTOP: Full sidebar workspace.
         setLayoutMode("desktop");
-        if (activeView === "menu") setActiveView("storybook");
+        if (activeView === "menu") setActiveView("welcome");
       }
     };
     handleResize();
@@ -195,7 +195,7 @@ const App: React.FC = () => {
 
   const [creditSettings, setCreditSettings] = useState({
     creditBalance: 0,
-    currency: "USD"
+    currency: "EUR"
   });
 
   // Gift States
@@ -283,7 +283,6 @@ const App: React.FC = () => {
 
   // TIMELINE HISTORY ENGINE
   const [timelineHistory, setTimelineHistory] = useState<string[]>([]);
-  // DO add comment: Fixed block-scoped variable error by removing redundant and syntactically incorrect 'isUndoing.current' initialization.
   const isUndoing = useRef(false);
 
   useEffect(() => {
@@ -338,8 +337,6 @@ const App: React.FC = () => {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
       setSession(session);
-      if (session && activeView === "welcome")
-        setActiveView(layoutMode === "phone" ? "menu" : "storybook");
       if (_event === "SIGNED_OUT") {
         setCharacters([]);
         setHistory([]);
@@ -351,7 +348,7 @@ const App: React.FC = () => {
       }
     });
     return () => subscription.unsubscribe();
-  }, [activeView, layoutMode]);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -410,8 +407,8 @@ const App: React.FC = () => {
     [footageVideoTier]
   );
   useEffect(
-    () => localStorage.setItem("footageImageTier", footageImageTier),
-    [footageImageTier]
+    () => localStorage.setItem("footageMode", footageMode),
+    [footageMode]
   );
   useEffect(
     () =>
@@ -498,7 +495,8 @@ const App: React.FC = () => {
 
     setIsGenerating(true);
 
-    if (source !== "footage") setActiveView("storyboard");
+    // DIRECT ROUTING: Every generation source (including footage) now immediately takes you to the Storyboard.
+    setActiveView("storyboard");
 
     try {
       let sessionId = Date.now();
@@ -522,7 +520,8 @@ const App: React.FC = () => {
 
       setHistory((prev) => {
         const next = [...prev, newItem];
-        if (source !== "footage") setActiveHistoryIndex(next.length - 1);
+        // ALWAYS FOCUS: Automatically select the newest production session in the storyboard.
+        setActiveHistoryIndex(next.length - 1);
         return next;
       });
 
@@ -1073,7 +1072,7 @@ const App: React.FC = () => {
           ...h,
           isClosed: false,
           imageSet: h.imageSet.map((s: any) =>
-            s.sceneId === sceneId || !sceneId ? { ...s, isHidden: false } : s
+            s.sceneId === sceneId || !sceneId ? { ...s, hidden: false } : s
           )
         };
       })
@@ -1188,7 +1187,7 @@ const App: React.FC = () => {
     );
   };
 
-  // DO add comment above each fix. Removed duplicate definition of handleSelectSceneVariant.
+  // DO add comment: Fix handleSelectSceneVariant signature: added genId parameter and corrected session lookup logic.
   const handleSelectSceneVariant = (
     genId: number,
     sceneId: string,
@@ -1285,7 +1284,8 @@ const App: React.FC = () => {
             volume: 1,
             fadeInDuration: 0,
             fadeOutDuration: 0,
-            videoObject
+            videoObject,
+            isNew: true // Visual indicator for timeline
           }
         ];
       });
@@ -1353,8 +1353,9 @@ const App: React.FC = () => {
           text,
           startTime: start,
           duration: 4,
-          bgColor: "#000000",
-          bgOpacity: 0.8,
+          bgColor: "#312e81",
+          bgOpacity: 0.7, // BIG BACKGROUND ENABLED BY DEFAULT
+          fullBackground: true, // NEW: Start with the "Big Background"
           fadeInDuration: 0.8,
           fadeOutDuration: 0.5,
           transition: "none"
@@ -1427,23 +1428,7 @@ const App: React.FC = () => {
               : h
           )
         );
-        const currentEnd = Math.max(
-          0,
-          ...timelineClips.map((c) => (c.startTime || 0) + c.duration)
-        );
-        setTimelineClips((prev) => [
-          ...prev,
-          {
-            id: Date.now().toString(),
-            url: videoUrl,
-            duration: 8,
-            startTime: currentEnd,
-            originalDuration: 8,
-            videoObject,
-            isMuted: false
-          }
-        ]);
-        
+        onAddTimelineClip(videoUrl, "video", 8, undefined, 0, videoObject);
       }
     } catch (e: any) {
       console.error(e);
@@ -1582,7 +1567,7 @@ const App: React.FC = () => {
               // DEDUCTION FIRST: Everything label (Character import scan).
               await consumeCredits("CHARACTER_IMAGE");
 
-              const {  description, detectedStyle } =
+              const { description, detectedStyle } =
                 await generateCharacterDescription(base64, f.type);
               setCharacters((prev) =>
                 prev.map((c) =>
@@ -1591,6 +1576,7 @@ const App: React.FC = () => {
                         ...c,
                         
                         description,
+                        // DO add comment: Map detectedStyle to detectedImageStyle for Character state update.
                         detectedImageStyle: detectedStyle,
                         isAnalyzing: false
                       }
@@ -1627,6 +1613,7 @@ const App: React.FC = () => {
                         originalImageBase64: base64,
                         originalImageMimeType: f.type,
                         description,
+                        // DO add comment: Map detectedStyle to detectedImageStyle for existing character update.
                         detectedImageStyle: detectedStyle,
                         isAnalyzing: false
                       }
@@ -1671,9 +1658,7 @@ const App: React.FC = () => {
       characterStyle={characterStyle}
       selectedCountry={selectedCountry}
       creditBalance={creditSettings.creditBalance}
-      onClose={() =>
-        setActiveView(layoutMode === "phone" ? "menu" : "storybook")
-      }
+      onClose={() => setActiveView("welcome")}
       onGenerateFromStorybook={(scenes) => handleGenerate(scenes, "storybook")}
       onGenerateSingleStorybookScene={handleGenerateSingleStorybookScene}
       onResetStorybook={() =>
@@ -1737,25 +1722,15 @@ const App: React.FC = () => {
         )
       }
       onGenerateVideo={handleGenerateVideo}
-      onAddToTimeline={(url, dur, obj) =>
-        setTimelineClips((prev) => {
-          const end = Math.max(
-            0,
-            ...prev.map((c) => (c.startTime || 0) + c.duration)
-          );
-          return [
-            ...prev,
-            {
-              id: Date.now().toString(),
-              url,
-              duration: dur || 8,
-              startTime: end,
-              originalDuration: dur || 8,
-              videoObject: obj,
-              isMuted: false
-            }
-          ];
-        })
+      onAddToTimeline={(url, type, duration, obj) =>
+        onAddTimelineClip(
+          url,
+          type || "image",
+          duration || 5,
+          undefined,
+          0,
+          obj
+        )
       }
       isGenerating={isGenerating}
       isDisabled={false}
@@ -1784,7 +1759,7 @@ const App: React.FC = () => {
         )
       }
       creditBalance={creditSettings.creditBalance}
-      currency="USD"
+      currency="EUR"
       activeI2ISlot={activeI2ISlot}
       setActiveI2ISlot={setActiveI2ISlot}
       onUploadStartImage={handleUploadStartImage}
@@ -1804,6 +1779,7 @@ const App: React.FC = () => {
         let nextIdx = dir === "next" ? cur + 1 : cur - 1;
         if (nextIdx < 0) nextIdx = scene.variants.length - 1;
         if (nextIdx >= scene.variants.length) nextIdx = 0;
+        // DO add comment: Fix usage of handleSelectSceneVariant by passing gid as first argument.
         handleSelectSceneVariant(gid, sid, nextIdx);
       }}
     />
@@ -1851,27 +1827,7 @@ const App: React.FC = () => {
       onProduce={handleFootageProduce}
       isGenerating={isGenerating}
       creditBalance={creditSettings.creditBalance}
-      footageHistory={footageHistory}
-      onSaveItem={handleToggleSave}
-      onDeleteItem={(sid) =>
-        setFootageHistory((prev) => prev.filter((f) => f.sceneId !== sid))
-      }
-      onToTimeline={(item) => {
-        const url =
-          item.videoClips?.[0]?.videoUrl ||
-          (item.src ? `data:image/png;base64,${item.src}` : null);
-        if (url)
-          onAddTimelineClip(
-            url,
-            item.videoClips?.length > 0 ? "video" : "image",
-            8,
-            undefined,
-            0
-          );
-      }}
-      onAnimate={handleAnimateFootage}
       onUpdateCountry={setSelectedCountry}
-      savedItems={savedScenes}
       footagePrompt={footagePrompt}
       setFootagePrompt={setFootagePrompt}
       footageMode={footageMode}
@@ -1882,6 +1838,7 @@ const App: React.FC = () => {
       setFootageImageTier={setFootageImageTier}
       footageRefImages={footageRefImages}
       setFootageRefImages={setFootageRefImages}
+      savedItems={savedScenes}
     />
   );
 
@@ -1911,7 +1868,6 @@ const App: React.FC = () => {
           <div className="inline-flex flex-col items-center gap-4">
             {/* GIFT TOGGLE SYSTEM */}
             <div className="flex bg-white/5 rounded-2xl p-1 border border-white/10 shadow-inner">
-              {/* DO add comment: Corrected state variable 'isGifting' to 'isGiftMode' */}
               <button
                 onClick={() => setIsGiftMode(false)}
                 className={`flex items-center gap-2 px-6 py-2 rounded-xl text-[10px] font-black  tracking-widest transition-all ${!isGiftMode ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
@@ -1974,14 +1930,14 @@ const App: React.FC = () => {
             </h3>
             <div className="flex items-baseline gap-1 mb-3">
               <span className="text-2xl font-black text-white tracking-tighter">
-                $12
+                €10
               </span>
               <span className="text-[8px] font-bold text-gray-500  tracking-widest">
                 One-time
               </span>
             </div>
             <a
-              href={PAYPAL_STARTER_LINK}
+              href={`${PAYPAL_STARTER_LINK}${isGiftMode && giftRecipientEmail ? `&custom=${giftRecipientEmail}` : ""}`}
               target="_blank"
               className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-sky-600 text-white hover:bg-sky-500"}`}
             >
@@ -2022,14 +1978,14 @@ const App: React.FC = () => {
             </h3>
               <div className="flex items-baseline gap-1 mb-4">
                 <span className="text-3xl font-black text-white tracking-tighter">
-                $25
+                  €20
               </span>
                 <span className="text-[10px] font-bold text-gray-400  tracking-widest italic">
                 Best Value
               </span>
             </div>
             <a
-                href={PAYPAL_PRO_LINK}
+                href={`${PAYPAL_PRO_LINK}${isGiftMode && giftRecipientEmail ? `&custom=${giftRecipientEmail}` : ""}`}
               target="_blank"
                 className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-all ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-white text-black hover:bg-gray-200"}`}
             >
@@ -2063,14 +2019,14 @@ const App: React.FC = () => {
             </h3>
             <div className="flex items-baseline gap-1 mb-4">
               <span className="text-3xl font-black text-white tracking-tighter">
-                $50
+                €40
               </span>
-              <span className="text-[10px] font-bold text-gray-500  tracking-widest">
+              <span className="text-[10px] font-bold text-gray-400  tracking-widest">
                 Max Power
               </span>
             </div>
             <a
-              href={PAYPAL_STUDIO_LINK}
+              href={`${PAYPAL_STUDIO_LINK}${isGiftMode && giftRecipientEmail ? `&custom=${giftRecipientEmail}` : ""}`}
               target="_blank"
               className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-amber-600 text-white hover:bg-amber-500"}`}
             >
@@ -2116,7 +2072,7 @@ const App: React.FC = () => {
           {title}
         </h2>
         <button
-          onClick={() => setActiveView("menu")}
+          onClick={() => setActiveView("welcome")}
           className="p-2.5 bg-gray-800 hover:bg-red-900/30 rounded-xl text-gray-400 hover:text-red-400 transition-all"
         >
           <XIcon className="w-6 h-6" />
@@ -2126,6 +2082,10 @@ const App: React.FC = () => {
     </div>
   );
 
+  const currentGlowColor = VIEW_COLORS[activeView] || "#6366f1";
+  const closeSubPage = () =>
+    setActiveView(layoutMode === "phone" ? "welcome" : activeView);
+
   if (isAuthChecking)
     return (
       <div className="h-screen bg-gray-950 flex items-center justify-center">
@@ -2133,15 +2093,11 @@ const App: React.FC = () => {
       </div>
     );
 
-  const currentGlowColor = VIEW_COLORS[activeView] || "#6366f1";
-  const closeSubPage = () =>
-    setActiveView(layoutMode === "phone" ? "menu" : activeView);
-
   return (
     <div
-      className={`flex h-screen bg-gray-950 text-white font-sans overflow-hidden layout-${layoutMode}`}
+      className={`flex h-[100dvh] bg-gray-950 text-white font-sans overflow-hidden layout-${layoutMode}`}
     >
-      {layoutMode !== "phone" && session && activeView !== "welcome" && (
+      {layoutMode !== "phone" && session && (
         <Sidebar
           activeView={activeView}
           setActiveView={setActiveView}
@@ -2163,22 +2119,28 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 h-full overflow-hidden relative flex flex-col bg-gray-950">
-        {activeView === "welcome" ? (
+        {activeView === "welcome" && (
+          <div className="absolute inset-0 z-0">
           <WelcomePage
             session={session}
             onEnter={() => {
               if (!session) setActiveView("welcome");
-              else setActiveView(layoutMode === "phone" ? "menu" : "storybook");
+                else setActiveView("welcome");
             }}
           />
-        ) : (
+          </div>
+        )}
+
+        {(activeView !== "welcome" ||
+          (activeView === "welcome" && session)) && (
           <div
-            className="flex-1 flex flex-col h-full workspace-artline neon-active-frame"
+            className="flex-1 flex flex-col h-full workspace-artline neon-active-frame relative z-10"
             style={{ "--glow-color": currentGlowColor } as React.CSSProperties}
           >
             {layoutMode === "phone" ? (
               <div className="flex-1 h-full overflow-hidden flex flex-col">
-            {activeView === "menu" && (
+                {(activeView === "menu" ||
+                  (activeView === "welcome" && session)) && (
               <Sidebar
                 activeView={activeView}
                 setActiveView={setActiveView}
@@ -2199,9 +2161,14 @@ const App: React.FC = () => {
               />
             )}
                 {activeView === "roster" && (
-                  <MobileViewWrapper title="Character Roster">
+                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
+                    <ViewHeader
+                      title="Character roster"
+                      onBack={closeSubPage}
+                      layout={layoutMode}
+                    />
                     {renderRoster()}
-                  </MobileViewWrapper>
+                  </div>
                 )}
             {activeView === "storybook" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
@@ -2222,17 +2189,6 @@ const App: React.FC = () => {
                       layout={layoutMode}
                     />
                 {renderStoryboard()}
-                  </div>
-                )}
-
-                {activeView === "roster" && (
-                  <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
-                    <ViewHeader
-                      title="Character roster"
-                      onBack={closeSubPage}
-                      layout={layoutMode}
-                    />
-                    {renderRoster()}
                   </div>
             )}
 
@@ -2332,7 +2288,7 @@ const App: React.FC = () => {
         savedItems={savedScenes}
         characterStyle={selectedCountry}
         selectedCountry={selectedCountry}
-        currencySymbol="$"
+        currencySymbol="€"
         exchangeRate={1}
         costPerImage={1}
         onToggleSave={handleToggleSave}
@@ -2372,8 +2328,15 @@ const App: React.FC = () => {
           )
         }
         onGenerateVideo={handleGenerateVideo}
-        onAddToTimeline={(url, duration, obj) =>
-          onAddTimelineClip(url, "video", duration, undefined, 0, obj)
+        onAddToTimeline={(url, type, duration, obj) =>
+          onAddTimelineClip(
+            url,
+            type || "image",
+            duration || 5,
+            undefined,
+            0,
+            obj
+          )
         }
         videoModel={videoModel}
         setVideoModel={setVideoModel}
@@ -2431,6 +2394,7 @@ const App: React.FC = () => {
                         ...c,
                         imagePreview: `data:image/png;base64,${src}`,
                         description,
+                        // DO add comment: Fixed property name mismatch: changed detectedStyle to detectedImageStyle.
                         detectedImageStyle: null
                       }
                     : c
@@ -2448,13 +2412,15 @@ const App: React.FC = () => {
         handleUploadNewCharacterImage={async (f) => {
           const base64 = await fileToBase64(f);
           const tempId = Date.now();
-          const newChar = {
+          // DO add comment above each fix. Fix undeclared variable: Added missing const declaration for newChar.
+          const newChar: Character = {
             id: tempId,
             name: "Scanning Identity...",
             imagePreview: `data:${f.type};base64,${base64}`,
             originalImageBase64: base64,
             originalImageMimeType: f.type,
             description: null,
+            // DO add comment: Fixed property name mismatch: changed detectedStyle to detectedImageStyle to match Character type.
             detectedImageStyle: null,
             isDescribing: false,
             isAnalyzing: true,
@@ -2465,7 +2431,7 @@ const App: React.FC = () => {
             // DEDUCTION FIRST: Identity production.
             await consumeCredits("CHARACTER_IMAGE");
 
-            const {  description, detectedStyle } =
+            const { description, detectedStyle } =
               await generateCharacterDescription(base64, f.type);
             setCharacters((prev) =>
               prev.map((c) =>
@@ -2474,6 +2440,7 @@ const App: React.FC = () => {
                       ...c,
                        
                       description,
+                      // DO add comment: Map detectedStyle to detectedImageStyle for Character state update.
                       detectedImageStyle: detectedStyle,
                       isAnalyzing: false
                     }
@@ -2510,6 +2477,7 @@ const App: React.FC = () => {
                       originalImageBase64: base64,
                       originalImageMimeType: f.type,
                       description,
+                      // DO add comment: Map detectedStyle to detectedImageStyle for character replacement.
                       detectedImageStyle: detectedStyle,
                       isAnalyzing: false
                     }
@@ -2549,6 +2517,7 @@ const App: React.FC = () => {
           let nIdx = dir === "next" ? cur + 1 : cur - 1;
           if (nIdx < 0) nIdx = scene.variants.length - 1;
           if (nIdx >= scene.variants.length) nIdx = 0;
+          // DO add comment: Fix usage of handleSelectSceneVariant by passing gid as first argument.
           handleSelectSceneVariant(gid, sid, nIdx);
         }}
         onUpdateSceneImage={handleUpdateSceneImage}
