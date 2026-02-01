@@ -704,11 +704,13 @@ export async function generateStructuredStory(
   const castNotes = characters
     .map((c) => `${c.name}: ${c.description}`)
     .join("; ");
-  const system = `You are a professional screenwriter. TARGET MEDIUM: [${movieStyle}]. 
-    STRICT MEDIUM AWARENESS: Do NOT use words like 'drawing' if medium is 3D. Do NOT use 'photo' if medium is Illustrator.
-    CAST: ${castNotes}. ${includeDialogue ? "Include speaker-prefixed dialogue." : "No dialogue."}
+
+  const system = `You are a professional cinematic screenwriter. 
+    TARGET MEDIUM: [${movieStyle}]. 
+    DIALOGUE MANDATE: ${includeDialogue ? "Include speaker-prefixed dialogue (Name: Dialogue)." : "STRICTLY NO DIALOGUE. DO NOT use the 'Name: ' speaker format. Instead, write cinematic action beats using the characters' names naturally (e.g., '[Name] enters the room') to explain the action in the video."}
+    CAST: ${castNotes}.
     Return JSON with 'title', 'storyNarrative', and 'scenes' (array of {imageDescription, script}).
-    Scene script MUST follow "Name: Dialogue" format. Dialogue must be spoken within 8 seconds.`;
+    Scene script (Narrative/Dialogue) must be speakable within 8 seconds.`;
 
   const response: GenerateContentResponse = await withRetry(() =>
     ai.models.generateContent({

@@ -142,8 +142,12 @@ export const Footage: React.FC<FootageProps> = ({
   };
 
   let cost = footageImageTier === "pro" ? 2 : 1;
-  if (footageMode === "video")
+  let shortTier = footageImageTier === "pro" ? "PR" : "FL";
+  
+  if (footageMode === "video") {
     cost = footageVideoTier === "veo31-quality" ? 8 : 5;
+    shortTier = footageVideoTier === "veo31-quality" ? "HD" : "SD";
+  }
 
   return (
     <div className="w-full h-full flex flex-col bg-[#030712] animate-in fade-in duration-500 overflow-hidden font-sans">
@@ -230,19 +234,19 @@ export const Footage: React.FC<FootageProps> = ({
                           onClick={() => clearSlot(idx)}
                           className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                         >
-                          <XIcon className="w-4 h-4 text-white" />
+                          <XIcon className="w-5 h-5 text-white" />
                         </button>
                       </div>
                     ) : (
-                      <div className="w-16 h-11 rounded-lg border border-dashed border-white/10 bg-black/40 flex flex-col items-center justify-center gap-0.5 overflow-hidden group/empty">
+                      <div className="w-20 h-14 rounded-xl border-2 border-dashed border-white/10 bg-black/40 flex flex-col items-center justify-center gap-0.5 overflow-hidden group/empty">
                         <button
                           onClick={() => {
                             setActiveSlotIdx(idx);
                             setShowHistoryPicker(true);
                           }}
-                          className="w-full flex-1 flex items-center justify-center bg-white/5 hover:bg-indigo-600 text-[6px] font-black text-gray-400 hover:text-white  transition-all tracking-tighter"
+                          className="w-full flex-1 flex items-center justify-center bg-white/5 hover:bg-indigo-600 text-[8px] font-black text-gray-500 hover:text-white transition-all tracking-tighter"
                         >
-                          Hist
+                          HIST
                         </button>
                         <button
                           onClick={() => {
@@ -257,46 +261,52 @@ export const Footage: React.FC<FootageProps> = ({
                     )}
                   </div>
                   {idx === 0 && showTransitionArrow && (
-                    <ArrowsRightLeftIcon className="w-3.5 h-3.5 text-indigo-600" />
+                    <ArrowsRightLeftIcon className="w-4 h-4 text-indigo-600" />
                   )}
                 </React.Fragment>
               ))}
             </div>
 
             <div className="border-t border-white/5 bg-white/[0.01] p-3 flex flex-col sm:flex-row gap-3 items-center">
-              <div className="flex-1 w-full bg-black/50 rounded-xl p-1 flex items-center gap-1 shadow-inner">
+              <div className="flex bg-black/50 rounded-xl p-1 items-center gap-1 shadow-inner shrink-0">
                 <button
                   onClick={() => setFootageMode("image")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-black tracking-widest transition-all ${footageMode === "image" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                  className={`flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg text-[10px] font-black tracking-widest transition-all ${footageMode === "image" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
                 >
-                  <PhotoIcon className="w-4 h-4" /> Image
+                  <PhotoIcon className="w-3.5 h-3.5" /> IMAGE
                 </button>
                 <button
                   onClick={() => setFootageMode("video")}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-[10px] font-black tracking-widest transition-all ${footageMode === "video" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                  className={`flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg text-[10px] font-black tracking-widest transition-all ${footageMode === "video" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
                 >
-                  <VideoIcon className="w-4 h-4" /> Video
+                  <VideoIcon className="w-3.5 h-3.5" /> VIDEO
                 </button>
                 {hasRefImages && (
-                  <div className="flex-1 bg-indigo-900/40 rounded-lg py-2.5 flex items-center justify-center gap-2 text-[10px] font-black tracking-widest text-indigo-300">
-                    <SparklesIcon className="w-4 h-4" /> I2I
+                  <div className="px-3.5 bg-indigo-900/40 rounded-lg py-2.5 flex items-center justify-center gap-2 text-[10px] font-black tracking-widest text-indigo-300">
+                    <SparklesIcon className="w-3.5 h-3.5" /> I2I
                   </div>
                 )}
               </div>
 
-              <div className="relative w-full sm:w-auto">
+              <div className="relative flex-1 w-full flex justify-end">
                 <button
                   onClick={handleProduce}
                   disabled={isGenerating || !footagePrompt.trim()}
-                  className="w-full sm:w-48 h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-black tracking-widest rounded-xl transition-all active:scale-95 disabled:bg-gray-800 disabled:text-gray-600 flex items-center justify-center gap-3 border border-indigo-400/20 shadow-xl"
+                  className="w-full sm:w-52 h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-black tracking-widest rounded-xl transition-all active:scale-95 disabled:bg-gray-800 disabled:text-gray-600 flex items-center justify-center border border-indigo-400/20 shadow-xl overflow-hidden"
                 >
                   {isGenerating ? (
                     <LoaderIcon className="w-5 h-5 animate-spin" />
                   ) : (
                     <>
-                      <ClapperboardIcon className="w-5 h-5" />
-                      <span className="text-[12px]">Initiate</span>
-                      <div className="h-4 w-px bg-white/20"></div>
+                      <div className="flex-1 flex items-center justify-center gap-2 pl-4">
+                        <ClapperboardIcon className="w-4 h-4" />
+                        <span className="text-[20px] font-black">Generate</span>
+                      </div>
+                      
+                      {/* VERTICAL SEPARATOR */}
+                      <div className="h-6 w-px bg-white/20 mx-1"></div>
+
+                      {/* PORTABLE SLIM CREDIT BADGE */}
                       <div
                         onClick={(e) => {
                           e.stopPropagation();
