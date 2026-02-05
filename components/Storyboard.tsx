@@ -16,7 +16,8 @@ interface StoryboardProps {
     genId: number,
     sceneId: string,
     script?: string,
-    cameraMovement?: string
+    cameraMovement?: string,
+    withAudio?: boolean
   ) => void;
   // DO add comment: Fix onAddToTimeline type signature to match SceneCard's required 4-parameter interface.
   onAddToTimeline: (
@@ -41,7 +42,7 @@ interface StoryboardProps {
     storybook?: any; 
     historyIndex: number;
   // DO add comment above each fix. Fix currency type: Added 'EUR' to the allowed currency union to resolve type mismatch in App and Modals.
-  currency:  "EUR";
+  currency: "EUR";
     onCloseSession?: () => void;
     history: any[];
     onSwitchSession: (index: number, sceneId?: string, restore?: boolean) => void;
@@ -54,6 +55,9 @@ interface StoryboardProps {
     isBlurred?: boolean;
     activeI2ISlot: { genId: number, sceneId: string } | null;
     setActiveI2ISlot: (slot: { genId: number, sceneId: string } | null) => void;
+    onGenerateAudioOnly?: (genId: number, sceneId: string) => void;
+    onAddAudioToTimeline?: (url: string, duration: number) => void;
+    characters: any[];
 }
 
 export const Storyboard = React.memo((props: StoryboardProps) => {
@@ -65,42 +69,48 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
     const [videoErrors, setVideoErrors] = useState<{ [key: string]: string }>(
       {}
     );
-    const [confirmingVideoSceneId, setConfirmingVideoSceneId] = useState<
-      string | null
-    >(null);
+    
 
     const windowWidth = window.innerWidth;
     // SYNCED BREAKPOINT: 500px matches the App.tsx 'phone' layout mode exactly.
     const isPhone = windowWidth <= 500;
     const isTable = windowWidth > 500 && windowWidth <= 1024;
 
-    useEffect(() => {
-        if (!confirmingVideoSceneId) return;
-        const handleClickOutside = (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
-            if (scrollContainerRef.current && scrollContainerRef.current.contains(target) && !target.closest('.bg-gray-800')) {
-                setConfirmingVideoSceneId(null);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [confirmingVideoSceneId]);
+    
 
     const handleImportScript = (idx: number, sceneId: string) => { if (props.storybook?.scenes && props.storybook.scenes[idx]) props.onUpdateVideoDraft(generationItem.id, sceneId, { draftScript: props.storybook.scenes[idx].script || '' }); };
 
-    const handleVideoGenerateClick = (genId: number, sceneId: string, script: string, movement: string) => {
-        const currentCost = props.videoModel === 'veo-3.1-fast-generate-preview' ? 6 : 10;
+    const handleVideoGenerateClick = (genId: number, sceneId: string, script: string, movement: string, withAudio?: boolean) => {
+        const baseCost = props.videoModel === 'veo-3.1-fast-generate-preview' ? 6 : 10;
+        const currentCost = baseCost + (withAudio ? 1 : 0);
+        
         if (props.creditBalance < currentCost) {
             setVideoErrors(prev => ({ ...prev, [sceneId]: `Insufficient credits. Required: ${currentCost} Credits.` }));
             return;
         }
-        if (confirmingVideoSceneId !== sceneId) {
-            setConfirmingVideoSceneId(sceneId);
-            setVideoErrors(prev => { const next = { ...prev }; delete next[sceneId]; return next; });
-            return;
-        }
-        setConfirmingVideoSceneId(null);
-        props.onGenerateVideo(genId, sceneId, script, movement);
+       const handleVideoGenerateClick = (
+         genId: number,
+         sceneId: string,
+         script: string,
+         movement: string,
+         withAudio?: boolean
+       ) => {
+         const baseCost =
+           props.videoModel === "veo-3.1-fast-generate-preview" ? 6 : 10;
+         const currentCost = baseCost + (withAudio ? 1 : 0);
+
+         if (props.creditBalance < currentCost) {
+           setVideoErrors((prev) => ({
+             ...prev,
+             [sceneId]: `Insufficient credits. Required: ${currentCost} Credits.`
+           }));
+           return;
+         }
+
+         props.onGenerateVideo(genId, sceneId, script, movement, withAudio);
+       };
+
+        props.onGenerateVideo(genId, sceneId, script, movement, withAudio);
     };
 
     const openSessions = history ? history.map((h, i) => ({ ...h, originalIndex: i })).filter(h => !h.isClosed) : [];
@@ -239,7 +249,8 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
                       activeSession.id,
                       sceneId,
                       script,
-                      movement
+                      movement,
+                      withAudio
                     )
                   }
                   onAddToTimeline={props.onAddToTimeline}
@@ -260,10 +271,12 @@ export const Storyboard = React.memo((props: StoryboardProps) => {
                   isMusicVideo={activeSession.genre === "Music Video"}
                   isHistory={activeSession.genre === "History"}
                   videoError={videoErrors[sceneId]}
-                  isConfirmingVideo={confirmingVideoSceneId === sceneId}
+                 
                   creditBalance={props.creditBalance}
                   activeI2ISlot={props.activeI2ISlot}
                   setActiveI2ISlot={props.setActiveI2ISlot}
+                  onGenerateAudioOnly={props.onGenerateAudioOnly}
+                  onAddAudioToTimeline={props.onAddAudioToTimeline}
                             />
                         );
                     })}

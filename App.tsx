@@ -44,6 +44,7 @@ import {
 } from "./services/geminiService";
 import { fileToBase64 } from "./utils/fileUtils";
 import { dbGet, dbSet } from "./utils/indexedDB";
+import { parseErrorMessage } from "./utils/errorUtils";
 import {
   SUPPORT_EMAIL,
   HELLO_EMAIL,
@@ -204,21 +205,26 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (session?.user?.id) {
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("credits")
-          .eq("id", session.user.id)
-          .single();
-        if (!error && data)
-          setCreditSettings((prev) => ({
-            ...prev,
-            creditBalance: data.credits
-          }));
+      if (!session?.user?.id) return;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("credits, currency")
+        .eq("id", session.user.id)
+        .single();
+
+      if (!error && data) {
+        setCreditSettings((prev) => ({
+          ...prev,
+          creditBalance: data.credits,
+          currency: data.currency || "EUR"
+        }));
       }
     };
+
     fetchProfile();
   }, [session]);
+
 
   const [storybook, setStorybook] = useState<Storybook>(() => {
     try {
@@ -623,6 +629,120 @@ const App: React.FC = () => {
     }
   };
 
+  const handleGenerateDirectVideo = async (prompt: string, tier: string) => {
+    await ensureApiKey();
+    setIsGenerating(true);
+    setActiveView("storyboard");
+
+    const sessionId = Date.now();
+    const action = tier === "veo31-quality" ? "VIDEO_HQ" : "VIDEO_FAST";
+
+    // Direct Video Prompting Logic
+    const ethnicityContext =
+      characterStyle === "Afro-toon"
+        ? "Subject: African person."
+        : `Subject: Person from ${selectedCountry}.`;
+    const finalPrompt = `Visual Style: ${visualStyle}. ${ethnicityContext} Action: ${prompt}`;
+
+    const newItem = {
+      id: sessionId,
+      type: "footage",
+      prompt: "Direct Video Production",
+      imageSet: [
+        {
+          sceneId: `scene-${sessionId}-0`,
+          prompt: prompt,
+          src: null,
+          status: "complete",
+          originSessionId: sessionId,
+          originSection: "FootageFrontSection"
+        }
+      ],
+      videoStates: [
+        {
+          status: "loading",
+          clips: [],
+          draftScript: prompt,
+          draftCameraMovement: "Zoom In (Focus In)",
+          loadingMessage: "Directly producing video..."
+        }
+      ],
+      aspectRatio,
+      characterStyle: selectedCountry,
+      visualStyle,
+      isClosed: false
+    };
+
+    setHistory((prev) => {
+      const next = [...prev, newItem];
+      setActiveHistoryIndex(next.length - 1);
+      return next;
+    });
+
+    try {
+      await consumeCredits(action as any);
+
+      const { videoUrl, videoObject } = await generateVideoFromScene(
+        { src: null, prompt: prompt },
+        aspectRatio,
+        finalPrompt,
+        null, // No input image bytes for direct video
+        visualStyle,
+        selectedCountry,
+        tier === "veo31-quality"
+          ? "veo-3.1-generate-preview"
+          : "veo-3.1-fast-generate-preview",
+        videoResolution as any,
+        "Zoom In (Focus In)",
+        () => {},
+        characters
+      );
+
+      if (videoUrl) {
+        setHistory((prev) =>
+          prev.map((h) =>
+            h.id === sessionId
+              ? {
+                  ...h,
+                  videoStates: h.videoStates.map((vs: any, idx: number) =>
+                    idx === 0
+                      ? {
+                          ...vs,
+                          status: "complete",
+                          clips: [
+                            ...(vs.clips || []),
+                            { videoUrl, videoObject }
+                          ]
+                        }
+                      : vs
+                  )
+                }
+              : h
+          )
+        );
+        onAddTimelineClip(videoUrl, "video", 8, undefined, 0, videoObject);
+      }
+    } catch (e: any) {
+      const userMessage = parseErrorMessage(e);
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === sessionId
+            ? {
+                ...h,
+                videoStates: h.videoStates.map((vs: any, idx: number) =>
+                  idx === 0
+                    ? { ...vs, status: "error", error: userMessage }
+                    : vs
+                )
+              }
+            : h
+        )
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleRegenerateScene = async (genId: number, sceneId: string) => {
     const sessionId = genId;
     const session = history.find((h) => h.id === sessionId);
@@ -682,7 +802,7 @@ const App: React.FC = () => {
                     return {
                       ...s,
                       src: src || s.src,
-                      error,
+                      error: error ? parseErrorMessage(error) : null,
                       status: error ? "error" : "complete",
                       variants: src
                         ? [
@@ -1782,6 +1902,7 @@ const App: React.FC = () => {
         // DO add comment: Fix usage of handleSelectSceneVariant by passing gid as first argument.
         handleSelectSceneVariant(gid, sid, nextIdx);
       }}
+      characters={characters}
     />
   );
 
@@ -2030,13 +2151,13 @@ const App: React.FC = () => {
               target="_blank"
               className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-amber-600 text-white hover:bg-amber-500"}`}
             >
-              {isGiftMode ? "Gift 700 Credits" : "Purchase Now"}
+              {isGiftMode ? "Gift 600 Credits" : "Purchase Now"}
             </a>
             <div className="w-full space-y-2 text-left border-t border-white/5 pt-4">
               <div className="flex items-center gap-2 text-amber-400">
                 <CheckIcon className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-black  tracking-wider">
-                  700 Credits
+                  600 Credits
                 </span>
               </div>
             </div>

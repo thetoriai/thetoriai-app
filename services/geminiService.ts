@@ -816,3 +816,27 @@ export async function generateSpeech(
 
   return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
 }
+/**
+ * MAGIC WRITING: Polish and enrich a script beat with cinematic depth.
+ * This is the 'Thought Partner' function that transforms simple notes into professional writing.
+ */
+export async function enrichScript(
+  script: string,
+  characters: Character[],
+  style: string
+): Promise<string> {
+  const ai = getAiClient();
+  const cast = characters.map((c) => c.name).join(", ");
+  const prompt = `You are a cinematic writing partner. Rewrite this script beat to be more cinematic, poetic, and professional for a ${style} production. 
+  Maintain the 8-second speakable limit (approx 25 words). Keep the "Name: Dialogue" format. 
+  Original: "${script}" 
+  Characters in play: ${cast}`;
+
+  const response: GenerateContentResponse = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: prompt
+  });
+
+  return response.text?.trim() || script;
+}
+

@@ -22,9 +22,15 @@ import {
   PhotoIcon,
   SpeakerWaveIcon,
   FilmIcon,
-  CheckIcon
+  CheckIcon,
+  ArrowsRightLeftIcon,
+  LoaderIcon
 } from "./Icons";
-import { CAMERA_MOVEMENT_PROMPTS } from "../services/geminiService";
+import {
+  CAMERA_MOVEMENT_PROMPTS,
+  enrichScript,
+  type Character
+} from "../services/geminiService";
 import { PAYPAL_LINK } from "../utils/constants";
 
 interface SceneProgressOverlayProps {
@@ -55,12 +61,7 @@ export const SceneProgressOverlay: React.FC<SceneProgressOverlayProps> = ({
       <p className="text-xs font-bold text-indigo-300 mb-3 animate-pulse">
         {label}
       </p>
-      <button
-        onClick={onStop}
-        className="flex items-center gap-1 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-600/50 rounded-full text-[10px] font-bold transition-colors"
-      >
-        <StopIcon className="w-3 h-3" /> Cancel
-      </button>
+      {/* CANCEL BUTTON REMOVED FOR FOCUS */}
     </div>
   );
 };
@@ -110,10 +111,11 @@ export interface SceneCardProps {
   isHistory: boolean;
   isEnhanced?: boolean;
   videoError?: string;
-  isConfirmingVideo: boolean;
-  creditBalance: number;
+ creditBalance: number;
   activeI2ISlot: { genId: number; sceneId: string } | null;
   setActiveI2ISlot: (slot: { genId: number; sceneId: string } | null) => void;
+  onGenerateAudioOnly?: (genId: number, sceneId: string) => void;
+  onAddAudioToTimeline?: (url: string, duration: number) => void;
 }
 
 const formatImageSrc = (src: string) => {
@@ -124,10 +126,15 @@ const formatImageSrc = (src: string) => {
 };
 
 export const SceneCard: React.FC<SceneCardProps> = (props) => {
+  
   const { scene, index, isActive, videoState, status } = props;
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const [displayMode, setDisplayMode] = useState<"image" | number>("image");
   const [isAddedToTimeline, setIsAddedToTimeline] = useState(false);
   const [isPortrait, setIsPortrait] = useState(props.aspectRatio === "9:16");
+  const [isEnriching, setIsEnriching] = useState(false);
+    const [isConfirming, setIsConfirming] = useState(false);
+
   const isVideoLoading = videoState?.status === "loading";
 
   const [withAudio, setWithAudio] = useState(false);
@@ -145,9 +152,31 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
   };
 
   useEffect(() => {
-    if (props.draftScript.trim().length > 0) setWithAudio(true);
-    else setWithAudio(false);
+    setWithAudio(props.draftScript.trim().length > 0);
   }, [props.draftScript]);
+  useEffect(() => {
+    if (
+      videoState?.status === "loading" ||
+      videoState?.status === "generating"
+    ) {
+      setIsConfirming(false);
+    }
+  }, [videoState?.status]);
+  useEffect(() => {
+    if (!isConfirming) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setIsConfirming(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isConfirming]);
+
 
   useEffect(() => {
     if (!isActive) setDisplayMode("image");
@@ -178,8 +207,10 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
   const hasScriptText = props.draftScript.trim().length > 0;
   const voiceCostModifier = withAudio && hasScriptText ? 1 : 0;
   const baseVideoCost =
-    props.videoModel === "veo-3.1-fast-generate-preview" ? 5 : 8;
+    props.videoModel === "veo-3.1-fast-generate-preview" ? 6 : 10;
   const totalCompoundCost = baseVideoCost + voiceCostModifier;
+  const tierShortLabel =
+    props.videoModel === "veo-3.1-fast-generate-preview" ? "FAST" : "HD";
 
   const handleDragStart = (e: React.DragEvent) => {
     if (scene.src) {
@@ -188,17 +219,47 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
     }
   };
 
-  const handleAddFrameToTimeline = () => {
+  const handleAddMediaToTimeline = () => {
     if (status !== "complete") return;
+    setIsAddedToTimeline(true);
+    setTimeout(() => setIsAddedToTimeline(false), 2000);
 
-    // UI FEEDBACK: Toggle state for visual blue-to-green switch
-    const newState = !isAddedToTimeline;
-    setIsAddedToTimeline(newState);
-
-    if (newState) {
+    if (displayMode === "image") {
       const src = formatImageSrc(scene.src);
       // REINFORCED: Explicitly routing through TrackManager (Layer 0)
       props.onAddToTimeline(src, "image", 5);
+    } else if (
+      typeof displayMode === "number" &&
+      videoState?.clips?.[displayMode]
+    ) {
+      const clip = videoState.clips[displayMode];
+      props.onAddToTimeline(
+        clip.videoUrl,
+        "video",
+        videoRef.current?.duration,
+        clip.videoObject
+      );
+    }
+  };
+
+  const toggleTier = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    props.setVideoModel(
+      props.videoModel === "veo-3.1-fast-generate-preview"
+        ? "veo-3.1-generate-preview"
+        : "veo-3.1-fast-generate-preview"
+    );
+  };
+
+  const handleEnrich = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!props.draftScript.trim() || isEnriching) return;
+    setIsEnriching(true);
+    try {
+      const enriched = await enrichScript(props.draftScript, [], "Cinematic");
+      props.onUpdateDraft({ draftScript: enriched });
+    } finally {
+      setIsEnriching(false);
     }
   };
 
@@ -208,6 +269,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
   return (
     <div
+      ref={cardRef}
       draggable={!!scene.src && status === "complete"}
       onDragStart={handleDragStart}
       className={`bg-[#1e293b] rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col cursor-grab active:cursor-grabbing themed-artline transition-all duration-500 h-fit ${isPortrait ? "min-h-[580px]" : ""} ${scene.isCameraAngleFor !== undefined ? "ring-2 ring-indigo-500" : ""} ${isAnySafetyBlock ? "border-2 border-amber-500/50 animate-pulse-amber" : ""}`}
@@ -420,22 +482,28 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
         <div className={`flex gap-2 ${isPortrait ? "flex-col" : "mt-0"}`}>
           <button
             disabled={status !== "complete"}
-            onClick={handleAddFrameToTimeline}
-            className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all shadow-inner rounded-xl group disabled:opacity-30 disabled:cursor-not-allowed ${isAddedToTimeline ? "bg-green-600 text-white border border-green-500 scale-[1.02]" : "bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/20"}`}
+            onClick={handleAddMediaToTimeline}
+            className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all shadow-inner rounded-xl disabled:opacity-30 ${isAddedToTimeline ? "bg-green-600 text-white" : "bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/20"}`}
           >
             {isAddedToTimeline ? (
               <CheckIcon className="w-4 h-4" />
+            ) : displayMode === "image" ? (
+              <PhotoIcon className="w-4 h-4" />
             ) : (
               <FilmIcon className="w-4 h-4" />
             )}
-            {isAddedToTimeline ? "Added" : "Add Frame"}
+            {isAddedToTimeline
+              ? "Added"
+              : displayMode === "image"
+                ? "Add Frame"
+                : "Add Clip"}
           </button>
-        <button
-          onClick={props.onToggleVideoCreator}
+          <button
+            onClick={props.onToggleVideoCreator}
             className="flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border border-white/5 shadow-inner rounded-xl group"
-        >
+          >
             <VideoIcon className="w-4 h-4" /> Motion
-        </button>
+          </button>
         </div>
       </div>
 
@@ -457,10 +525,16 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                 onClick={() => setDisplayMode("image")}
                 className={`shrink-0 w-14 h-11 rounded-lg border overflow-hidden transition-all ${displayMode === "image" ? "border-indigo-500 ring-2 ring-indigo-500/50 opacity-100 shadow-lg" : "border-gray-700 opacity-60 hover:opacity-100 hover:bg-gray-700"}`}
               >
-                <img
-                  src={formatImageSrc(scene.src)}
-                  className="w-full h-full object-cover"
-                />
+                {scene.src ? (
+                  <img
+                    src={formatImageSrc(scene.src)}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-black flex items-center justify-center">
+                    <PhotoIcon className="w-4 h-4 text-gray-700" />
+                  </div>
+                )}
               </button>
               {videoState?.clips?.map((clip: any, idx: number) => (
                 <button
@@ -483,40 +557,44 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
             <div className="space-y-1.5 flex-1 min-h-0">
               <div className="flex justify-between items-center px-0.5">
-                <div className="flex items-center gap-1.5">
-                  <label className="text-[10px] font-black text-gray-200 tracking-[0.2em] ">
-                    {props.isMusicVideo ? "Notes" : "The Story"}
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-black text-gray-200 tracking-[0.2em]">
+                    The Narrative
                   </label>
-                  {props.hasScriptToImport && !isUploaded && (
-                    <button
-                      onClick={props.onImportScript}
-                      className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-lg hover:from-indigo-500 hover:to-indigo-400 transition-all shadow-[0_0_15px_rgba(79,70,229,0.4)] border border-white/10"
-                    >
-                      <SparklesIcon className="w-3 h-3 text-amber-300" />
-                      <span className="text-[8px] font-black ">
-                        Magic Script
-                      </span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setWithAudio(!withAudio)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${withAudio ? "bg-indigo-600/40 border-indigo-500 text-indigo-100 shadow-lg" : "bg-gray-800 border-gray-700 text-gray-400"}`}
+                  >
+                    <SparklesIcon
+                      className={`w-3.5 h-3.5 ${props.draftScript.trim() ? "text-indigo-400" : "text-gray-600"}`}
+                    />
+                  </button>
                 </div>
                 <button
                   onClick={() => setWithAudio(!withAudio)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${withAudio ? "bg-indigo-600/40 border-indigo-500 text-indigo-100 shadow-lg" : "bg-gray-800 border-gray-700 text-gray-400"}`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[8px] font-bold ${withAudio ? "bg-indigo-600/40 border-indigo-500 text-indigo-100" : "bg-gray-800 border-gray-700 text-gray-400"}`}
                 >
                   <SpeakerWaveIcon
                     className={`w-3 h-3 ${withAudio && hasScriptText ? "animate-pulse" : ""}`}
-                  />
-                  <span className="text-[8px] font-bold">AI Voice</span>
+                  />{" "}
+                  AI Voice
                 </button>
               </div>
-              <textarea
-                value={props.draftScript}
-                onChange={(e) =>
-                  props.onUpdateDraft({ draftScript: e.target.value })
-                }
-                placeholder="Type character lines or narrative details here..."
-                className="w-full bg-black/30 border border-gray-600 rounded-xl p-3 text-[11px] font-bold text-white placeholder-gray-500 focus:border-indigo-500 outline-none resize-none h-20 shadow-inner leading-relaxed"
-              />
+              <div className="relative group">
+                <textarea
+                  value={props.draftScript}
+                  onChange={(e) =>
+                    props.onUpdateDraft({ draftScript: e.target.value })
+                  }
+                  placeholder="Describe action..."
+                  className="w-full bg-black/30 border border-gray-600 rounded-xl p-3 text-[11px] text-white h-20 outline-none resize-none relative z-10"
+                />
+                {!props.draftScript && (
+                  <div className="absolute top-3 left-3 text-[11px] text-gray-700 pointer-events-none z-0 italic">
+                    Start with Name: Dialogue...
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-end gap-1.5 shrink-0">
@@ -545,49 +623,68 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                   </div>
                 </div>
               </div>
-              {props.isConfirmingVideo && (
-                <div className="flex flex-col animate-in slide-in-from-right-1">
-                  <label className="text-[9px] font-bold text-indigo-200 mb-0.5 block tracking-widest px-1 ">
-                    Engine
-                  </label>
-                  <select
-                    value={props.videoModel}
-                    onChange={(e) => props.setVideoModel(e.target.value)}
-                    className="h-10 bg-indigo-900/40 text-[10px] font-bold text-indigo-50 border border-indigo-500/50 rounded-xl px-2 outline-none focus:border-indigo-500 cursor-pointer"
-                  >
-                    <option value="veo-3.1-fast-generate-preview">Fast</option>
-                    <option value="veo-3.1-generate-preview">HQ-Pro</option>
-                  </select>
-                </div>
-              )}
             </div>
 
             <div className="flex gap-2 mt-4 shrink-0">
               <button
-                onClick={() =>
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+
+                  if (!isConfirming) {
+                    setIsConfirming(true);
+                    return;
+                  }
+
                   props.onGenerateVideo(
                     props.draftScript,
                     props.draftMovement,
                     withAudio
-                  )
-                }
+                  );
+                }}
                 disabled={props.isDisabled || isVideoLoading}
-                className={`flex-1 flex items-center justify-center gap-2 py-4 text-xs font-black tracking-[0.2em]  transition-all text-white shadow-xl rounded-xl ${props.isConfirmingVideo ? "bg-green-600 hover:bg-green-700 scale-[1.02]" : "bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-600"}`}
+                className={`flex-1 flex items-center justify-center gap-0 py-4 text-xs font-black tracking-widest transition-all text-white shadow-xl rounded-xl border overflow-hidden active:scale-[0.98] ${
+                  isConfirming
+                    ? "bg-green-600 hover:bg-green-700 border-green-500/50 ring-2 ring-green-500/20 animate-pulse"
+                    : "bg-indigo-600 hover:bg-indigo-700 border-indigo-400/20"
+                }`}
               >
                 {isVideoLoading ? (
-                  "Producing..."
-                ) : props.isConfirmingVideo ? (
-                  `Confirm (${totalCompoundCost}C)`
+                  <div className="flex items-center gap-2">
+                    <LoaderIcon className="w-4 h-4 animate-spin" />
+                    <span>Producing...</span>
+                  </div>
                 ) : (
                   <>
-                    <ClapperboardIcon className="w-4 h-4" /> Produce
+                    <div className="flex-1 flex items-center justify-center gap-2 pl-4">
+                      {isConfirming ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12px] font-black uppercase tracking-[0.1em]">
+                            Confirm
+                          </span>
+                          <span className="text-sky-400 text-[13px] font-black">
+                            {totalCompoundCost}C
+                          </span>
+                        </div>
+                      ) : (
+                        <>
+                          <ClapperboardIcon className="w-4 h-4" />
+                          <span className="text-[11px] uppercase">Produce</span>
+                        </>
+                      )}
+                    </div>
+
+                    {isConfirming && (
+                      <>
+                        <div className="h-6 w-px bg-white/20 mx-1" ></div> <div className="flex flex-col items-center leading-none px-3 py-1 hover:bg-black/20 transition-colors group/tier shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleTier(e); }} > <div className="flex items-center gap-0.5"> <span className="text-[10px] font-black"> {totalCompoundCost} </span> <ArrowsRightLeftIcon className="w-2 h-2 opacity-40 group-hover/tier:opacity-100" /> </div> <span className="text-[6px] font-black opacity-30 tracking-tighter uppercase"> {tierShortLabel} </span> </div>
+                      </>
+                    )}
                   </>
                 )}
               </button>
               <button
                 onClick={props.onToggleVideoCreator}
-                className="px-5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border-l border-gray-700 transition-colors shadow-xl rounded-xl"
-                title="Close Panel"
+                className="px-5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors shadow-xl rounded-xl border border-white/5 active:scale-90"
               >
                 <XIcon className="w-4 h-4" />
               </button>

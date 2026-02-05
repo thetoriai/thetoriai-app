@@ -16,7 +16,6 @@ import {
   FilmIcon,
   EllipsisVerticalIcon
 } from "./Icons";
-import { SceneProgressOverlay } from "./Card";
 import type { Character } from "../services/geminiService";
 import { fileToBase64 } from "../utils/fileUtils";
 import { AFRICAN_COUNTRIES, WORLD_COUNTRIES } from "../utils/constants";
@@ -72,12 +71,12 @@ export const Footage: React.FC<FootageProps> = ({
 }) => {
   const [activeSlotIdx, setActiveSlotIdx] = useState<number | null>(null);
   const [showHistoryPicker, setShowHistoryPicker] = useState(false);
-  const [showTierMenu, setShowTierMenu] = useState(false);
   const [showContextDropdown, setShowContextDropdown] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const tierMenuRef = useRef<HTMLDivElement>(null);
   const contextDropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const hasRefImages = footageRefImages.some((img) => img !== null);
   const isSlot1Filled = !!footageRefImages[0];
@@ -91,20 +90,33 @@ export const Footage: React.FC<FootageProps> = ({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (tierMenuRef.current && !tierMenuRef.current.contains(target))
-        setShowTierMenu(false);
       if (
         contextDropdownRef.current &&
         !contextDropdownRef.current.contains(target)
       )
         setShowContextDropdown(false);
+
+      // Reset confirmation if clicking outside the button area
+      if (
+        isConfirming &&
+        buttonRef.current &&
+        !buttonRef.current.contains(target)
+      ) {
+        setIsConfirming(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isConfirming]);
 
-  const handleProduce = () => {
+  const handleProduceClick = () => {
     if (!footagePrompt.trim() || isGenerating) return;
+
+    if (!isConfirming) {
+      setIsConfirming(true);
+      return;
+    }
+
     const activeMode = hasRefImages ? "i2i" : footageMode;
     onProduce(
       footagePrompt,
@@ -113,6 +125,18 @@ export const Footage: React.FC<FootageProps> = ({
       footageVideoTier,
       footageImageTier
     );
+    setIsConfirming(false);
+  };
+
+  const toggleTier = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (footageMode === "image") {
+      setFootageImageTier(footageImageTier === "fast" ? "pro" : "fast");
+    } else {
+      setFootageVideoTier(
+        footageVideoTier === "veo31-fast" ? "veo31-quality" : "veo31-fast"
+      );
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,11 +166,11 @@ export const Footage: React.FC<FootageProps> = ({
   };
 
   let cost = footageImageTier === "pro" ? 2 : 1;
-  let shortTier = footageImageTier === "pro" ? "PR" : "FL";
-  
+  let shortTier = footageImageTier === "pro" ? "PRO" : "FAST";
+
   if (footageMode === "video") {
-    cost = footageVideoTier === "veo31-quality" ? 8 : 5;
-    shortTier = footageVideoTier === "veo31-quality" ? "HD" : "SD";
+    cost = footageVideoTier === "veo31-quality" ? 10 : 6;
+    shortTier = footageVideoTier === "veo31-quality" ? "HD" : "FAST";
   }
 
   return (
@@ -156,21 +180,21 @@ export const Footage: React.FC<FootageProps> = ({
           <div className="flex items-center justify-between mb-4">
             <div className="flex flex-col">
               <h2 className="text-xl font-black text-white italic tracking-tighter leading-none">
-                Quick Footage 
+                Quick Footage
               </h2>
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-1 h-1 rounded-full bg-red-600 animate-pulse"></div>
-                <p className="text-[7px] font-black text-gray-500  tracking-[0.4em]">
+                <p className="text-[7px] font-black text-gray-500 tracking-[0.4em]">
                   Rapid Terminal
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex gap-1.5">
-                <div className="px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/20 rounded text-[7px] font-black text-indigo-400  tracking-widest">
+                <div className="px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/20 rounded text-[7px] font-black text-indigo-400 tracking-widest">
                   {visualStyle}
                 </div>
-                <div className="px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/20 rounded text-[7px] font-black text-indigo-400  tracking-widest">
+                <div className="px-2 py-0.5 bg-indigo-600/10 border border-indigo-500/20 rounded text-[7px] font-black text-indigo-400 tracking-widest">
                   {selectedCountry}
                 </div>
               </div>
@@ -184,7 +208,7 @@ export const Footage: React.FC<FootageProps> = ({
                 {showContextDropdown && (
                   <div className="absolute top-full right-0 mt-2 w-48 bg-[#0a0f1d] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[110] animate-in slide-in-from-top-1">
                     <div className="p-2 border-b border-white/5 bg-white/[0.02]">
-                      <span className="text-[8px] font-black text-gray-500  ">
+                      <span className="text-[8px] font-black text-gray-500">
                         Country Scope
                       </span>
                     </div>
@@ -211,7 +235,10 @@ export const Footage: React.FC<FootageProps> = ({
           <div className="bg-[#0a0f1d] rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex flex-col relative themed-artline p-1">
             <textarea
               value={footagePrompt}
-              onChange={(e) => setFootagePrompt(e.target.value)}
+              onChange={(e) => {
+                setFootagePrompt(e.target.value);
+                setIsConfirming(false);
+              }}
               placeholder="Describe your footage vision... characters sync automatically."
               className="w-full h-32 bg-transparent border-none p-4 text-[15px] font-bold text-white placeholder-gray-700 resize-none focus:outline-none leading-relaxed italic scrollbar-none"
             />
@@ -255,7 +282,7 @@ export const Footage: React.FC<FootageProps> = ({
                           }}
                           className="w-full flex-1 flex items-center justify-center bg-white/5 hover:bg-indigo-600 text-[8px] font-black text-gray-500 hover:text-white transition-all tracking-tighter border-t border-white/5"
                         >
-                          Comp
+                          COMP
                         </button>
                       </div>
                     )}
@@ -270,13 +297,19 @@ export const Footage: React.FC<FootageProps> = ({
             <div className="border-t border-white/5 bg-white/[0.01] p-3 flex flex-col sm:flex-row gap-3 items-center">
               <div className="flex bg-black/50 rounded-xl p-1 items-center gap-1 shadow-inner shrink-0">
                 <button
-                  onClick={() => setFootageMode("image")}
+                  onClick={() => {
+                    setFootageMode("image");
+                    setIsConfirming(false);
+                  }}
                   className={`flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg text-[10px] font-black tracking-widest transition-all ${footageMode === "image" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
                 >
                   <PhotoIcon className="w-3.5 h-3.5" /> IMAGE
                 </button>
                 <button
-                  onClick={() => setFootageMode("video")}
+                  onClick={() => {
+                    setFootageMode("video");
+                    setIsConfirming(false);
+                  }}
                   className={`flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg text-[10px] font-black tracking-widest transition-all ${footageMode === "video" && !hasRefImages ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
                 >
                   <VideoIcon className="w-3.5 h-3.5" /> VIDEO
@@ -290,67 +323,60 @@ export const Footage: React.FC<FootageProps> = ({
 
               <div className="relative flex-1 w-full flex justify-end">
                 <button
-                  onClick={handleProduce}
+                  ref={buttonRef}
+                  onClick={handleProduceClick}
                   disabled={isGenerating || !footagePrompt.trim()}
-                  className="w-full sm:w-52 h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-black tracking-widest rounded-xl transition-all active:scale-95 disabled:bg-gray-800 disabled:text-gray-600 flex items-center justify-center border border-indigo-400/20 shadow-xl overflow-hidden"
+                  className={`w-full sm:w-52 h-12 font-black tracking-widest rounded-xl transition-all active:scale-95 disabled:bg-gray-800 disabled:text-gray-600 flex items-center justify-center border border-indigo-400/20 shadow-xl overflow-hidden ${isConfirming ? "bg-green-600 text-white border-green-500/50" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}
                 >
                   {isGenerating ? (
                     <LoaderIcon className="w-5 h-5 animate-spin" />
                   ) : (
                     <>
                       <div className="flex-1 flex items-center justify-center gap-2 pl-4">
-                        <ClapperboardIcon className="w-4 h-4" />
-                        <span className="text-[20px] font-black">Generate</span>
+                        {isConfirming ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[12px] font-black uppercase tracking-[0.1em]">
+                              Confirm (
+                            </span>
+                            <span className="text-sky-400 text-[13px] font-black">
+                              {cost}C
+                            </span>
+                            <span className="text-[12px] font-black uppercase tracking-[0.1em]">
+                              )
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <ClapperboardIcon className="w-4 h-4" />
+                            <span className="text-[11px] font-black uppercase">
+                              Generate
+                            </span>
+                          </>
+                        )}
                       </div>
-                      
-                      {/* VERTICAL SEPARATOR */}
-                      <div className="h-6 w-px bg-white/20 mx-1"></div>
 
-                      {/* PORTABLE SLIM CREDIT BADGE */}
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowTierMenu(!showTierMenu);
-                        }}
-                        className="flex items-center gap-1 px-1.5 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                      >
-                        <span className="text-[9px] font-black">{cost}C</span>
-                        <ChevronDownIcon className="w-2.5 h-2.5 opacity-60" />
-                      </div>
+                      {!isConfirming && (
+                        <>
+                          <div className="h-6 w-px bg-white/20 mx-1"></div>
+                          <div
+                            onClick={toggleTier}
+                            className="flex flex-col items-center leading-none px-3 py-1 hover:bg-black/20 transition-colors cursor-pointer group/tier shrink-0"
+                          >
+                            <div className="flex items-center gap-0.5">
+                              <span className="text-[10px] font-black tracking-tighter">
+                                {cost}
+                              </span>
+                              <ArrowsRightLeftIcon className="w-2 h-2 opacity-40 group-hover/tier:opacity-100" />
+                            </div>
+                            <span className="text-[6px] font-black opacity-30 tracking-tighter uppercase">
+                              {shortTier}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
                 </button>
-                {showTierMenu && (
-                  <div
-                    ref={tierMenuRef}
-                    className="absolute bottom-full right-0 mb-3 w-44 bg-[#0a0f1d] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[110] animate-in slide-in-from-bottom-1"
-                  >
-                    {(footageMode === "image"
-                      ? [
-                          { id: "fast", l: "Flash", c: 1 },
-                          { id: "pro", l: "Pro", c: 2 }
-                        ]
-                      : [
-                          { id: "veo31-fast", l: "Fast", c: 5 },
-                          { id: "veo31-quality", l: "Quality", c: 8 }
-                        ]
-                    ).map((tier: any) => (
-                      <button
-                        key={tier.id}
-                        onClick={() => {
-                          if (footageMode === "image")
-                            setFootageImageTier(tier.id);
-                          else setFootageVideoTier(tier.id);
-                          setShowTierMenu(false);
-                        }}
-                        className={`w-full flex items-center justify-between p-3.5 text-[9px] font-black tracking-widest transition-colors ${(footageMode === "image" ? footageImageTier : footageVideoTier) === tier.id ? "bg-indigo-600 text-white" : "text-gray-400 hover:bg-white/5"}`}
-                      >
-                        <span>{tier.l}</span>
-                        <span className="opacity-60">{tier.c}C</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -366,7 +392,7 @@ export const Footage: React.FC<FootageProps> = ({
               Initiated assets will automatically appear in your Production
               Stage for cinematic editing and timeline assembly.
             </p>
-            </div>
+          </div>
         </div>
       </div>
 

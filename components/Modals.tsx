@@ -140,17 +140,6 @@ interface ModalsProps {
   onUploadToSession?: (file: File, sessionId: number) => void;
   onDeleteScene?: (genId: number, sceneId: string) => void;
   onUndoEdit?: (genId: number, sceneId: string) => void;
-  onRegenerateScene?: (genId: number, sceneId: string) => void;
-  onAngleSelect?: (genId: number, sceneId: string) => void;
-
-  setCharacters?: React.Dispatch<React.SetStateAction<Character[]>>;
-  handleBuildCharacterVisual?: (id: number) => void;
-  handleUploadNewCharacterImage?: (file: File) => void;
-  handleCharacterImageUpload?: (file: File, id: number) => void;
-  updateCharacter?: (id: number, props: Partial<Character>) => void;
-  removeCharacter?: (id: number) => void;
-  onToggleHero?: (id: number) => void;
-
   onAddSceneVariant?: (
     genId: number,
     sceneId: string,
@@ -169,6 +158,16 @@ interface ModalsProps {
     direction: "next" | "prev"
   ) => void;
   onUpdateSceneImage?: (genId: number, sceneId: string, base64: string) => void;
+  onGenerateAudioOnly?: (genId: number, sceneId: string) => void;
+  setCharacters?: React.Dispatch<React.SetStateAction<Character[]>>;
+  handleBuildCharacterVisual?: (id: number) => void;
+  handleUploadNewCharacterImage?: (file: File) => void;
+  handleCharacterImageUpload?: (file: File, id: number) => void;
+  updateCharacter?: (id: number, props: Partial<Character>) => void;
+  removeCharacter?: (id: number) => void;
+  onToggleHero?: (id: number) => void;
+  onRegenerateScene?: (genId: number, sceneId: string) => void;
+  onAngleSelect?: (genId: number, sceneId: string) => void;
 }
 
 const ModalWrapper = ({
@@ -641,7 +640,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group transition-all hover:scale-[1.02]`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
-              €40 (700C)
+              €40 (600C)
             </h3>
             <a
               href={getPurchaseLink(PAYPAL_STUDIO_LINK)}
@@ -743,7 +742,8 @@ export const Modals: React.FC<ModalsProps> = ({
   onUpdateSceneImage,
   onRegenerateScene,
   onAngleSelect,
-  visualStyle
+  visualStyle,
+  onGenerateAudioOnly
 }) => {
   const [selectedAngle, setSelectedAngle] = useState("");
   const [focusSubject, setFocusSubject] = useState("");
@@ -955,6 +955,9 @@ export const Modals: React.FC<ModalsProps> = ({
           onUploadStartImage={onUploadStartImage}
           onUploadToSession={onUploadToSession}
           onSceneVariantChange={onSceneVariantChange}
+          onGenerateAudioOnly={onGenerateAudioOnly}
+          onAddAudioToTimeline={onAddAudioToTimeline}
+          characters={characters}
         />
       </ModalWrapper>
     );
