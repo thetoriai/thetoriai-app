@@ -280,6 +280,12 @@ const App: React.FC = () => {
     }
   );
 
+  // DO add comment: Local video result state specifically for the Footage page workflow.
+  const [footageVideoResult, setFootageVideoResult] = useState<{
+    videoUrl: string;
+    videoObject: any;
+  } | null>(null);
+
   // TIMELINE PERSISTENT STATE
   const [timelineClips, setTimelineClips] = useState<any[]>([]);
   const [audioClips, setAudioClips] = useState<any[]>([]);
@@ -494,7 +500,9 @@ const App: React.FC = () => {
     prompts: string[],
     source: string = "idea",
     referenceImage?: string,
-    preferredImageModel?: string
+    preferredImageModel?: string,
+    // DO add comment: Optional flag to bypass Storyboard routing for certain Footage workflows.
+    skipRouting: boolean = false
   ) => {
     const activeImageModel = preferredImageModel || imageModel;
     if (activeImageModel === "gemini-3-pro-image-preview") await ensureApiKey();
@@ -502,7 +510,9 @@ const App: React.FC = () => {
     setIsGenerating(true);
 
     // DIRECT ROUTING: Every generation source (including footage) now immediately takes you to the Storyboard.
+    if (!skipRouting && source !== "footage") {
     setActiveView("storyboard");
+    }
 
     try {
       let sessionId = Date.now();
@@ -524,12 +534,14 @@ const App: React.FC = () => {
         isClosed: false
       };
 
+      if (source !== "footage") {
       setHistory((prev) => {
         const next = [...prev, newItem];
         // ALWAYS FOCUS: Automatically select the newest production session in the storyboard.
         setActiveHistoryIndex(next.length - 1);
         return next;
       });
+      }
 
       const placeholders = prompts.map((p, i) => ({
         sceneId: `scene-${sessionId}-${i}`,
@@ -540,6 +552,8 @@ const App: React.FC = () => {
         status: "pending",
         variants: []
       }));
+
+      if (source !== "footage") {
       setHistory((prev) =>
         prev.map((h) =>
           h.id === sessionId
@@ -556,6 +570,7 @@ const App: React.FC = () => {
             : h
         )
       );
+      }
 
       let currentSequentialRef: string | undefined = referenceImage;
 
@@ -606,6 +621,7 @@ const App: React.FC = () => {
                 : "FootageFrontSection"
         };
 
+        if (source !== "footage") {
         setHistory((prev) =>
           prev.map((h) =>
             h.id === sessionId
@@ -618,8 +634,25 @@ const App: React.FC = () => {
               : h
           )
         );
-        if (source === "footage")
-          setFootageHistory((prev) => [updatedScene, ...prev]);
+        }
+
+        if (source === "footage") {
+          // DO add comment: If generating from footage, update the specific item in the grid by sceneId or timestamp.
+          setFootageHistory((prev) =>
+            prev.map((item) =>
+              item.sceneId === updatedScene.sceneId
+                ? {
+                    ...item,
+                    ...updatedScene,
+                    status: error ? "error" : "complete"
+                  }
+                : item
+            )
+          );
+        }
+
+        // Return result if requested for local footage display
+        if (skipRouting) return src;
       }
     } catch (e: any) {
       console.error(e);
@@ -643,6 +676,22 @@ const App: React.FC = () => {
         ? "Subject: African person."
         : `Subject: Person from ${selectedCountry}.`;
     const finalPrompt = `Visual Style: ${visualStyle}. ${ethnicityContext} Action: ${prompt}`;
+    
+  const result = await generateSingleImage(
+    finalPrompt,
+    aspectRatio,
+    selectedCountry,
+    visualStyle,
+    "General",
+    characters,
+    imageModel
+  );
+
+  const startFrame = result.src;
+
+
+
+
 
     const newItem = {
       id: sessionId,
@@ -682,21 +731,22 @@ const App: React.FC = () => {
     try {
       await consumeCredits(action as any);
 
-      const { videoUrl, videoObject } = await generateVideoFromScene(
-        { src: null, prompt: prompt },
-        aspectRatio,
-        finalPrompt,
-        null, // No input image bytes for direct video
-        visualStyle,
-        selectedCountry,
-        tier === "veo31-quality"
-          ? "veo-3.1-generate-preview"
-          : "veo-3.1-fast-generate-preview",
-        videoResolution as any,
-        "Zoom In (Focus In)",
-        () => {},
-        characters
-      );
+     const { videoUrl, videoObject } = await generateVideoFromScene(
+       { src: startFrame, prompt: prompt },
+       aspectRatio,
+       finalPrompt,
+       startFrame,
+       visualStyle,
+       selectedCountry,
+       tier === "veo31-quality"
+         ? "veo-3.1-generate-preview"
+         : "veo-3.1-fast-generate-preview",
+       videoResolution as any,
+       "Zoom In (Focus In)",
+       () => {},
+       characters
+     );
+
 
       if (videoUrl) {
         setHistory((prev) =>
@@ -839,13 +889,33 @@ const App: React.FC = () => {
     }
   };
 
-  const handleFootageProduce = async (
-    prompt: string,
-    mode: "image" | "video" | "i2i",
-    refImage?: string,
-    videoTier?: string,
-    imageTier?: string
-  ) => {
+const handleFootageProduce = async (
+  prompt: string,
+  mode: "image" | "video" | "i2i",
+  refImage?: string,
+  videoTier?: string,
+  imageTier?: string
+) => {
+  const tempId = `footage-${Date.now()}`;
+  // START AND END FRAME FROM FOOTAGE DESK
+  const startFrame = footageRefImages?.[0] || refImage || null;
+  const endFrame = footageRefImages?.[1] || null;
+
+  const placeholder = {
+    sceneId: tempId,
+    prompt: prompt,
+    status: "generating",
+    type: mode === "image" ? "image" : "video",
+    src: refImage || null,
+    originSection: "FootageFrontSection",
+    timestamp: Date.now()
+  };
+
+  // DO add comment: Immediately create a placeholder card in the grid to show progress feedback.
+  setFootageHistory((prev) => [placeholder, ...prev]);
+
+  // IMAGE WORKFLOW
+  if (mode === "image") {
     const modelToUse =
       imageTier === "pro"
         ? "gemini-3-pro-image-preview"
@@ -858,8 +928,88 @@ const App: React.FC = () => {
     const styleContext = `Visual Medium: [${visualStyle}].`;
     const finalPrompt = `${styleContext} ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
 
-    await handleGenerate([finalPrompt], "footage", refImage, modelToUse);
-  };
+    await handleGenerate([finalPrompt], "footage", refImage, modelToUse, true);
+    return;
+  }
+
+  // VIDEO WORKFLOW
+  await ensureApiKey();
+  setIsGenerating(true);
+
+  const action = videoTier === "veo31-quality" ? "VIDEO_HQ" : "VIDEO_FAST";
+
+  try {
+    // DEDUCTION FIRST
+    await consumeCredits(action as any);
+
+    // 1. If I2I but NO input image, generate one first
+    let activeInputImage = startFrame;
+
+    if (mode === "i2i" && !activeInputImage) {
+      const modelToUse = "gemini-2.5-flash-image";
+      const ethnicityContext =
+        characterStyle === "Afro-toon"
+          ? "Subject: African/Black person."
+          : `Subject: Person from ${selectedCountry}.`;
+      const finalImgPrompt = `Visual Medium: [${visualStyle}]. ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
+
+      activeInputImage = (await handleGenerate(
+        [finalImgPrompt],
+        "footage",
+        undefined,
+        modelToUse,
+        true
+      )) as string;
+    }
+
+    // 2. Generate Video
+    const ethnicityContext =
+      characterStyle === "Afro-toon"
+        ? "Subject: African person."
+        : `Subject: Person from ${selectedCountry}.`;
+    const styleContext = `Visual Style: ${visualStyle}.`;
+    const finalVidPrompt = `${styleContext} ${ethnicityContext} Action: ${prompt}`;
+
+    const { videoUrl, videoObject } = await generateVideoFromScene(
+      { src: activeInputImage, prompt: prompt },
+      aspectRatio,
+      finalVidPrompt,
+      endFrame,
+
+      visualStyle,
+      selectedCountry,
+      videoTier === "veo31-quality"
+        ? "veo-3.1-generate-preview"
+        : "veo-3.1-fast-generate-preview",
+      videoResolution as any,
+      "Zoom In (Focus In)",
+      () => {},
+      characters
+    );
+
+    if (videoUrl) {
+      // DO add comment: Update history item with video data once generation completes.
+      setFootageHistory((prev) =>
+        prev.map((item) =>
+          item.sceneId === tempId
+            ? { ...item, videoUrl, status: "complete", videoObject }
+            : item
+        )
+      );
+    }
+  } catch (e: any) {
+    console.error(e);
+    setFootageHistory((prev) =>
+      prev.map((item) =>
+        item.sceneId === tempId
+          ? { ...item, status: "error", error: parseErrorMessage(e) }
+          : item
+      )
+    );
+  } finally {
+    setIsGenerating(false);
+  }
+};;
 
   const handleAnimateFootage = async (item: any) => {
     await ensureApiKey();
@@ -1611,6 +1761,26 @@ const App: React.FC = () => {
     });
   }, [savedScenes, activeHistoryIndex]);
 
+  const onUpdateHeroData = (
+    id: number,
+    data: Partial<Character["heroData"]>
+  ) => {
+    setCharacters((prev) =>
+      prev.map((c) => {
+        if (c.id === id) {
+          return {
+            ...c,
+            heroData: {
+              ...(c.heroData || { outfits: [] }),
+              ...data
+            }
+          };
+        }
+        return c;
+      })
+    );
+  };
+
   // --- Sub-View Renderers ---
   const renderRoster = () => (
     <div className="flex-1 overflow-y-auto p-4 md:p-8 scrollbar-thin scrollbar-thumb-gray-800">
@@ -1764,6 +1934,7 @@ const App: React.FC = () => {
               }))
             )
           }
+          onUpdateHeroData={onUpdateHeroData}
           visualStyle={visualStyle}
         />
       </div>
@@ -1960,6 +2131,18 @@ const App: React.FC = () => {
       footageRefImages={footageRefImages}
       setFootageRefImages={setFootageRefImages}
       savedItems={savedScenes}
+      footageHistory={footageHistory}
+      onAnimateFootage={handleAnimateFootage}
+      onAddToTimeline={(url, type, duration, obj) =>
+        onAddTimelineClip(
+          url,
+          type || "image",
+          duration || 5,
+          undefined,
+          0,
+          obj
+        )
+      }
     />
   );
 
@@ -2624,6 +2807,7 @@ const App: React.FC = () => {
             prev.map((c) => ({ ...c, isHero: c.id === id ? !c.isHero : false }))
           )
         }
+        onUpdateHeroData={onUpdateHeroData}
         onGenerateSingleStorybookScene={handleGenerateSingleStorybookScene}
         onAddSceneVariant={handleAddSceneVariant}
         onSelectSceneVariant={handleSelectSceneVariant}

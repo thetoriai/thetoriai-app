@@ -168,6 +168,7 @@ interface ModalsProps {
   onToggleHero?: (id: number) => void;
   onRegenerateScene?: (genId: number, sceneId: string) => void;
   onAngleSelect?: (genId: number, sceneId: string) => void;
+  onUpdateHeroData?: (id: number, data: Partial<Character["heroData"]>) => void;
 }
 
 const ModalWrapper = ({
@@ -732,6 +733,11 @@ export const Modals: React.FC<ModalsProps> = ({
   updateCharacter,
   removeCharacter,
   onToggleHero,
+  onRegenerateScene,
+  onAngleSelect,
+  visualStyle,
+  onGenerateAudioOnly,
+  onUpdateHeroData,
   onUploadStartImage,
   onUploadToSession,
   onDeleteScene,
@@ -739,11 +745,7 @@ export const Modals: React.FC<ModalsProps> = ({
   onAddSceneVariant,
   onSelectSceneVariant,
   onSceneVariantChange,
-  onUpdateSceneImage,
-  onRegenerateScene,
-  onAngleSelect,
-  visualStyle,
-  onGenerateAudioOnly
+  onUpdateSceneImage
 }) => {
   const [selectedAngle, setSelectedAngle] = useState("");
   const [focusSubject, setFocusSubject] = useState("");
@@ -983,6 +985,7 @@ export const Modals: React.FC<ModalsProps> = ({
               updateCharacter={updateCharacter || (() => {})}
               removeCharacter={removeCharacter || (() => {})}
               onToggleHero={onToggleHero || (() => {})}
+              onUpdateHeroData={onUpdateHeroData}
               visualStyle={visualStyle}
             />
           </div>

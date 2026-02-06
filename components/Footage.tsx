@@ -14,10 +14,17 @@ import {
   ArrowsRightLeftIcon,
   ChevronDownIcon,
   FilmIcon,
-  EllipsisVerticalIcon
+  EllipsisVerticalIcon,
+  DownloadIcon,
+  CheckIcon,
+  PlayIcon,
+  RefreshIcon,
+  CircularProgressIcon,
+  // DO add comment above each fix. Fix missing icon import: Added ExclamationTriangleIcon to resolve name not found error in result card.
+  ExclamationTriangleIcon
 } from "./Icons";
 import type { Character } from "../services/geminiService";
-import { fileToBase64 } from "../utils/fileUtils";
+import { fileToBase64, formatBase64Src } from "../utils/fileUtils";
 import { AFRICAN_COUNTRIES, WORLD_COUNTRIES } from "../utils/constants";
 
 interface FootageProps {
@@ -31,8 +38,10 @@ interface FootageProps {
     mode: "image" | "video" | "i2i",
     refImage?: string,
     videoTier?: string,
-    imageTier?: string
+    imageTier?: string,
+    endImage?: string
   ) => void;
+
   isGenerating?: boolean;
   creditBalance: number;
   onUpdateCountry: (val: string) => void;
@@ -47,7 +56,150 @@ interface FootageProps {
   footageRefImages: (string | null)[];
   setFootageRefImages: (v: (string | null)[]) => void;
   savedItems: any[];
+  footageHistory: any[];
+  onAnimateFootage: (item: any) => void;
+  onAddToTimeline: (
+    url: string,
+    type: "video" | "image",
+    duration: number,
+    obj?: any
+  ) => void;
 }
+
+// DO add comment: Compact Footage Card for the results grid.
+const FootageResultCard: React.FC<{
+  item: any;
+  onAddToTimeline: (
+    url: string,
+    type: "video" | "image",
+    duration: number,
+    obj?: any
+  ) => void;
+}> = ({ item, onAddToTimeline }) => {
+  const [isAdded, setIsAdded] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  // Simulate progress for the internal loading circle
+  useEffect(() => {
+    if (item.status !== "generating") return;
+    const interval = setInterval(() => {
+      setProgress((prev) => (prev >= 95 ? prev : prev + 2));
+    }, 500);
+    return () => clearInterval(interval);
+  }, [item.status]);
+
+  const handleAdd = () => {
+    const url =
+      item.type === "video"
+        ? item.videoUrl
+        : item.src?.startsWith("data")
+          ? item.src
+          : `data:image/png;base64,${item.src}`;
+    onAddToTimeline(
+      url,
+      item.type,
+      item.type === "video" ? 8 : 5,
+      item.videoObject
+    );
+    setIsAdded(true);
+    setTimeout(() => setIsAdded(false), 2000);
+  };
+
+  const handleDownload = () => {
+    const url =
+      item.type === "video"
+        ? item.videoUrl
+        : item.src?.startsWith("data")
+          ? item.src
+          : `data:image/png;base64,${item.src}`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Footage_${Date.now()}.${item.type === "video" ? "mp4" : "png"}`;
+    link.click();
+  };
+
+  return (
+    <div className="bg-[#0f172a] rounded-2xl border border-white/5 overflow-hidden flex flex-col shadow-xl group animate-in zoom-in-95 duration-500 relative">
+      <div className="aspect-video bg-black relative flex items-center justify-center overflow-hidden">
+        {item.status === "generating" ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-10">
+            <div className="w-12 h-12 relative flex items-center justify-center">
+              <CircularProgressIcon
+                progress={progress}
+                className="w-full h-full text-cyan-500"
+              />
+            </div>
+            <span className="text-[7px] font-black text-cyan-400 tracking-[0.3em] mt-3 uppercase animate-pulse">
+              Producing...
+            </span>
+          </div>
+        ) : item.status === "error" ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-950/20 p-4 text-center">
+            <ExclamationTriangleIcon className="w-6 h-6 text-red-500 mb-2" />
+            <span className="text-[8px] font-black text-red-400 tracking-widest uppercase">
+              Signal Lost
+            </span>
+          </div>
+        ) : item.type === "video" ? (
+          <video
+            src={item.videoUrl}
+            className="w-full h-full object-cover"
+            controls
+            playsInline
+            loop
+            muted
+          />
+        ) : (
+          <img
+            src={
+              item.src?.startsWith("data")
+                ? item.src
+                : `data:image/png;base64,${item.src}`
+            }
+            className="w-full h-full object-cover"
+          />
+        )}
+
+        {/* OVERLAY ACTIONS */}
+        {item.status === "complete" && (
+          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+            <button
+              onClick={handleDownload}
+              className="p-1.5 bg-black/60 text-white rounded-lg hover:bg-cyan-600 transition-all shadow-lg"
+            >
+              <DownloadIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="p-3 bg-[#0a0f1d] border-t border-white/5 flex flex-col gap-2">
+        <div className="flex justify-between items-center">
+          <span
+            className={`px-2 py-0.5 rounded text-[7px] font-black tracking-widest uppercase border ${item.type === "video" ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" : "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"}`}
+          >
+            {item.type}
+          </span>
+          <p className="text-[8px] font-bold text-gray-500 truncate flex-1 ml-2 tracking-tight opacity-60">
+            {item.prompt}
+          </p>
+        </div>
+        <button
+          disabled={item.status !== "complete" || isAdded}
+          onClick={handleAdd}
+          className={`w-full py-2.5 rounded-xl text-[8px] font-black tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 border ${isAdded ? "bg-green-600 text-white border-green-500/50" : "bg-white/5 text-gray-400 hover:bg-white/10 border-white/5"}`}
+        >
+          {isAdded ? (
+            <CheckIcon className="w-3 h-3" />
+          ) : (
+            <PlusIcon className="w-3 h-3" />
+          )}
+          {isAdded ? "ADDED" : "ADD TO TIMELINE"}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const Footage: React.FC<FootageProps> = ({
   visualStyle,
@@ -67,7 +219,9 @@ export const Footage: React.FC<FootageProps> = ({
   setFootageImageTier,
   footageRefImages,
   setFootageRefImages,
-  savedItems
+  savedItems,
+  footageHistory,
+  onAddToTimeline
 }) => {
   const [activeSlotIdx, setActiveSlotIdx] = useState<number | null>(null);
   const [showHistoryPicker, setShowHistoryPicker] = useState(false);
@@ -108,6 +262,14 @@ export const Footage: React.FC<FootageProps> = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isConfirming]);
+  useEffect(() => {
+    // Safety: never allow history picker to stay open during actions
+    if (isGenerating || isConfirming) {
+      setShowHistoryPicker(false);
+      setActiveSlotIdx(null);
+    }
+  }, [isGenerating, isConfirming]);
+
 
   const handleProduceClick = () => {
     if (!footagePrompt.trim() || isGenerating) return;
@@ -118,13 +280,15 @@ export const Footage: React.FC<FootageProps> = ({
     }
 
     const activeMode = hasRefImages ? "i2i" : footageMode;
-    onProduce(
-      footagePrompt,
-      activeMode as any,
-      footageRefImages[0] || undefined,
-      footageVideoTier,
-      footageImageTier
-    );
+   onProduce(
+     footagePrompt,
+     activeMode as any,
+     footageRefImages[0] || undefined,
+     footageVideoTier,
+     footageImageTier,
+     footageRefImages[1] || undefined
+   );
+
     setIsConfirming(false);
   };
 
@@ -148,6 +312,7 @@ export const Footage: React.FC<FootageProps> = ({
       setActiveSlotIdx(null);
     }
   };
+
 
   const selectFromHistory = (src: string) => {
     if (activeSlotIdx !== null) {
@@ -173,9 +338,16 @@ export const Footage: React.FC<FootageProps> = ({
     shortTier = footageVideoTier === "veo31-quality" ? "HD" : "FAST";
   }
 
+  // Filter for items originating from this section or specifically marked as footage
+  const recentResults = footageHistory.filter(
+    (h) =>
+      h.originSection === "FootageFrontSection" ||
+      h.sceneId?.startsWith("footage-")
+  );
+
   return (
-    <div className="w-full h-full flex flex-col bg-[#030712] animate-in fade-in duration-500 overflow-hidden font-sans">
-      <div className="w-full h-full flex flex-col items-center justify-center p-4">
+    <div className="w-full h-full flex flex-col bg-[#030712] animate-in fade-in duration-500 font-sans">
+      <div className="w-full flex flex-col items-center p-4 shrink-0">
         <div className="w-full max-w-2xl">
           <div className="flex items-center justify-between mb-4">
             <div className="flex flex-col">
@@ -380,19 +552,44 @@ export const Footage: React.FC<FootageProps> = ({
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="mt-12 flex flex-col items-center text-center opacity-30">
-            <div className="w-16 h-16 rounded-full border-2 border-dashed border-gray-700 flex items-center justify-center mb-4">
-              <SparklesIcon className="w-8 h-8 text-gray-700" />
-            </div>
-            <p className="text-[10px] font-black text-gray-500 tracking-[0.5em] uppercase">
-              Ready for Production
-            </p>
-            <p className="text-[9px] text-gray-600 max-w-sm mt-2 leading-relaxed">
-              Initiated assets will automatically appear in your Production
-              Stage for cinematic editing and timeline assembly.
-            </p>
+        {/* RESULTS GRID - ALWAYS BELOW THE ENGINE */}
+        <div className="w-full max-w-6xl">
+          <div className="flex items-center gap-4 px-2 mb-6">
+            <span className="text-[10px] font-black text-gray-500 tracking-[0.5em] uppercase whitespace-nowrap">
+              Production Reel
+            </span>
+            <div className="h-px bg-white/5 flex-1"></div>
           </div>
+
+          {recentResults.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 opacity-20">
+              <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-600 flex items-center justify-center mb-6">
+                <ClapperboardIcon className="w-10 h-10 text-gray-600" />
+              </div>
+              <p className="text-[10px] font-black text-gray-500 tracking-[0.5em] uppercase">
+                Ready for Production
+              </p>
+              <p className="text-[9px] text-gray-600 max-w-sm mt-2 leading-relaxed">
+                Initiated assets will automatically appear in your Production
+                Stage for cinematic editing and timeline assembly.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {recentResults.map((item) => (
+                <FootageResultCard
+                  item={item}
+                  onAddToTimeline={(...args) => {
+                    setShowHistoryPicker(false);
+                    setActiveSlotIdx(null);
+                    onAddToTimeline(...args);
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

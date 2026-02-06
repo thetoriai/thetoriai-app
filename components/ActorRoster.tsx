@@ -111,17 +111,21 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
   };
 
   const handleNewEmptyActor = () => {
-    const newChar: Character = {
-      id: Date.now(),
-      name: "",
-      imagePreview: null,
-      originalImageBase64: null,
-      originalImageMimeType: null,
-      description: null,
-      detectedImageStyle: null,
-      isDescribing: false,
-      isHero: false
-    };
+   const newChar: Character = {
+     id: Date.now(),
+     name: "",
+     imagePreview: null,
+     originalImageBase64: null,
+     originalImageMimeType: null,
+     description: null,
+     detectedImageStyle: null,
+     isDescribing: false,
+     isHero: false,
+     heroData: {
+       outfits: []
+     }
+   };
+
     props.setCharacters((prev) => [...prev, newChar]);
     setShowRefineId(newChar.id);
   };

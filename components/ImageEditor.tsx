@@ -86,17 +86,18 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
   // --- Effects ---
 
   useEffect(() => {
-    if (isOpen) {
-      setCurrentSrc(imageSrc);
-      setVersions(initialVersions.length > 0 ? initialVersions : [imageSrc]);
-      setEditPrompt(initialPrompt);
-      setHasDrawn(false);
-      setDrawingMode("add");
-      setTool("brush");
-      setError(null);
-      setReferenceImg(null);
-    }
-  }, [isOpen, imageSrc, initialVersions, initialPrompt]);
+    if (!isOpen) return;
+
+    setCurrentSrc(imageSrc);
+    setVersions(initialVersions.length > 0 ? initialVersions : [imageSrc]);
+    setEditPrompt(initialPrompt);
+    setHasDrawn(false);
+    setDrawingMode("add");
+    setTool("brush");
+    setError(null);
+    setReferenceImg(null);
+  }, [isOpen]);
+
 
   useEffect(() => {
     if (currentSrc && canvasRef.current) {
@@ -200,8 +201,9 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
     if (!ctx) return;
     const color =
       drawingMode === "add"
-        ? "rgba(74, 222, 128, 0.5)"
-        : "rgba(248, 113, 113, 0.5)";
+        ? "rgba(74, 222, 128, 1)"
+        : "rgba(248, 113, 113, 1)";
+
     if (tool === "lasso") {
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       ctx.setLineDash([]);
@@ -248,35 +250,98 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
   };
 
   const handleApply = async () => {
-    const isRemoval = drawingMode === "remove";
-    if (!editPrompt.trim() && !hasDrawn && !isRemoval) return;
+    const isRemove = drawingMode === "remove";
+
+    if (!editPrompt.trim() && !hasDrawn && !isRemove) return;
+
     setIsProcessing(true);
     setError(null);
-    if (abortControllerRef.current) abortControllerRef.current.abort();
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    let finalPrompt = editPrompt.trim();
+
+    if (hasDrawn && drawingMode === "add") {
+      finalPrompt =
+        "The masked region MUST contain a new visible object or structure that matches the instruction. " +
+        "Do NOT leave the area empty, blank, white, or background-only. " +
+        "Insert or construct the described content inside the mask. " +
+        "Everything outside the mask must remain exactly the same. " +
+        finalPrompt;
+    }
+
+
+    let maskBase64: string | undefined;
+
     try {
-      let maskBase64: string | undefined = undefined;
       if (hasDrawn && canvasRef.current && imageRef.current) {
         const img = imageRef.current;
+
         const maskCanvas = document.createElement("canvas");
         maskCanvas.width = img.naturalWidth;
         maskCanvas.height = img.naturalHeight;
+
         const mCtx = maskCanvas.getContext("2d");
-        if (mCtx) {
-          mCtx.fillStyle = "#000000";
-          mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-          mCtx.globalCompositeOperation = "source-over";
-          mCtx.drawImage(canvasRef.current, 0, 0);
-          mCtx.globalCompositeOperation = "source-in";
-          mCtx.fillStyle = "#FFFFFF";
-          mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-          maskBase64 = maskCanvas.toDataURL("image/png").split(",")[1];
-        }
+        if (!mCtx) throw new Error("Mask context failed");
+
+        mCtx.fillStyle = "black";
+        mCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+        mCtx.drawImage(canvasRef.current, 0, 0);
+
+       const imgData = mCtx.getImageData(
+         0,
+         0,
+         maskCanvas.width,
+         maskCanvas.height
+       );
+
+       const data = imgData.data;
+
+       for (let i = 0; i < data.length; i += 4) {
+         const alpha = data[i + 3];
+
+         if (alpha > 10) {
+           // SELECTED AREA -> PURE WHITE
+           data[i] = 255;
+           data[i + 1] = 255;
+           data[i + 2] = 255;
+           data[i + 3] = 255;
+         } else {
+           // NON SELECTED -> PURE BLACK
+           data[i] = 0;
+           data[i + 1] = 0;
+           data[i + 2] = 0;
+           data[i + 3] = 255;
+         }
+       }
+
+       mCtx.putImageData(imgData, 0, 0);
+
+
+        maskBase64 = maskCanvas.toDataURL("image/png").split(",")[1];
       }
-      let finalPrompt = editPrompt.trim();
-      if (!finalPrompt && hasDrawn && drawingMode === "remove")
-        finalPrompt = "Remove selection.";
+
+     if (hasDrawn) {
+       finalPrompt =
+         "MANDATORY CONTENT RULE. " +
+         "The white masked region MUST contain visible, meaningful content after editing. " +
+         "You are FORBIDDEN from leaving the masked area empty, blank, white, transparent, or erased. " +
+         "If a reference image is provided, you MUST insert or adapt it inside the masked region. " +
+         "If no reference image is provided, you MUST generate content that matches the text instruction. " +
+         "All changes must occur ONLY inside the mask. " +
+         "Everything outside the mask must remain exactly identical to the original image. " +
+         finalPrompt;
+     }
+
+
+
+
       const { src, error: apiError } = await editImage({
         imageBase64: currentSrc,
         mimeType: "image/png",
@@ -289,20 +354,20 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
         overlayImage: maskBase64
           ? { base64: maskBase64, mimeType: "image/png" }
           : undefined,
-        referenceImage: referenceImg
-          ? { base64: referenceImg, mimeType: "image/png" }
-          : undefined,
         signal: controller.signal,
         imageModel: imageModel.includes("gemini")
           ? imageModel
           : "gemini-3-pro-image-preview"
       });
+
+
       if (src) {
         setVersions((prev) => [...prev, src]);
         setCurrentSrc(src);
-        if (onUpdateImage) onUpdateImage(src, finalPrompt);
         clearCanvas();
-      } else if (apiError && apiError !== "Aborted") setError(apiError);
+      } else if (apiError && apiError !== "Aborted") {
+        setError(apiError);
+      }
     } catch (e) {
       const msg = parseErrorMessage(e);
       if (msg !== "Aborted") setError(msg);
@@ -311,11 +376,12 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
       abortControllerRef.current = null;
     }
   };
-
   const handleSaveAndClose = () => {
     onSave(currentSrc, editPrompt);
     onClose();
   };
+
+
 
   if (!isOpen) return null;
 

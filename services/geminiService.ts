@@ -426,29 +426,26 @@ export async function editImage(
     }
   ];
 
-  if (overlayImage) {
-    parts.push({
-      inlineData: {
-        data: stripBase64Prefix(overlayImage.base64),
-        mimeType: overlayImage.mimeType
-      }
-    });
-  }
-
-  if (referenceImage) {
-    parts.push({
-      inlineData: {
-        data: stripBase64Prefix(referenceImage.base64),
-        mimeType: referenceImage.mimeType
-      }
-    });
-  }
+  
 
   if (overlayImage) parts.push({ inlineData: { data: stripBase64Prefix(overlayImage.base64), mimeType: overlayImage.mimeType } });
   if (referenceImage) parts.push({ inlineData: { data: stripBase64Prefix(referenceImage.base64), mimeType: referenceImage.mimeType } });
 
   const castNotes = characters.map((c) => `${c.name}: ${c.description}`).join("; ");
-  const system = `${getStyleInstructions(visualStyle)} CAST DNA: ${castNotes}. LOCK MEDIUM TO [${visualStyle}]. USE ATTACHED IMAGE AS VISUAL IDENTITY REFERENCE.`;
+ const system = `
+STRICT INPAINTING RULE:
+When a visual mask is provided, you are ABSOLUTELY FORBIDDEN from modifying any pixels outside the white region of the mask.
+All black regions MUST remain bit identical to the original image.
+
+${getStyleInstructions(visualStyle)}
+
+CAST DNA:
+${castNotes}
+
+LOCK MEDIUM TO ${visualStyle}
+USE ATTACHED IMAGE AS THE ONLY IDENTITY SOURCE
+`;
+
   parts.push({ text: `STRICT VISUAL MEDIUM: [${visualStyle}]. REPLICATE ATTACHED CHARACTER FACE EXACTLY. ` + editPrompt });
 
   try {
@@ -470,9 +467,26 @@ export async function editImage(
       return { src: null, error: "BLOCK_SAFETY_GENERAL" };
     }
 
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) return { src: part.inlineData.data, error: null };
+    const candidate = response.candidates?.[0];
+    if (!candidate || !candidate.content) {
+      return { src: null, error: "No content returned from model." };
     }
+
+    const responseParts = Array.isArray(candidate.content.parts)
+      ? candidate.content.parts
+      : candidate.content.parts
+        ? [candidate.content.parts]
+        : [];
+
+
+    for (const part of responseParts) {
+      if (part.inlineData?.data) {
+        return { src: part.inlineData.data, error: null };
+      }
+    }
+
+    return { src: null, error: "Model did not return an image." };
+
     return { src: null, error: "No image generated." };
   } catch (e: any) {
     const msg = e.message?.toLowerCase() || "";
@@ -705,9 +719,45 @@ export async function generateStructuredStory(
     .map((c) => `${c.name}: ${c.description}`)
     .join("; ");
 
+  // DO add comment: Music Video Intelligence Protocol. Updated prompt system to treat lyrics as the primary structural anchor, focusing on rhythmic visualizer cues and emotional synchronization.
+  const musicVideoMandate = isMusicVideo
+    ? `MUSIC VIDEO MODE ACTIVE:
+
+     CORE INTENT:
+     - This is a PROFESSIONAL CINEMATIC MUSIC VIDEO.
+     - Visuals must feel classic, clean, and intentional.
+
+     PERFORMANCE FRAMING:
+     - Default to MEDIUM or MEDIUM-CLOSE shot.
+     - Artist performs naturally, facing camera or within environment.
+     - If a band or multiple performers, widen framing slightly but keep focus centered.
+
+     LIGHTING LANGUAGE:
+     - Use a SINGLE DOMINANT KEY LIGHT from one side.
+     - Create soft shadow falloff across the face for depth.
+     - Avoid flat lighting and overexposed studio looks.
+
+     ENVIRONMENT RULE:
+     - DO NOT use plain, empty, white, blue, or solid-color backgrounds.
+     - ALWAYS place the performer in a REAL ENVIRONMENT.
+     - Environment may be a street, seaside, stage, room, night exterior, or symbolic location.
+     - The environment must support the emotion of the song.
+
+     STORY CONNECTION:
+     - Visuals must FOLLOW the emotion and narrative of the lyrics.
+     - Use expressive performance actions instead of dialogue.
+
+     OUTPUT RULE:
+     - Scene scripts describe performance actions or atmospheric moments.
+     - No speaker dialogue format.
+     - No meta or industry references.
+     `
+    : ``;
+
+
   const system = `You are a professional cinematic screenwriter. 
     TARGET MEDIUM: [${movieStyle}]. 
-    DIALOGUE MANDATE: ${includeDialogue ? "Include speaker-prefixed dialogue (Name: Dialogue)." : "STRICTLY NO DIALOGUE. DO NOT use the 'Name: ' speaker format. Instead, write cinematic action beats using the characters' names naturally (e.g., '[Name] enters the room') to explain the action in the video."}
+    DIALOGUE MANDATE: ${includeDialogue  ? "Include speaker-prefixed dialogue (Name: Dialogue)." : "STRICTLY NO DIALOGUE. DO NOT use the 'Name: ' speaker format. Instead, write cinematic action beats using the characters' names naturally (e.g., '[Name] enters the room') to explain the action in the video."}
     CAST: ${castNotes}.
     Return JSON with 'title', 'storyNarrative', and 'scenes' (array of {imageDescription, script}).
     Scene script (Narrative/Dialogue) must be speakable within 8 seconds.`;
@@ -777,7 +827,8 @@ export async function regenerateSceneVisual(
 
 export async function generatePromptFromAudio(
   base64: string,
-  mimeType: string
+  mimeType: string,
+  country: string
 ): Promise<string> {
   const ai = getAiClient();
   const response: GenerateContentResponse = await ai.models.generateContent({
@@ -816,6 +867,34 @@ export async function generateSpeech(
 
   return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
 }
+
+// DO add comment: Added THOUGHT PARTNER PROTOCOL: Generates directorial insights and script suggestions based on scene context.
+export async function getWritingSuggestions(
+  lastScript: string,
+  allScenes: any[],
+  characters: Character[]
+): Promise<string[]> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const cast = characters.map((c) => c.name).join(", ");
+  const prompt = `You are a cinematic thought partner and director. Based on this scene script: "${lastScript}" 
+    and the production cast: ${cast}, suggest 3 brief directorial insights or "what happens next" ideas (max 10 words each). 
+    Return a simple JSON array of strings.`;
+
+  try {
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+    const text = response.text;
+    if (!text) return [];
+    return JSON.parse(extractJson(text));
+  } catch (e) {
+    console.error("Writing suggestions failed", e);
+    return [];
+  }
+}
+
 /**
  * MAGIC WRITING: Polish and enrich a script beat with cinematic depth.
  * This is the 'Thought Partner' function that transforms simple notes into professional writing.

@@ -18,6 +18,19 @@ export const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+/**
+ * Detects the correct MIME type and returns a full data URL.
+ * Prevents "black image" issues when JPEGs are forced as PNGs.
+ */
+export const formatBase64Src = (base64: string | null): string => {
+  if (!base64) return "";
+  if (base64.startsWith("data:")) return base64;
+  // Check for JPEG magic bytes in base64 string (/9j/)
+  const isJpeg = base64.startsWith("/9j/");
+  const mime = isJpeg ? "image/jpeg" : "image/png";
+  return `data:${mime};base64,${base64}`;
+};
+
 export function base64ToBytes(base64: string): Uint8Array {
     const binString = atob(base64);
     const len = binString.length;
@@ -80,6 +93,8 @@ function writeString(view: DataView, offset: number, string: string) {
         view.setUint8(offset + i, string.charCodeAt(i));
     }
 }
+
+
 
 /**
  * FIXED: Universal WAV encoder for 16-bit PCM.

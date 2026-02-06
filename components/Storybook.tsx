@@ -129,6 +129,10 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const scenesEndRef = useRef<HTMLDivElement>(null);
   const productionSequenceRef = useRef<HTMLDivElement>(null);
 
+  // DO add comment: Music Video Specific State. Added specialized state to handle song lyrics and production mode.
+  const [songLyrics, setSongLyrics] = useState("");
+  const isMusicVideoMode = selectedStoryGenre === "Music Video";
+
   const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState("Zephyr");
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(
@@ -218,10 +222,11 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
         selectedMovieStyle,
         "3",
         historyText,
-        false,
-        "",
+        isMusicVideoMode,
+        songLyrics,
         selectedCountry
       );
+
       const lockedScenes = res.scenes.map((s: any) => ({
         ...s,
         isDescriptionLocked: true,
@@ -392,11 +397,22 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     setIsProcessingAudio(true);
     try {
       const base64 = await fileToBase64(file);
-      const transcription = await generatePromptFromAudio(base64, file.type);
+      // DO add comment: Linguistic Accuracy Sync. Passing selectedCountry to ensure transcription follows local dialect rules of the chosen country.
+      const transcription = await generatePromptFromAudio(
+        base64,
+        file.type,
+        selectedCountry
+      );
+
+      // DO add comment: Lyrics Context Redirect. If Music Video mode is active, the transcription is routed to songLyrics box.
+      if (isMusicVideoMode) {
+        setSongLyrics((prev) => (prev ? prev + "\n" : "") + transcription);
+      } else {
       setSharedStoryText(
         (sharedStoryText ? sharedStoryText + "\n" : "") + transcription
       );
       setStorySeed((storySeed ? storySeed + "\n" : "") + transcription);
+      }
     } catch {
       setStoryError("Failed to transcribe audio.");
     } finally {
@@ -438,6 +454,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     setTitle("");
     setSharedStoryText("");
     setStorySeed("");
+    setSongLyrics("");
     setPreviewAudio(null);
     setIsPlayingPreview(false);
   };
@@ -502,41 +519,46 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       {/* DO add comment: Reduced Header height and Reset Story button size for PC for better layout proportionality. */}
       <div className="hidden lg:flex p-2 border-b border-white/5 justify-between items-center shrink-0 bg-[#0a0f1d] z-50">
         <div className="flex flex-col ml-3">
-          <h2 className="text-[10px] font-black text-gray-400 flex items-center gap-2  tracking-[0.2em] uppercase">
+          <h2 className="text-[10px] font-black text-gray-400 flex items-center gap-2  tracking-[0.2em] ">
             <BookOpenIcon className="w-5 h-5 text-indigo-500" /> Story writer
           </h2>
-          <div className="flex items-center gap-2 mt-0.5 ml-7">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.4)]"></div>
-            <p className="text-[7px] font-black text-gray-600 tracking-[0.2em] uppercase">
-              Terminal Active
-            </p>
-          </div>
         </div>
         <div className="flex items-center gap-3 mr-3">
           <button
             onClick={handleClearEverything}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/10 hover:bg-red-600 border border-red-500/30 text-red-500 hover:text-white rounded-lg text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/10 hover:bg-red-600 border border-red-500/30 text-red-500 hover:text-white rounded-lg text-[9px] font-black  tracking-widest active:scale-95 transition-all shadow-lg"
           >
-            <TrashIcon className="w-3.5 h-3.5" /> Reset Story
+            <RefreshIcon className="w-3.5 h-3.5" /> Reset Story
           </button>
         </div>
       </div>
 
       <div className="flex-1 flex flex-col lg:flex-row overflow-visible lg:overflow-hidden">
-        {/* LEFT COLUMN: HIGH DENSITY COMPACT DESIGN */}
-        <div className="w-full lg:w-[320px] p-4 lg:border-r border-white/5 flex flex-col gap-3 shrink-0 bg-[#0a0f1d]/20 h-auto lg:h-full lg:overflow-y-auto scrollbar-none">
-          <div className="flex bg-gray-900 rounded-xl p-1 border border-white/5 themed-artline shrink-0">
+        {/* DO add comment: Increased sidebar width on desktop from 320px to 420px for a more expansive writing area. */}
+        <div className="w-full lg:w-[420px] p-4 lg:border-r border-white/5 flex flex-col gap-3 shrink-0 bg-[#0a0f1d]/20 h-auto lg:h-full lg:overflow-y-auto scrollbar-none">
+          {/* MOBILE/TABLET HEADER WITH RESET BUTTON */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex-1 flex bg-gray-900 rounded-xl p-1 border border-white/5 themed-artline shrink-0">
+              <button
+                onClick={() => setCreationMode("ai")}
+                className={`flex-1 py-2 text-[20px] font-black rounded-lg transition-all ${creationMode === "ai" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-200"}`}
+              >
+                Blueprint
+              </button>
+              <button
+                onClick={() => setCreationMode("paste")}
+                className={`flex-1 py-2 text-[20px] font-black rounded-lg transition-all ${creationMode === "paste" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500"}`}
+              >
+                Draft
+              </button>
+            </div>
+            {/* DO add comment: Changed icon to RefreshIcon for Mobile/iPad Reset button. */}
             <button
-              onClick={() => setCreationMode("ai")}
-              className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${creationMode === "ai" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-200"}`}
+              onClick={handleClearEverything}
+              className="lg:hidden p-2.5 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/30 transition-all active:scale-95 shadow-md flex items-center justify-center"
+              title="Reset Story"
             >
-              Blueprint
-            </button>
-            <button
-              onClick={() => setCreationMode("paste")}
-              className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${creationMode === "paste" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500"}`}
-            >
-              Draft
+              <RefreshIcon className="w-4 h-4" />
             </button>
           </div>
 
@@ -589,13 +611,49 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
           </div>
 
           <div className="flex flex-col gap-2 flex-1 min-h-0">
+            {/* DO add comment: Music Video Lyrics Section. Conditional rendering of a lyrics input box when Music Video genre is selected. */}
+            {isMusicVideoMode && (
+              <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <MusicalNoteIcon className="w-3.5 h-3.5 text-indigo-400" />
+                    <label className="text-[12px] font-black text-indigo-400 tracking-[0.2em] uppercase">
+                      Song Lyrics
+                    </label>
+                  </div>
+                  {/* DO add comment: Voice Context in Lyrics. Moved button here for Music Video mode. */}
+                  <button
+                    onClick={() => audioInputRef.current?.click()}
+                    className="flex items-center gap-2 px-2.5 py-1 bg-indigo-900/20 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-300 hover:text-white rounded-lg text-[8px] font-black transition-all shadow-sm"
+                  >
+                    {isProcessingAudio ? (
+                      <LoaderIcon className="w-2.5 h-2.5 animate-spin" />
+                    ) : (
+                      <MusicalNoteIcon className="w-2.5 h-2.5" />
+                    )}{" "}
+                    {isProcessingAudio ? "Analysing..." : "Voice Context"}
+                  </button>
+                </div>
+                <textarea
+                  value={songLyrics}
+                  onChange={(e) => setSongLyrics(e.target.value)}
+                  placeholder="Paste your song lyrics here to synchronize visuals..."
+                  className="w-full h-64 bg-indigo-900/10 border border-indigo-500/20 rounded-2xl p-4 text-[13px] font-bold text-white resize-none outline-none focus:border-indigo-400 transition-all placeholder-gray-700 shadow-inner scrollbar-none"
+                />
+              </div>
+            )}
+
             <div className="flex justify-between items-center px-1 shrink-0">
               <div className="flex items-center gap-2">
-                <label className="text-[8px] font-black text-gray-600 tracking-[0.2em] uppercase">
-                  Concept
+                <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)]"></div>
+                <label className="text-[18px] font-black text-gray-600 tracking-[0.2em] ">
+                  {isMusicVideoMode ? "Visualizer Concept" : "Concept"}
                 </label>
                 <CopyButton text={sharedStoryText} />
               </div>
+
+              {/* DO add comment: Conditional Render. Voice Context only appears here when NOT in Music Video mode. */}
+              {!isMusicVideoMode && (
               <button
                 onClick={() => audioInputRef.current?.click()}
                 className="flex items-center gap-2 px-2.5 py-1 bg-indigo-900/20 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-300 hover:text-white rounded-lg text-[8px] font-black transition-all shadow-sm"
@@ -607,6 +665,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 )}{" "}
                 {isProcessingAudio ? "Analysing..." : "Voice Context"}
               </button>
+              )}
               <input
                 type="file"
                 ref={audioInputRef}
@@ -618,8 +677,12 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
             <textarea
               value={sharedStoryText}
               onChange={(e) => handleStoryTextChange(e.target.value)}
-              placeholder="Type narrative vision..."
-              className="w-full min-h-[120px] lg:flex-1 bg-black/40 border border-white/5 rounded-2xl p-4 text-[13px] font-bold text-white resize-none outline-none focus:border-indigo-500/50 transition-all placeholder-gray-700 leading-relaxed shadow-inner scrollbar-none"
+              placeholder={
+                isMusicVideoMode
+                  ? "Describe the mood, lighting, or setting of the music video..."
+                  : "Type narrative vision..."
+              }
+              className={`w-full ${isMusicVideoMode ? "h-32" : "min-h-[140px] lg:flex-1"} bg-black/40 border border-white/5 rounded-2xl p-5 text-[15px] font-extrabold text-white resize-none outline-none focus:border-indigo-500/50 transition-all placeholder-gray-600 leading-[1.7] shadow-inner scrollbar-none`}
             />
           </div>
 
@@ -629,7 +692,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 <select
                   value={selectedStoryGenre}
                   onChange={(e) => setSelectedStoryGenre(e.target.value)}
-                  className="w-full bg-gray-900 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-black text-gray-400 outline-none appearance-none cursor-pointer hover:bg-black transition-colors"
+                  className={`w-full border rounded-xl px-3 py-2 text-[10px] font-black outline-none appearance-none cursor-pointer transition-colors ${isMusicVideoMode ? "bg-indigo-900/20 border-indigo-500 text-indigo-300" : "bg-gray-900 border-white/10 text-gray-400 hover:bg-black"}`}
                 >
                   <option>Oral Tradition</option>
                   <option>Drama</option>
@@ -642,6 +705,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                   <option>Folklore</option>
                   <option>Mystery</option>
                   <option>Fantasy</option>
+                  <option>Music Video</option>
                 </select>
                 <ChevronDownIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
               </div>
@@ -666,8 +730,9 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 <div className="relative">
                   <select
                     value={selectedVoice}
+                    disabled={isMusicVideoMode}
                     onChange={(e) => setSelectedVoice(e.target.value)}
-                    className="w-full bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-2 py-1.5 text-[9px] font-black text-emerald-400 outline-none appearance-none"
+                    className={`w-full border rounded-xl px-2 py-1.5 text-[9px] font-black outline-none appearance-none transition-opacity ${isMusicVideoMode ? "bg-gray-800 border-white/5 text-gray-600 opacity-50" : "bg-emerald-500/5 border-emerald-500/20 text-emerald-400"}`}
                   >
                     {PREBUILT_VOICES.map((v) => (
                       <option key={v} value={v}>
@@ -675,13 +740,20 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                       </option>
                     ))}
                   </select>
+                  {!isMusicVideoMode && (
                   <ChevronDownIcon className="w-2.5 h-2.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-900 pointer-events-none" />
+                  )}
                 </div>
+                {/* DO add comment: Speak Grayed Out. Speaker button is disabled and visually muted in Music Video mode. */}
                 <button
                   ref={speakButtonRef}
                   onClick={handleGenerateSpeechMaster}
-                  disabled={isGeneratingSpeech || !sharedStoryText.trim()}
-                  className={`w-full py-3 rounded-xl text-[9px] font-black tracking-widest transition-all active:scale-[0.98] border border-emerald-500/10 ${isConfirmingSpeak ? "bg-emerald-600 text-white" : "bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white"}`}
+                  disabled={
+                    isGeneratingSpeech ||
+                    !sharedStoryText.trim() ||
+                    isMusicVideoMode
+                  }
+                  className={`w-full py-3 rounded-xl text-[9px] font-black tracking-widest transition-all active:scale-[0.98] border ${isMusicVideoMode ? "bg-gray-800/20 text-gray-600 border-white/5 opacity-50 cursor-not-allowed" : isConfirmingSpeak ? "bg-emerald-600 text-white border-emerald-500/10" : "bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border-emerald-500/10"}`}
                 >
                   {isGeneratingSpeech ? (
                     <LoaderIcon className="w-3 h-3 animate-spin mx-auto" />
@@ -693,18 +765,19 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 </button>
               </div>
 
-              {/* Dialogue Gen Toggle */}
+              {/* DO add comment: Dialogue Grayed Out. Button is disabled and visually muted in Music Video mode. */}
               <button
                 onClick={() => setIncludeDialogue(!includeDialogue)}
-                className={`flex flex-col items-center justify-center gap-2 rounded-xl border transition-all active:scale-[0.98] ${includeDialogue ? "bg-indigo-600/10 border-indigo-500 text-indigo-200" : "bg-gray-900 border-white/5 text-gray-600"}`}
+                disabled={isMusicVideoMode}
+                className={`flex flex-col items-center justify-center gap-2 rounded-xl border transition-all active:scale-[0.98] ${isMusicVideoMode ? "bg-gray-800/20 border-white/5 text-gray-600 opacity-50 cursor-not-allowed" : includeDialogue ? "bg-indigo-600/10 border-indigo-500 text-indigo-200" : "bg-gray-900 border-white/5 text-gray-600"}`}
               >
-                <span className="text-[8px] font-black tracking-tighter uppercase leading-none px-2 text-center">
+                <span className="text-[8px] font-black tracking-tighter  leading-none px-2 text-center">
                   Dialogue Gen
                 </span>
                 <div
-                  className={`w-4 h-4 rounded border-2 flex items-center justify-center ${includeDialogue ? "bg-indigo-600 border-indigo-400 shadow-[0_0_10px_rgba(79,70,229,0.4)]" : "border-gray-800"}`}
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center ${isMusicVideoMode ? "border-gray-800" : includeDialogue ? "bg-indigo-600 border-indigo-400 shadow-[0_0_10px_rgba(79,70,229,0.4)]" : "border-gray-800"}`}
                 >
-                  {includeDialogue && (
+                  {includeDialogue && !isMusicVideoMode && (
                     <CheckIcon className="w-2.5 h-2.5 text-white" />
                   )}
                 </div>
@@ -725,14 +798,13 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 ) : (
                   <SparklesIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
                 )}
-                <span className="text-[9px] tracking-[0.2em]">
-                  {creationMode === "ai" ? "GENERATE" : "PROCESS"}
+                <span className="text-[12px] tracking-[0.2em]">
+                  {creationMode === "ai" ? "Generate" : "Process"}
                 </span>
               </button>
             </div>
 
-            {/* Master Audio Row. Colored buttons: Red Play, Blue Save/Deck. */}
-            {storybookContent.narrativeAudioSrc && (
+            {storybookContent.narrativeAudioSrc && !isMusicVideoMode && (
               <div className="grid grid-cols-3 gap-2 animate-in zoom-in-95 mt-2">
                 <button
                   onClick={togglePreviewAudio}
@@ -743,7 +815,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                   ) : (
                     <PlayIcon className="w-5 h-5" />
                   )}
-                  <span className="text-[8px] font-black uppercase tracking-widest mt-1">
+                  <span className="text-[8px] font-black  tracking-widest mt-1">
                     Play
                   </span>
                 </button>
@@ -757,7 +829,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                   className="flex flex-col items-center justify-center py-2.5 bg-blue-700/80 hover:bg-blue-600 text-white rounded-xl transition-all active:scale-95 shadow-xl border border-blue-400/20"
                 >
                   <DownloadIcon className="w-5 h-5" />
-                  <span className="text-[8px] font-black uppercase tracking-widest mt-1">
+                  <span className="text-[8px] font-black  tracking-widest mt-1">
                     Save
                   </span>
                 </button>
@@ -768,7 +840,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                   className="flex flex-col items-center justify-center py-2.5 bg-blue-700/80 hover:bg-blue-600 text-white rounded-xl transition-all active:scale-95 shadow-xl border border-blue-400/20"
                 >
                   <MusicalNoteIcon className="w-5 h-5" />
-                  <span className="text-[8px] font-black uppercase tracking-widest mt-1">
+                  <span className="text-[8px] font-black  tracking-widest mt-1">
                     Deck
                   </span>
                 </button>
@@ -787,11 +859,17 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
               <div className="flex justify-between items-center border-b border-white/5 pb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-indigo-600/10 rounded-xl border border-indigo-500/20">
+                    {isMusicVideoMode ? (
+                      <MusicalNoteIcon className="w-5 h-5 text-indigo-500" />
+                    ) : (
                     <FilmIcon className="w-5 h-5 text-indigo-500" />
+                    )}
                   </div>
                   <div>
                     <h3 className="text-sm font-black text-white italic tracking-tighter leading-none">
-                      Sequence Map
+                      {isMusicVideoMode
+                        ? "Music Video Sequence"
+                        : "Sequence Map"}
                     </h3>
                     <p className="text-[9px] font-black text-gray-600 tracking-[0.3em] mt-1">
                       Elements: {storybookContent.scenes.length}
@@ -819,8 +897,10 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                   <div className="w-20 h-20 rounded-full border border-dashed border-gray-600 flex items-center justify-center mb-8">
                     <Logo className="w-10 h-10 grayscale" />
                   </div>
-                  <h4 className="text-[10px] font-black tracking-[0.5em] text-gray-500 uppercase">
-                    Awaiting Blueprint Production
+                  <h4 className="text-[10px] font-black tracking-[0.5em] text-gray-500 ">
+                    {isMusicVideoMode
+                      ? "Awaiting Lyrical Blueprint"
+                      : "Awaiting Blueprint Production"}
                   </h4>
                 </div>
               ) : (
@@ -828,13 +908,16 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                   {storybookContent.scenes.map((scene, index) => (
                     <div
                       key={index}
-                      className="bg-gray-800/20 rounded-[2rem] border border-white/5 p-6 lg:p-8 hover:border-indigo-500/20 transition-all group relative overflow-hidden shadow-2xl"
+                      className="bg-gray-800/20 rounded-[2rem] border border-white/5 pt-3 pb-8 px-4 lg:pt-3 lg:pb-10 lg:px-5 hover:border-indigo-500/20 transition-all group relative overflow-hidden shadow-2xl"
                     >
-                      <div className="flex justify-between items-center mb-6 relative z-10">
+                      <div className="flex justify-between items-center mb-3 relative z-10">
                         <div className="flex items-center gap-3">
-                          <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-[10px] font-black tracking-widest">
-                            SCENE {index + 1}
+                          <span className="px-2 py-0.5 bg-indigo-600 text-white rounded-full text-[12px] font-black tracking-widest">
+                            {isMusicVideoMode
+                              ? `Clip ${index + 1}`
+                              : `Scene ${index + 1}`}
                           </span>
+
                           <button
                             onClick={() => {
                               const ns = [...storybookContent.scenes];
@@ -860,8 +943,8 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                             className={`px-5 py-2 text-[10px] font-black rounded-xl tracking-widest transition-all active:scale-95 shadow-lg ${confirmingExecuteIdx === index ? "bg-green-600 text-white" : "bg-indigo-600 text-white"}`}
                           >
                             {confirmingExecuteIdx === index
-                              ? "CONFIRM"
-                              : "PRODUCE"}
+                              ? "Confirm"
+                              : "Produce"}
                           </button>
                           <button
                             onClick={() => handleRegenerateVisual(index)}
@@ -884,11 +967,11 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10 items-stretch">
                         <div className="space-y-2">
-                          <div className="flex items-center gap-3 mb-1 ml-1">
-                            <label className="text-[9px] font-black text-gray-500 tracking-[0.2em] uppercase">
-                              Image Prompt
+                          <div className="flex items-center gap-3 mb-0.5 ml-1">
+                            <label className="text-[8px] lg:text-[12px] font-black text-gray-500 tracking-[0.2em] ">
+                              Visual Direction
                             </label>
                             <CopyButton text={scene.imageDescription} />
                           </div>
@@ -903,18 +986,20 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                                 scenes: ns
                               });
                             }}
-                            className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 text-[14px] font-bold text-white leading-relaxed min-h-[100px] outline-none focus:border-indigo-500/30 transition-colors shadow-inner scrollbar-none"
+                            className="w-full bg-black/50 border border-white/5 rounded-2xl pt-5 pr-5 pl-5 pb-12 text-[14px] font-bold text-white leading-relaxed h-full outline-none focus:border-indigo-500/30 transition-colors shadow-inner scrollbar-none"
                           />
                         </div>
-                        <div className="space-y-2 flex flex-col">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center gap-3 ml-1">
-                              <label className="text-[9px] font-black text-gray-500 tracking-[0.2em] uppercase">
-                                Narrative
+                        <div className="space-y-2 flex flex-col h-full">
+                          <div className="flex justify-between items-center mt-2 mb-1 lg:mt-0">
+                            <div className="flex items-center gap-2 ml-1 mt-1 lg:mt-0">
+                              <label className="text-[12px] font-black text-gray-500 tracking-[0.2em] ">
+                                {isMusicVideoMode
+                                  ? "Lyrics / Action"
+                                  : "Narrative / Dialogue"}
                               </label>
                               <CopyButton text={scene.script} />
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 mt-1 lg:mt-0">
                               {scene.audioSrc ? (
                                 <div className="flex gap-1.5 animate-in zoom-in-95">
                                   <button
@@ -980,7 +1065,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                                 scenes: ns
                               });
                             }}
-                            className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 text-[14px] font-bold text-white leading-relaxed flex-1 min-h-[100px] outline-none focus:border-indigo-500/30 transition-colors shadow-inner scrollbar-none"
+                            className="w-full bg-black/50 border border-white/5 rounded-2xl p-5 text-[14px] font-bold text-white leading-relaxed flex-grow outline-none focus:border-indigo-500/30 transition-colors shadow-inner scrollbar-none"
                           />
                         </div>
                       </div>
@@ -995,7 +1080,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
           {/* FLOATING MASTER BATCH CONSOLE - MINIMALIST */}
           {storybookContent.scenes.length > 0 && (
             <div className="fixed lg:absolute bottom-6 left-0 right-0 px-6 flex justify-center pointer-events-none z-[100]">
-              <div className="w-full max-w-sm bg-[#0a0f1d] border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.9)] p-2 flex items-center justify-between pointer-events-auto animate-in slide-in-from-bottom-4 duration-500">
+              <div className="w-full max-sm bg-[#0a0f1d] border border-white/10 rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.9)] p-2 flex items-center justify-between pointer-events-auto animate-in slide-in-from-bottom-4 duration-500">
                 <div className="flex items-center gap-4 pl-6">
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
@@ -1003,7 +1088,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                         {storybookContent.scenes.length} Scenes
                       </span>
                       <div className="h-3 w-px bg-white/10"></div>
-                      <span className="text-[10px] font-black text-indigo-400 leading-none">
+                      <span className="text-[16px] font-black text-indigo-400 leading-none">
                         {storybookContent.scenes.length}C
                       </span>
                     </div>
@@ -1013,10 +1098,10 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 <button
                   ref={batchButtonRef}
                   onClick={handleBatchProduce}
-                  className={`px-8 py-3.5 font-black  tracking-widest rounded-full shadow-2xl transition-all active:scale-95 flex items-center gap-3 text-[11px] border ${confirmingBatch ? "bg-green-600 border-green-400 text-white" : "bg-indigo-600 border-indigo-400 text-white shadow-[0_8px_30px_rgba(79,70,229,0.4)]"}`}
+                  className={`px-8 py-3.5 font-black  tracking-widest rounded-full shadow-2xl transition-all active:scale-95 flex items-center gap-3 text-[15px] border ${confirmingBatch ? "bg-green-600 border-green-400 text-white" : "bg-indigo-600 border-indigo-400 text-white shadow-[0_8px_30px_rgba(79,70,229,0.4)]"}`}
                 >
                   <DocumentMagnifyingGlassIcon className="w-4 h-4" />
-                  {confirmingBatch ? `Confirm Batch` : "PRODUCE ALL"}
+                  {confirmingBatch ? `Confirm Batch` : "Produce All"}
                 </button>
               </div>
             </div>
@@ -1027,7 +1112,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       {storyError && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-red-900 border border-red-500 text-white px-8 py-3 rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.8)] flex items-center gap-4 animate-in slide-in-from-bottom-4 z-[200]">
           <ExclamationTriangleIcon className="w-6 h-6 text-red-400" />
-          <span className="text-[11px] font-black tracking-widest italic uppercase">
+          <span className="text-[11px] font-black tracking-widest italic ">
             Signal Error: {storyError}
           </span>
           <button
