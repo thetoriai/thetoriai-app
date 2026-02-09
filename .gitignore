@@ -24,3 +24,4 @@ dist-ssr
 .env.development
 *.compare.tsx
 *.dir.tsx
+.*hide.tsx

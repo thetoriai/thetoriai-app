@@ -67,6 +67,8 @@ export const SceneProgressOverlay: React.FC<SceneProgressOverlayProps> = ({
 };
 
 export interface SceneCardProps {
+  consumeCredits: (action: "IMAGE_EDIT" | "IMAGE_REGEN") => Promise<boolean>
+
   scene: any;
   index: number;
   genId: number;
@@ -450,7 +452,12 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                   <CameraIcon className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={props.onEdit}
+                  onClick={async () => {
+  const ok = await props.consumeCredits("IMAGE_EDIT")
+  if (!ok) return
+
+  props.onEdit()
+}}
                   className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                   title="Edit Canvas"
                 >
@@ -462,7 +469,12 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
               !isUploaded &&
               !isAnySafetyBlock && (
                 <button
-                  onClick={() => props.onRegenerate(props.genId, scene.sceneId)}
+                 onClick={async () => {
+  const ok = await props.consumeCredits("IMAGE_REGEN")
+                 if (!ok) return
+
+                   props.onRegenerate(props.genId, scene.sceneId)
+                   }}
                   className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                   title="Regenerate Image"
                 >

@@ -495,11 +495,14 @@ export const Timeline: React.FC<TimelineProps> = ({
             ? 0.05
             : entry.internalTime;
 
-        if (
-          Math.abs(ref.current.currentTime - targetSeekTime) > driftThreshold
-        ) {
-          ref.current.currentTime = targetSeekTime;
-        }
+       if (
+         ref.current.readyState >= 1 &&
+         Math.abs(ref.current.currentTime - targetSeekTime) > driftThreshold
+       ) {
+         try {
+           ref.current.currentTime = targetSeekTime;
+         } catch {}
+       }
 
         if (isPlaying) {
           if (ref.current.paused) ref.current.play().catch(() => {});
@@ -1312,17 +1315,17 @@ export const Timeline: React.FC<TimelineProps> = ({
             {/* RULER: Scrubbing is now restricted to this div only */}
             <div
               className="h-6 md:h-7 border-b border-white/10 sticky top-0 bg-[#030712]/95 backdrop-blur-sm z-[110] flex items-end cursor-pointer"
-          onMouseDown={(e) => {
+              onMouseDown={(e) => {
                 e.stopPropagation(); // Prevent root deselection
-              isScrubbingRef.current = true;
-              performScrub(e.clientX);
-          }}
-          onTouchStart={(e) => {
+                isScrubbingRef.current = true;
+                performScrub(e.clientX);
+              }}
+              onTouchStart={(e) => {
                 e.stopPropagation(); // Prevent root deselection
-              isScrubbingRef.current = true;
-              performScrub(e.touches[0].clientX);
-            }}
-          >
+                isScrubbingRef.current = true;
+                performScrub(e.touches[0].clientX);
+              }}
+            >
               {Array.from({ length: Math.ceil(viewportDuration / 5) + 1 }).map(
                 (_, i) => (
                   <div
@@ -1409,39 +1412,39 @@ export const Timeline: React.FC<TimelineProps> = ({
                     : null;
 
                 return (
-                <div
-                  key={layer}
-                  className="relative w-full h-10 md:h-12 border-b border-white/5 group/track"
-                >
                   <div
-                    className="absolute top-0 bottom-0 flex items-center justify-center bg-gray-950 border-r border-white/10 z-[120]"
-                    style={{
-                      left: `-${labelWidth}px`,
-                      width: `${labelWidth}px`
-                    }}
+                    key={layer}
+                    className="relative w-full h-10 md:h-12 border-b border-white/5 group/track"
                   >
-                    <button
-                      disabled={layer === 1}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (layer === 0) fileInputRef.current?.click();
+                    <div
+                      className="absolute top-0 bottom-0 flex items-center justify-center bg-gray-950 border-r border-white/10 z-[120]"
+                      style={{
+                        left: `-${labelWidth}px`,
+                        width: `${labelWidth}px`
                       }}
-                      className={`p-1 md:p-2 rounded-lg ${layer === 1 ? "text-gray-800" : "text-indigo-400"}`}
                     >
-                      {" "}
-                      <div className="relative">
+                      <button
+                        disabled={layer === 1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (layer === 0) fileInputRef.current?.click();
+                        }}
+                        className={`p-1 md:p-2 rounded-lg ${layer === 1 ? "text-gray-800" : "text-indigo-400"}`}
+                      >
                         {" "}
-                        <FilmIcon className="w-4 md:w-5 h-4 md:h-5" />{" "}
-                        <span
-                          className={`absolute -bottom-1 -right-1 text-[5px] md:text-[6px] font-black px-0.5 rounded-full border ${layer === 1 ? "bg-gray-700 text-gray-500 border-gray-600" : "bg-indigo-600 text-white border-white/20"}`}
-                        >
+                        <div className="relative">
                           {" "}
-                          {layer === 1 ? "V2" : "V1"}{" "}
-                        </span>{" "}
-                      </div>{" "}
-                    </button>
-                  </div>
-                  {layerClips.map((clip) => {
+                          <FilmIcon className="w-4 md:w-5 h-4 md:h-5" />{" "}
+                          <span
+                            className={`absolute -bottom-1 -right-1 text-[5px] md:text-[6px] font-black px-0.5 rounded-full border ${layer === 1 ? "bg-gray-700 text-gray-500 border-gray-600" : "bg-indigo-600 text-white border-white/20"}`}
+                          >
+                            {" "}
+                            {layer === 1 ? "V2" : "V1"}{" "}
+                          </span>{" "}
+                        </div>{" "}
+                      </button>
+                    </div>
+                    {layerClips.map((clip) => {
                       const isSelected = selectedClip?.id === clip.id;
                       const isFlashing = flashingClipId === clip.id;
                       // DO add comment: Logic to check if this clip has been double-clicked to show the side-panel.
@@ -1461,8 +1464,8 @@ export const Timeline: React.FC<TimelineProps> = ({
                           // DO add comment: Double-click behavior draws out the side-panel, but only for the very last clip added to the track.
                           onDoubleClick={(e) => {
                             e.stopPropagation();
-                            if (isLastInLayer && clip.type === 'video') {
-                                setSidePanelClipId(clip.id);
+                            if (isLastInLayer && clip.type === "video") {
+                              setSidePanelClipId(clip.id);
                             }
                           }}
                           onMouseDown={(e) => {
@@ -1484,23 +1487,23 @@ export const Timeline: React.FC<TimelineProps> = ({
                         >
                           {/* DO add comment: Compact side-panel. Small rectangle containing only the logo, with the last frame as visual background. */}
                           {isSidePanelOpen && (
-                            <div 
+                            <div
                               className="absolute top-0 bottom-0 left-full ml-1.5 z-[200] bg-gray-950 border border-indigo-500 rounded-md w-12 flex items-center justify-center shadow-[0_0_15px_rgba(79,70,229,0.4)] animate-in slide-in-from-left-2 duration-200 overflow-hidden"
                               onClick={(e) => e.stopPropagation()}
                             >
                               {/* DO add comment: Dynamic background showing the last frame inside the compact rectangle. */}
                               <div className="absolute inset-0 z-0 bg-black">
-                                {clip.type === 'video' ? (
-                                    <video 
-                                        src={formatAssetUrl(clip.url)} 
-                                        className="w-full h-full object-cover opacity-60" 
-                                        muted 
-                                        onLoadedMetadata={(e) => {
+                                {clip.type === "video" ? (
+                                  <video
+                                    src={formatAssetUrl(clip.url)}
+                                    className="w-full h-full object-cover opacity-60"
+                                    muted
+                                    onLoadedMetadata={(e) => {
                                       (
                                         e.target as HTMLVideoElement
                                       ).currentTime = clip.duration - 0.1;
-                                        }}
-                                    />
+                                    }}
+                                  />
                                 ) : (
                                   <img
                                     src={formatAssetUrl(clip.url)}
@@ -1509,7 +1512,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                 )}
                               </div>
                               {/* DO add comment: Small rectangular blue overlay containing ONLY the logo/icon. */}
-                              <button 
+                              <button
                                 onClick={() =>
                                   handleCaptureLastFrameAction(clip)
                                 }
@@ -1584,7 +1587,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                         </div>
                       );
                     })}
-                </div>
+                  </div>
                 );
               })}
               <div className="relative w-full h-8 md:h-12 border-b border-white/5 group/track">
@@ -1667,14 +1670,21 @@ export const Timeline: React.FC<TimelineProps> = ({
         accept="video/*,image/*"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file)
-            onAddClip(
-              URL.createObjectURL(file),
-              file.type.startsWith("video/") ? "video" : "image",
-              5,
-              undefined,
-              0
-            );
+          if (!file) return;
+
+          if (file.type.startsWith("video/")) {
+           const video = document.createElement("video");
+           video.src = URL.createObjectURL(file);
+           video.preload = "metadata";
+
+          video.onloadedmetadata = () => {
+         onAddClip(file, "video", video.duration, undefined, 0, video);
+
+            };
+          } else {
+            onAddClip(file, "image", 5, undefined, 0);
+          }
+
           e.target.value = "";
         }}
       />
