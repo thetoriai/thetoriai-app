@@ -123,6 +123,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
   const recordingIntervalRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const videoSourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const activeStreamRef = useRef<MediaStream | null>(null);
 
@@ -294,8 +295,19 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
     if (audioCtx.state === "suspended") await audioCtx.resume();
     if (!videoSourceNodeRef.current) {
       videoSourceNodeRef.current = audioCtx.createMediaElementSource(v);
-      videoSourceNodeRef.current.connect(audioCtx.destination);
+        gainNodeRef.current = audioCtx.createGain();
+        videoSourceNodeRef.current.connect(gainNodeRef.current);
+        gainNodeRef.current.connect(audioCtx.destination);
     }
+
+      if (gainNodeRef.current) {
+        gainNodeRef.current.gain.setTargetAtTime(
+          isLooping ? 0 : 1,
+          audioCtx.currentTime,
+          0.05
+        );
+      }
+
     if (forceReset) {
       v.currentTime = 0;
       v.pause();
@@ -321,8 +333,14 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
     if (v) {
       v.loop = isLooping;
       v.muted = isLooping;
-      if (isLooping) v.volume = 0;
-      else v.volume = 1;
+      v.volume = isLooping ? 0 : 1;
+    }
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.setTargetAtTime(
+        isLooping ? 0 : 1,
+        audioContextRef.current?.currentTime || 0,
+        0.05
+      );
     }
   }, [isLooping]);
 
@@ -476,6 +494,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
       }
     } catch (err) {
       console.error("Magic failed", err);
+      alert("AI processing failed. Check your connection or markings.");
     } finally {
       setIsAiProcessing(false);
     }
@@ -1114,11 +1133,15 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
         audioCtx.createMediaStreamSource(webcamStream).connect(dest);
 
       if (videoRef.current?.src) {
-        if (!videoSourceNodeRef.current)
+        if (!videoSourceNodeRef.current) {
           videoSourceNodeRef.current = audioCtx.createMediaElementSource(
             videoRef.current
           );
-        videoSourceNodeRef.current.connect(dest);
+          gainNodeRef.current = audioCtx.createGain();
+          videoSourceNodeRef.current.connect(gainNodeRef.current);
+          gainNodeRef.current.connect(audioCtx.destination);
+        }
+        gainNodeRef.current.connect(dest);
       }
 
       const compositeStream = canvasRef.current.captureStream(30);
@@ -1433,9 +1456,9 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
             ref={videoRef}
             src={currentVisibleVideo?.url}
             playsInline
-            muted
             crossOrigin="anonymous"
-            loop
+            muted={isLooping}
+            loop={isLooping}
           />
           <video ref={webcamRef} autoPlay muted playsInline />
         </div>
@@ -1466,31 +1489,8 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
               </button>
             );
           })}
-          <label
-            className="
-    shrink-0
-    w-14 h-14
-    sm:w-14 sm:h-14
-    md:w-12 md:h-12
-    lg:w-9 lg:h-9
-    bg-zinc-900
-    border-2 border-zinc-800 border-dashed
-    rounded-xl
-    flex items-center justify-center
-    cursor-pointer
-    transition-all
-    active:scale-95
-  "
-          >
-            <PlusIcon
-              className="
-      w-6 h-6
-      sm:w-6 sm:h-6
-      md:w-5 md:h-5
-      lg:w-4 lg:h-4
-      text-zinc-500
-    "
-            />
+          <label className="shrink-0 w-14 h-14 bg-zinc-900 border-2 border-zinc-800 border-dashed rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95">
+            <PlusIcon className="w-6 h-6 text-zinc-500" />
             <input
               type="file"
               className="hidden"
