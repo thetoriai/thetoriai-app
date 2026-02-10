@@ -14,13 +14,16 @@ import {
   PlusIcon,
   ClapperboardIcon,
   ArrowsRightLeftIcon,
-  SparklesIcon,
-  LoaderIcon,
   PenIcon,
   CircleIcon,
   SquareIcon,
-  ArrowPointerIcon
+  ArrowPointerIcon,
+  SparklesIcon,
+  LoaderIcon,
+  RepeatIcon,
+  VolumeXIcon
 } from "./Icons";
+
 
 // --- Types ---
 export interface Transform {
@@ -59,6 +62,9 @@ export interface Asset {
   drawings: DrawingItem[];
 }
 
+
+
+
 const DEFAULT_TRANSFORM: Transform = {
   x: 50,
   y: 35,
@@ -69,14 +75,9 @@ const DEFAULT_TRANSFORM: Transform = {
   cropRight: 0
 };
 
-const DirectorsCut: React.FC<{
-  onClose?: () => void
-  consumeCredits: (action: "IMAGE" | "VIDEO_FAST") => Promise<boolean>
-}> = ({
-  onClose: externalClose,
-  consumeCredits
+const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
+  onClose: externalClose
 }) => {
-
   const [assets, setAssets] = useState<Asset[]>([]);
   const [visibleAssetIds, setVisibleAssetIds] = useState<string[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -89,6 +90,7 @@ const DirectorsCut: React.FC<{
 
   const [isRecording, setIsRecording] = useState(false);
   const [isAssetPlaying, setIsAssetPlaying] = useState(false);
+  const [isLooping, setIsLooping] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
 
   // Interaction Mode
@@ -98,17 +100,12 @@ const DirectorsCut: React.FC<{
   >(null);
   const [isPinching, setIsPinching] = useState(false);
   const [isFullFrame, setIsFullFrame] = useState(false);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
 
   // Drawing State
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawingShape, setDrawingShape] = useState<DrawingShape>("free");
   const currentPathRef = useRef<Point[]>([]);
-
-  // Generation State
-  const [isCreationHubOpen, setIsCreationHubOpen] = useState(false);
-  const [generationPrompt, setGenerationPrompt] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [genStatus, setGenStatus] = useState("");
 
   const startTouchRef = useRef({ x: 0, y: 0, scale: 0, dist: 0 });
   const isDraggingRef = useRef(false);
@@ -131,7 +128,7 @@ const DirectorsCut: React.FC<{
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
-  // --- Visibility Logic (Disable Camera/Mic when navigating away) ---
+  // --- Visibility Logic ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -210,150 +207,6 @@ const DirectorsCut: React.FC<{
     []
   );
 
-  // --- AI Handlers ---
-  const handleGenerateImage = async () => {
-  if (!generationPrompt) return;
-
-  const ok = await consumeCredits("IMAGE");
-  if (!ok) return;
-
-  setIsGenerating(true);
-  setGenStatus("Synthesizing Image...");
-
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image",
-      contents: { parts: [{ text: generationPrompt }] }
-    });
-
-    let base64 = "";
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        base64 = `data:image/png;base64,${part.inlineData.data}`;
-        break;
-      }
-    }
-
-    if (!base64) return;
-
-    const id = Date.now().toString();
-    const img = new Image();
-    img.src = base64;
-
-    img.onload = () => {
-      const newAsset: Asset = {
-        id,
-        name: generationPrompt,
-        type: "image",
-        url: base64,
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-        transform: { ...DEFAULT_TRANSFORM },
-        drawings: []
-      };
-
-      imageCache.current.set(id, img);
-      setAssets((p) => {
-        const next = [...p, newAsset];
-        selectAndShowAsset(id, "image", next);
-        return next;
-      });
-
-      setIsCreationHubOpen(false);
-      setGenerationPrompt("");
-    };
-  } catch (err) {
-    console.error(err);
-    alert("Generation failed.");
-  } finally {
-    setIsGenerating(false);
-    setGenStatus("");
-  }
-};
-
-
-
-  const handleGenerateVideo = async () => {
-  if (!generationPrompt) return
-
-  // 1. DEDUCT CREDITS FIRST
-  const ok = await consumeCredits("VIDEO_FAST")
-  if (!ok) return
-
-  if (typeof (window as any).aistudio?.hasSelectedApiKey === "function") {
-    if (!(await (window as any).aistudio.hasSelectedApiKey()))
-      await (window as any).aistudio.openSelectKey()
-  }
-
-  setIsGenerating(true)
-  setGenStatus("Directing AI Video (1-2 mins)...")
-
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY })
-    let operation = await ai.models.generateVideos({
-      model: "veo-3.1-fast-generate-preview",
-      prompt: generationPrompt,
-      config: { numberOfVideos: 1, resolution: "720p", aspectRatio: "16:9" }
-    })
-
-    while (!operation.done) {
-      await new Promise((r) => setTimeout(r, 10000))
-      operation = await ai.operations.getVideosOperation({ operation })
-    }
-
-    const downloadLink =
-      operation.response?.generatedVideos?.[0]?.video?.uri
-
-    const videoRes = await fetch(
-      `${downloadLink}&key=${process.env.API_KEY}`
-    )
-
-    const blob = await videoRes.blob()
-    const url = URL.createObjectURL(blob)
-    const id = Date.now().toString()
-    const v = document.createElement("video")
-    v.src = url
-
-    v.onloadedmetadata = () => {
-      const cap = document.createElement("canvas")
-      cap.width = 160
-      cap.height = 160
-      const ctx = cap.getContext("2d")
-      if (ctx) ctx.drawImage(v, 0, 0, 160, 160)
-      const thumb = cap.toDataURL("image/jpeg")
-
-      const newAsset: Asset = {
-        id,
-        name: generationPrompt,
-        type: "video",
-        url,
-        thumbnail: thumb,
-        width: v.videoWidth,
-        height: v.videoHeight,
-        transform: { ...DEFAULT_TRANSFORM },
-        drawings: []
-      }
-
-      setAssets((p) => {
-        const next = [...p, newAsset]
-        selectAndShowAsset(id, "video", next)
-        return next
-      })
-
-      setIsCreationHubOpen(false)
-      setGenerationPrompt("")
-    }
-  } catch (err) {
-    console.error(err)
-    alert("Video Gen Failed.")
-  } finally {
-    setIsGenerating(false)
-    setGenStatus("")
-  
-}
-  };
-
   const resetApp = () => {
     assets.forEach((a) => URL.revokeObjectURL(a.url));
     setAssets([]);
@@ -362,6 +215,7 @@ const DirectorsCut: React.FC<{
     setWebcamActive(false);
     setIsFullFrame(false);
     setIsAssetPlaying(false);
+    setIsLooping(false);
     if (externalClose) externalClose();
   };
 
@@ -428,7 +282,8 @@ const DirectorsCut: React.FC<{
     });
   };
 
-  const toggleAssetPlayback = useCallback(async (forceReset = false) => {
+  const toggleAssetPlayback = useCallback(
+    async (forceReset = false) => {
     const v = videoRef.current;
     if (!v || !v.src) return;
     if (!audioContextRef.current)
@@ -448,15 +303,28 @@ const DirectorsCut: React.FC<{
       return;
     }
     if (v.paused || v.ended) {
-      v.muted = false;
-      v.volume = 1;
-      v.play().catch((e) => console.warn(e));
-      setIsAssetPlaying(true);
+        v.muted = isLooping;
+        v.volume = isLooping ? 0 : 1;
+        v.play()
+          .then(() => setIsAssetPlaying(true))
+          .catch((e) => console.warn(e));
     } else {
       v.pause();
       setIsAssetPlaying(false);
     }
-  }, []);
+    },
+    [isLooping]
+  );
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v) {
+      v.loop = isLooping;
+      v.muted = isLooping;
+      if (isLooping) v.volume = 0;
+      else v.volume = 1;
+    }
+  }, [isLooping]);
 
   const handlePlaybackInteraction = useCallback(() => {
     const now = Date.now();
@@ -499,7 +367,6 @@ const DirectorsCut: React.FC<{
           if (next) setIsLocked(true);
           else {
             setIsLocked(false);
-            if (selectedAssetId) clearAssetDrawings(selectedAssetId);
           }
           return next;
         });
@@ -507,6 +374,112 @@ const DirectorsCut: React.FC<{
       }, 300);
     }
   }, [selectedAssetId]);
+
+  // --- Magic Cutout Logic ---
+  const processTransparency = (img: HTMLImageElement): string => {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return img.src;
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    // Sample background from top-left corner
+    const bgR = data[0],
+      bgG = data[1],
+      bgB = data[2];
+    const threshold = 40;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i],
+        g = data[i + 1],
+        b = data[i + 2];
+      const dist = Math.sqrt(
+        Math.pow(r - bgR, 2) + Math.pow(g - bgG, 2) + Math.pow(b - bgB, 2)
+      );
+      if (dist < threshold) {
+        data[i + 3] = 0; // Transparent
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL("image/png");
+  };
+
+  const handleMagicCutout = async () => {
+    if (!selectedAsset || selectedAsset.type !== "image") return;
+    setIsAiProcessing(true);
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+      let base64Data = "";
+      if (selectedAsset.url.startsWith("data:")) {
+        base64Data = selectedAsset.url.split(",")[1];
+      } else {
+        const res = await fetch(selectedAsset.url);
+        const blob = await res.blob();
+        const reader = new FileReader();
+        base64Data = await new Promise((resolve) => {
+          reader.onloadend = () =>
+            resolve((reader.result as string).split(",")[1]);
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      const prompt = `Remove the background from this image. Keep only the subject highlighted by the user markings. Return the subject as a high-quality cutout. The background must be a pure solid black color so it can be extracted for transparency. Edge quality is critical.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: {
+          parts: [
+            { inlineData: { data: base64Data, mimeType: "image/png" } },
+            { text: prompt }
+          ]
+        }
+      });
+
+      let resultUrl = "";
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          resultUrl = `data:image/png;base64,${part.inlineData.data}`;
+          break;
+        }
+      }
+
+      if (resultUrl) {
+        const img = new Image();
+        img.src = resultUrl;
+        img.onload = () => {
+          // Force transparency based on solid background sampling
+          const transparentUrl = processTransparency(img);
+          const finalImg = new Image();
+          finalImg.src = transparentUrl;
+          finalImg.onload = () => {
+            imageCache.current.set(selectedAsset.id, finalImg);
+            setAssets((prev) =>
+              prev.map((a) =>
+                a.id === selectedAsset.id
+                  ? {
+                      ...a,
+                      url: transparentUrl,
+                      width: finalImg.naturalWidth,
+                      height: finalImg.naturalHeight,
+                      drawings: []
+                    }
+                  : a
+              )
+            );
+          };
+        };
+      }
+    } catch (err) {
+      console.error("Magic failed", err);
+    } finally {
+      setIsAiProcessing(false);
+    }
+  };
 
   useEffect(() => {
     const stopTracks = () => {
@@ -688,8 +661,8 @@ const DirectorsCut: React.FC<{
             ctx.moveTo(sourceX, sourceY);
             ctx.lineTo(targetX, targetY);
             ctx.stroke();
-            const angle = Math.atan2(targetY - sourceY, targetX - sourceX),
-              hLen = 70,
+            const angle = Math.atan2(targetY - sourceY, targetX - sourceX);
+            const hLen = 65,
               hAng = Math.PI / 4;
             ctx.beginPath();
             ctx.moveTo(targetX, targetY);
@@ -705,12 +678,28 @@ const DirectorsCut: React.FC<{
             ctx.stroke();
           }
         });
+
+        // AI Processing Indicator
+        if (id === selectedAssetId && isAiProcessing) {
+          ctx.fillStyle = "rgba(0,0,0,0.6)";
+          ctx.fillRect(drawX, drawY, finalW, finalH);
+          ctx.font = "bold 80px sans-serif";
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.fillText(
+            "MAGIC CUTOUT...",
+            drawX + finalW / 2,
+            drawY + finalH / 2
+          );
+        }
+
         ctx.restore();
         if (
           id === selectedAssetId &&
           !isLocked &&
           !isFullFrame &&
-          !isDrawingMode
+          !isDrawingMode &&
+          !isAiProcessing
         ) {
           ctx.save();
           ctx.shadowColor = "rgba(16, 185, 129, 0.5)";
@@ -760,7 +749,8 @@ const DirectorsCut: React.FC<{
     isLocked,
     isFullFrame,
     isDrawingMode,
-    drawingShape
+    drawingShape,
+    isAiProcessing
   ]);
 
   useEffect(() => {
@@ -769,6 +759,7 @@ const DirectorsCut: React.FC<{
   }, [drawFrame]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (isAiProcessing) return;
     isDraggingRef.current = false;
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY;
@@ -871,6 +862,7 @@ const DirectorsCut: React.FC<{
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (isAiProcessing) return;
     isDraggingRef.current = true;
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY,
@@ -1023,8 +1015,7 @@ const DirectorsCut: React.FC<{
   };
 
   const handleTouchEnd = () => {
-    // Playback logic on touch end if not dragging or drawing
-    // ONLY triggered if we're not pinching/dragging and we have a video selected
+    if (isAiProcessing) return;
     if (
       !isDraggingRef.current &&
       !isPinching &&
@@ -1116,10 +1107,12 @@ const DirectorsCut: React.FC<{
         )();
       const audioCtx = audioContextRef.current;
       if (audioCtx.state === "suspended") await audioCtx.resume();
+
       const dest = audioCtx.createMediaStreamDestination();
       const webcamStream = webcamRef.current?.srcObject as MediaStream;
       if (webcamStream?.getAudioTracks().length > 0)
         audioCtx.createMediaStreamSource(webcamStream).connect(dest);
+
       if (videoRef.current?.src) {
         if (!videoSourceNodeRef.current)
           videoSourceNodeRef.current = audioCtx.createMediaElementSource(
@@ -1127,10 +1120,12 @@ const DirectorsCut: React.FC<{
           );
         videoSourceNodeRef.current.connect(dest);
       }
+
       const compositeStream = canvasRef.current.captureStream(30);
       dest.stream
         .getAudioTracks()
         .forEach((track) => compositeStream.addTrack(track));
+
       const mime =
         ["video/mp4;codecs=h264,aac", "video/mp4", "video/webm"].find((m) =>
           MediaRecorder.isTypeSupported(m)
@@ -1171,15 +1166,16 @@ const DirectorsCut: React.FC<{
         if (!success) {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
-        a.href = url;
+          a.href = url;
           a.download = fileName;
           document.body.appendChild(a);
-        a.click();
+          a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
         }
         setRecordingTime(0);
       };
+
       recorder.start(1000);
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
@@ -1320,6 +1316,7 @@ const DirectorsCut: React.FC<{
               {isDrawingMode ? "PEN ON" : "DRAW"}
             </span>
           </button>
+
           {selectedAsset?.type === "video" && (
             <div className="flex flex-col space-y-3">
               <button
@@ -1338,11 +1335,29 @@ const DirectorsCut: React.FC<{
                   {isAssetPlaying ? "Playing" : "Play"}
                 </span>
               </button>
+
+              {/* Loop & Mute Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLooping(!isLooping);
+                }}
+                className={`w-14 h-14 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${isLooping ? "bg-indigo-600 text-white border-indigo-400" : "bg-white/10 text-white/40"}`}
+              >
+                {isLooping ? (
+                  <RepeatIcon className="text-xl" />
+                ) : (
+                  <VolumeXIcon className="text-xl" />
+                )}
+                <span className="text-[7px] font-black mt-1 tracking-tighter uppercase">
+                  {isLooping ? "Looping" : "Normal"}
+                </span>
+              </button>
             </div>
           )}
         </div>
 
-        {/* RIGHT SIDEBAR - AI & View */}
+        {/* RIGHT SIDEBAR - View & Camera */}
         <div
           className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col space-y-3 z-30"
           onPointerDown={(e) => e.stopPropagation()}
@@ -1358,15 +1373,25 @@ const DirectorsCut: React.FC<{
               Sight
             </span>
           </button>
+
+          {/* Magic Button (Relocated back to sidebar) */}
+          {selectedAsset?.type === "image" && (
           <button
-            onClick={() => setIsCreationHubOpen(true)}
-            className="w-12 h-12 bg-gradient-to-tr from-purple-600 to-indigo-600 border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 text-white shadow-xl"
+              onClick={handleMagicCutout}
+              disabled={isAiProcessing}
+              className={`w-12 h-12 bg-gradient-to-tr from-purple-600 to-indigo-600 border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 text-white shadow-xl ${isAiProcessing ? "animate-pulse" : ""}`}
           >
+              {isAiProcessing ? (
+                <LoaderIcon className="text-lg" />
+              ) : (
             <SparklesIcon className="text-lg" />
-            <span className="text-[7px] font-black mt-1 tracking-widest uppercase">
-              Gen
+              )}
+              <span className="text-[7px] font-black mt-1 tracking-tighter uppercase">
+                Magic
             </span>
           </button>
+          )}
+
           {selectedAssetId && (
             <button
               onClick={(e) => {
@@ -1433,9 +1458,9 @@ const DirectorsCut: React.FC<{
                 />
                 <div className="absolute top-1 right-1">
                   {asset.type === "video" ? (
-                    <FilmIcon className="text-[16px] text-white/90 bg-black/70 p-1.5 rounded-sm" />
+                    <FilmIcon className="text-[14px] text-white/90 bg-black/70 p-1.5 rounded-sm" />
                   ) : (
-                    <ImageIcon className="text-[16px] text-white/90 bg-black/70 p-1.5 rounded-sm" />
+                    <ImageIcon className="text-[14px] text-white/90 bg-black/70 p-1.5 rounded-sm" />
                   )}
                 </div>
               </button>
@@ -1494,63 +1519,6 @@ const DirectorsCut: React.FC<{
         </div>
       </footer>
 
-      {isCreationHubOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-2xl flex items-end justify-center animate-fade-in">
-          <div className="w-full max-w-lg bg-zinc-900 rounded-t-[40px] p-8 border-t border-white/10 shadow-2xl animate-slide-up relative">
-            <button
-              onClick={() => setIsCreationHubOpen(false)}
-              className="absolute top-6 right-8 text-white/40 hover:text-white transition-colors"
-            >
-              <XIcon className="text-2xl" />
-            </button>
-            <div className="flex items-center space-x-3 mb-8">
-              <div className="w-12 h-12 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20">
-                <SparklesIcon className="text-white text-xl" />
-              </div>
-              <div>
-                <h2 className="text-xl font-black uppercase italic tracking-tighter">
-                  AI Studio
-                </h2>
-                <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">
-                  Generate media from words
-                </p>
-              </div>
-            </div>
-            <textarea
-              value={generationPrompt}
-              onChange={(e) => setGenerationPrompt(e.target.value)}
-              placeholder="Describe your scene..."
-              className="w-full bg-black/40 border border-white/10 rounded-3xl p-6 text-sm text-white focus:outline-none focus:border-purple-500/50 transition-all min-h-[120px] mb-6"
-              disabled={isGenerating}
-            />
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={handleGenerateImage}
-                disabled={isGenerating || !generationPrompt}
-                className="group bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-4 flex flex-col items-center transition-all active:scale-95 disabled:opacity-50"
-              >
-                <ImageIcon className="text-2xl mb-2 text-blue-400" />
-                <span className="text-xs font-black uppercase">Photo</span>
-              </button>
-              <button
-                onClick={handleGenerateVideo}
-                disabled={isGenerating || !generationPrompt}
-                className="group bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-4 flex flex-col items-center transition-all active:scale-95 disabled:opacity-50"
-              >
-                <FilmIcon className="text-2xl mb-2 text-purple-400" />
-                <span className="text-xs font-black uppercase">Video</span>
-              </button>
-            </div>
-            {isGenerating && (
-              <div className="mt-8 p-6 bg-purple-500/10 border border-purple-500/20 rounded-3xl flex items-center justify-center space-x-4 animate-pulse text-purple-200">
-                <LoaderIcon className="text-xl" />{" "}
-                <span className="text-sm font-bold">{genStatus}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {assets.length === 0 && (
         <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 text-center space-y-12 ">
           <div className="w-24 h-24 bg-red-600 rounded-[0.5rem] flex items-center justify-center transform -rotate-12 shadow-[0_30px_70px_-1px_rgba(220,38,38,0.6)] overflow-hidden ">
@@ -1574,12 +1542,6 @@ const DirectorsCut: React.FC<{
                 accept="image/*,video/*"
               />
             </label>
-            <button
-              onClick={() => setIsCreationHubOpen(true)}
-              className="block w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-5 rounded-3xl font-black active:scale-95 text-sm tracking-widest shadow-2xl  "
-            >
-              AI Generate
-            </button>
           </div>
         </div>
       )}
