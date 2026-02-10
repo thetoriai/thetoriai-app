@@ -893,3 +893,9 @@ export const EraserIcon: React.FC<IconProps> = ({ className }) => (
     <path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l3.54-3.53a1.003 1.003 0 0 1 1.41 0L12 14.83l4.24-4.24-4.24-4.24 1.41-1.41c.78-.79 2.05-.79 2.83.02zM12 17.66l-1.41-1.41L7.76 13.41l-2.12 2.12 3.54 3.54a2.01 2.01 0 0 0 2.83 0l.01-.01-.02-.01V17.66z" />
   </svg>
 );
+export const RepeatIcon: React.FC<IconProps> = ({ className }) => (
+  <i className={`fa-solid fa-repeat ${className}`}></i>
+);
+export const VolumeXIcon: React.FC<IconProps> = ({ className }) => (
+  <i className={`fa-solid fa-volume-xmark ${className}`}></i>
+);
