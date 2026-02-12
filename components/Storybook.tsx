@@ -265,14 +265,15 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       const selectedChars = characters.filter((c) =>
         storybookContent.characters.includes(c.name)
       );
-      const scenes = await generateScenesFromNarrative(
-        sharedStoryText,
-        selectedChars,
-        includeDialogue,
-        characterStyle,
-        selectedMovieStyle,
-        selectedCountry
-      );
+     const scenes = await generateScenesFromNarrative(
+       sharedStoryText,
+       selectedChars,
+       includeDialogue,
+       characterStyle,
+       selectedMovieStyle,
+       selectedCountry,
+       selectedStoryGenre
+     );
       const lockedScenes = scenes.map((s: any) => ({
         ...s,
         isDescriptionLocked: true,
@@ -427,13 +428,15 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       const fullChars = characters.filter((c) =>
         storybookContent.characters.includes(c.name)
       );
+      // DO add comment: Pass genre so Bible protocol activates correctly.
       const scenes = await generateScenesFromNarrative(
         storybookContent.storyNarrative,
         fullChars,
         storybookContent.includeDialogue || false,
         characterStyle,
         selectedMovieStyle,
-        selectedCountry
+        selectedCountry,
+        selectedStoryGenre
       );
       const lockedScenes = scenes.map((s: any) => ({
         ...s,
