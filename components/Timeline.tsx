@@ -317,10 +317,10 @@ export const Timeline: React.FC<TimelineProps> = ({
     const lastFrameTime = clip.startTime + clip.duration - 0.01;
     setLocalPlaybackTime(lastFrameTime);
     onUpdatePlaybackTime(lastFrameTime);
-    setSelectedClip({ id: clip.id, type: 'visual' });
+    setSelectedClip({ id: clip.id, type: "visual" });
     setSidePanelClipId(null);
     setTimeout(() => {
-        handleCapture();
+      handleCapture();
     }, 150);
   };
 
@@ -350,12 +350,18 @@ export const Timeline: React.FC<TimelineProps> = ({
             (textClips || []).filter((t) => t.id !== selectedClip.id)
           );
         setSelectedClip(null);
-        
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedClip, onDelete, onDeleteAudio, onUpdateTextClips, textClips, onUndo]);
+  }, [
+    selectedClip,
+    onDelete,
+    onDeleteAudio,
+    onUpdateTextClips,
+    textClips,
+    onUndo
+  ]);
 
   useEffect(() => {
     if (isPlaying && scrollAreaRef.current) {
@@ -495,14 +501,14 @@ export const Timeline: React.FC<TimelineProps> = ({
             ? 0.05
             : entry.internalTime;
 
-       if (
-         ref.current.readyState >= 1 &&
-         Math.abs(ref.current.currentTime - targetSeekTime) > driftThreshold
-       ) {
-         try {
-           ref.current.currentTime = targetSeekTime;
-         } catch {}
-       }
+        if (
+          ref.current.readyState >= 1 &&
+          Math.abs(ref.current.currentTime - targetSeekTime) > driftThreshold
+        ) {
+          try {
+            ref.current.currentTime = targetSeekTime;
+          } catch {}
+        }
 
         if (isPlaying) {
           if (ref.current.paused) ref.current.play().catch(() => {});
@@ -536,12 +542,16 @@ export const Timeline: React.FC<TimelineProps> = ({
     (clientX: number) => {
       if (!scrollAreaRef.current) return;
       const rect = scrollAreaRef.current.getBoundingClientRect();
-        const clickX = clientX - rect.left + scrollAreaRef.current.scrollLeft - labelWidth;
-        const newTime = Math.max(0, Math.min(contentDuration, clickX / pixelsPerSecond));
-        
-        // MAGNET SNAPPING LOGIC
-        const SNAP_THRESHOLD = 0.2;
-        const boundaries = [
+      const clickX =
+        clientX - rect.left + scrollAreaRef.current.scrollLeft - labelWidth;
+      const newTime = Math.max(
+        0,
+        Math.min(contentDuration, clickX / pixelsPerSecond)
+      );
+
+      // MAGNET SNAPPING LOGIC
+      const SNAP_THRESHOLD = 0.2;
+      const boundaries = [
         0,
         contentDuration,
         ...clips.map((c) => c.startTime),
@@ -550,18 +560,18 @@ export const Timeline: React.FC<TimelineProps> = ({
         ...audioClips.map((a) => a.startTime + a.duration),
         ...textClips.map((t) => t.startTime),
         ...textClips.map((t) => t.startTime + t.duration)
-        ];
-        
-        let snappedTime = newTime;
-        for (const b of boundaries) {
-            if (Math.abs(newTime - b) < SNAP_THRESHOLD) {
-                snappedTime = b;
-                break;
-            }
+      ];
+
+      let snappedTime = newTime;
+      for (const b of boundaries) {
+        if (Math.abs(newTime - b) < SNAP_THRESHOLD) {
+          snappedTime = b;
+          break;
         }
-        
-        setLocalPlaybackTime(snappedTime);
-        onUpdatePlaybackTime(snappedTime);
+      }
+
+      setLocalPlaybackTime(snappedTime);
+      onUpdatePlaybackTime(snappedTime);
     },
     [
       contentDuration,
@@ -1673,13 +1683,12 @@ export const Timeline: React.FC<TimelineProps> = ({
           if (!file) return;
 
           if (file.type.startsWith("video/")) {
-           const video = document.createElement("video");
-           video.src = URL.createObjectURL(file);
-           video.preload = "metadata";
+            const video = document.createElement("video");
+            video.src = URL.createObjectURL(file);
+            video.preload = "metadata";
 
-          video.onloadedmetadata = () => {
-         onAddClip(file, "video", video.duration, undefined, 0, video);
-
+            video.onloadedmetadata = () => {
+              onAddClip(file, "video", video.duration, undefined, 0, video);
             };
           } else {
             onAddClip(file, "image", 5, undefined, 0);

@@ -94,17 +94,17 @@ const ViewHeader: React.FC<{
       <div className="w-8 h-8 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-1.5 shadow-lg">
         <Logo className="w-full h-full" />
       </div>
-        <h2 className="text-[10px] font-black text-gray-300  tracking-[0.3em] italic">
-          {title}
-        </h2>
-          </div>
+      <h2 className="text-[10px] font-black text-gray-300  tracking-[0.3em] italic">
+        {title}
+      </h2>
+    </div>
     <button
       onClick={onBack}
       className="p-2 bg-gray-800/50 hover:bg-red-900/20 rounded-xl text-gray-400 hover:text-red-400 transition-all flex items-center gap-2 border border-white/5 group"
     >
       <span className="text-[8px] font-black  tracking-widest hidden sm:block group-hover:translate-x-[-2px] transition-transform">
         Close Page
-                </span>
+      </span>
       <XIcon className="w-5 h-5" />
     </button>
   </div>
@@ -225,7 +225,6 @@ const App: React.FC = () => {
     fetchProfile();
   }, [session]);
 
-
   const [storybook, setStorybook] = useState<Storybook>(() => {
     try {
       const saved = localStorage.getItem("storybookState");
@@ -333,6 +332,7 @@ const App: React.FC = () => {
   }, [timelineHistory]);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [creditWarning, setCreditWarning] = useState<string | null>(null);
   const [modalData, setModalData] = useState<any>({});
   const [activeVideoIndices, setActiveVideoIndices] = useState<number[]>([]);
   const [activeI2ISlot, setActiveI2ISlot] = useState<{
@@ -454,33 +454,57 @@ const App: React.FC = () => {
 
   // MASTER CREDIT DEDUCTION: Must run and succeed BEFORE any API generation occurs.
   const consumeCredits = async (actionType: keyof typeof CREDIT_ACTIONS) => {
-    if (!session?.user?.id) throw new Error("Not authenticated");
+    if (!session?.user?.id) {
+      setCreditWarning("Please login first.");
+      setActiveModal("credit-warning");
+      throw new Error("Not authenticated");
+    }
 
-    // Call Supabase RPC to handle deduction logic based on action label
-   const { data, error } = await supabase.rpc("consume_credits", {
-     p_user_id: session.user.id,
-     p_action_type: actionType
-   });
+    try {
+    const { data, error } = await supabase.rpc("consume_credits", {
+      p_user_id: session.user.id,
+      p_action_type: actionType
+    });
 
-    if (error) throw error;
-    if (data !== true) throw new Error("INSUFFICIENT_CREDITS");
+      if (error) {
+        throw error;
+      }
 
-    // Silent balance sync after successful deduction
-   const { data: profile } = await supabase
-     .from("profiles")
-     .select("credits")
-     .eq("id", session.user.id)
-     .single();
+      if (data !== true) {
+        setCreditWarning(
+          "Insufficient credits. Please purchase more credits to continue."
+        );
+        setActiveModal("credit-warning");
+        throw new Error("INSUFFICIENT_CREDITS");
+      }
 
-   if (profile) {
-     setCreditSettings((p) => ({
-       ...p,
-       creditBalance: profile.credits
-     }));
-   }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("credits")
+      .eq("id", session.user.id)
+      .single();
 
-   return true;
- };
+    if (profile) {
+      setCreditSettings((p) => ({
+        ...p,
+        creditBalance: profile.credits
+      }));
+    }
+
+    return true;
+    } catch (err: any) {
+      if (err.message === "INSUFFICIENT_CREDITS") {
+        setCreditWarning(
+          "Insufficient credits. Please purchase more credits to continue."
+        );
+        setActiveModal("credit-warning");
+      } else {
+        console.error("Credit error:", err);
+      }
+
+      throw err;
+    }
+  };
 
   const ensureApiKey = async () => {
     if (
@@ -511,7 +535,7 @@ const App: React.FC = () => {
 
     // DIRECT ROUTING: Every generation source (including footage) now immediately takes you to the Storyboard.
     if (!skipRouting && source !== "footage") {
-    setActiveView("storyboard");
+      setActiveView("storyboard");
     }
 
     try {
@@ -520,8 +544,8 @@ const App: React.FC = () => {
         source === "storybook"
           ? "Storywriter"
           : source === "footage"
-          ? "Footage Desk"
-          : "Production";
+            ? "Footage Desk"
+            : "Production";
       const newItem = {
         id: sessionId,
         type: source,
@@ -535,12 +559,12 @@ const App: React.FC = () => {
       };
 
       if (source !== "footage") {
-      setHistory((prev) => {
-        const next = [...prev, newItem];
-        // ALWAYS FOCUS: Automatically select the newest production session in the storyboard.
-        setActiveHistoryIndex(next.length - 1);
-        return next;
-      });
+        setHistory((prev) => {
+          const next = [...prev, newItem];
+          // ALWAYS FOCUS: Automatically select the newest production session in the storyboard.
+          setActiveHistoryIndex(next.length - 1);
+          return next;
+        });
       }
 
       const placeholders = prompts.map((p, i) => ({
@@ -554,22 +578,22 @@ const App: React.FC = () => {
       }));
 
       if (source !== "footage") {
-      setHistory((prev) =>
-        prev.map((h) =>
-          h.id === sessionId
-            ? {
-                ...h,
-                imageSet: placeholders,
-                videoStates: placeholders.map(() => ({
-                  status: "idle",
-                  clips: [],
-                  draftScript: "",
-                  draftCameraMovement: "Zoom In (Focus In)"
-                }))
-              }
-            : h
-        )
-      );
+        setHistory((prev) =>
+          prev.map((h) =>
+            h.id === sessionId
+              ? {
+                  ...h,
+                  imageSet: placeholders,
+                  videoStates: placeholders.map(() => ({
+                    status: "idle",
+                    clips: [],
+                    draftScript: "",
+                    draftCameraMovement: "Zoom In (Focus In)"
+                  }))
+                }
+              : h
+          )
+        );
       }
 
       let currentSequentialRef: string | undefined = referenceImage;
@@ -583,7 +607,8 @@ const App: React.FC = () => {
               ? "IMAGE_PRO"
               : "IMAGE_NORMAL";
 
-        await consumeCredits(action as any);
+        const ok = await consumeCredits(action as any);
+        if (!ok) throw new Error("INSUFFICIENT_CREDITS");
         if (referenceImage) await consumeCredits("IMAGE_EDIT_PRO");
 
         const activeRef =
@@ -622,18 +647,18 @@ const App: React.FC = () => {
         };
 
         if (source !== "footage") {
-        setHistory((prev) =>
-          prev.map((h) =>
-            h.id === sessionId
-              ? {
-                  ...h,
-                  imageSet: h.imageSet.map((s: any, idx: number) =>
-                    idx === i ? updatedScene : s
-                  )
-                }
-              : h
-          )
-        );
+          setHistory((prev) =>
+            prev.map((h) =>
+              h.id === sessionId
+                ? {
+                    ...h,
+                    imageSet: h.imageSet.map((s: any, idx: number) =>
+                      idx === i ? updatedScene : s
+                    )
+                  }
+                : h
+            )
+          );
         }
 
         if (source === "footage") {
@@ -661,6 +686,24 @@ const App: React.FC = () => {
       setIsGenerating(false);
     }
   };
+  // === Directors Cut Image Generator ===
+  const handleGenerateImage = async (prompt: string): Promise<string> => {
+    const base64 = await handleGenerate(
+      [prompt],
+      "footage",
+      undefined,
+      imageModel,
+      true
+    );
+
+    return base64;
+  };
+
+  // === Directors Cut Video Generator ===
+  // === Directors Cut Video Generator ===
+  const directorsCutGenerateVideo = async (prompt: string) => {
+    await handleGenerateDirectVideo(prompt, footageVideoTier);
+  };
 
   const handleGenerateDirectVideo = async (prompt: string, tier: string) => {
     await ensureApiKey();
@@ -676,22 +719,18 @@ const App: React.FC = () => {
         ? "Subject: African person."
         : `Subject: Person from ${selectedCountry}.`;
     const finalPrompt = `Visual Style: ${visualStyle}. ${ethnicityContext} Action: ${prompt}`;
-    
-  const result = await generateSingleImage(
-    finalPrompt,
-    aspectRatio,
-    selectedCountry,
-    visualStyle,
-    "General",
-    characters,
-    imageModel
-  );
 
-  const startFrame = result.src;
+    const result = await generateSingleImage(
+      finalPrompt,
+      aspectRatio,
+      selectedCountry,
+      visualStyle,
+      "General",
+      characters,
+      imageModel
+    );
 
-
-
-
+    const startFrame = result.src;
 
     const newItem = {
       id: sessionId,
@@ -731,22 +770,21 @@ const App: React.FC = () => {
     try {
       await consumeCredits(action as any);
 
-     const { videoUrl, videoObject } = await generateVideoFromScene(
-       { src: startFrame, prompt: prompt },
-       aspectRatio,
-       finalPrompt,
-       startFrame,
-       visualStyle,
-       selectedCountry,
-       tier === "veo31-quality"
-         ? "veo-3.1-generate-preview"
-         : "veo-3.1-fast-generate-preview",
-       videoResolution as any,
-       "Zoom In (Focus In)",
-       () => {},
-       characters
-     );
-
+      const { videoUrl, videoObject } = await generateVideoFromScene(
+        { src: startFrame, prompt: prompt },
+        aspectRatio,
+        finalPrompt,
+        startFrame,
+        visualStyle,
+        selectedCountry,
+        tier === "veo31-quality"
+          ? "veo-3.1-generate-preview"
+          : "veo-3.1-fast-generate-preview",
+        videoResolution as any,
+        "Zoom In (Focus In)",
+        () => {},
+        characters
+      );
 
       if (videoUrl) {
         setHistory((prev) =>
@@ -889,127 +927,133 @@ const App: React.FC = () => {
     }
   };
 
-const handleFootageProduce = async (
-  prompt: string,
-  mode: "image" | "video" | "i2i",
-  refImage?: string,
-  videoTier?: string,
-  imageTier?: string
-) => {
-  const tempId = `footage-${Date.now()}`;
-  // START AND END FRAME FROM FOOTAGE DESK
-  const startFrame = footageRefImages?.[0] || refImage || null;
-  const endFrame = footageRefImages?.[1] || null;
+  const handleFootageProduce = async (
+    prompt: string,
+    mode: "image" | "video" | "i2i",
+    refImage?: string,
+    videoTier?: string,
+    imageTier?: string
+  ) => {
+    const tempId = `footage-${Date.now()}`;
+    // START AND END FRAME FROM FOOTAGE DESK
+    const startFrame = footageRefImages?.[0] || refImage || null;
+    const endFrame = footageRefImages?.[1] || null;
 
-  const placeholder = {
-    sceneId: tempId,
-    prompt: prompt,
-    status: "generating",
-    type: mode === "image" ? "image" : "video",
-    src: refImage || null,
-    originSection: "FootageFrontSection",
-    timestamp: Date.now()
-  };
+    const placeholder = {
+      sceneId: tempId,
+      prompt: prompt,
+      status: "generating",
+      type: mode === "image" ? "image" : "video",
+      src: refImage || null,
+      originSection: "FootageFrontSection",
+      timestamp: Date.now()
+    };
 
-  // DO add comment: Immediately create a placeholder card in the grid to show progress feedback.
-  setFootageHistory((prev) => [placeholder, ...prev]);
+    // DO add comment: Immediately create a placeholder card in the grid to show progress feedback.
+    setFootageHistory((prev) => [placeholder, ...prev]);
 
-  // IMAGE WORKFLOW
-  if (mode === "image") {
-    const modelToUse =
-      imageTier === "pro"
-        ? "gemini-3-pro-image-preview"
-        : "gemini-2.5-flash-image";
+    // IMAGE WORKFLOW
+    if (mode === "image") {
+      const modelToUse =
+        imageTier === "pro"
+          ? "gemini-3-pro-image-preview"
+          : "gemini-2.5-flash-image";
 
-    const ethnicityContext =
-      characterStyle === "Afro-toon"
-        ? "Subject: African/Black person."
-        : `Subject: Person from ${selectedCountry}.`;
-    const styleContext = `Visual Medium: [${visualStyle}].`;
-    const finalPrompt = `${styleContext} ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
-
-    await handleGenerate([finalPrompt], "footage", refImage, modelToUse, true);
-    return;
-  }
-
-  // VIDEO WORKFLOW
-  await ensureApiKey();
-  setIsGenerating(true);
-
-  const action = videoTier === "veo31-quality" ? "VIDEO_HQ" : "VIDEO_FAST";
-
-  try {
-    // DEDUCTION FIRST
-    await consumeCredits(action as any);
-
-    // 1. If I2I but NO input image, generate one first
-    let activeInputImage = startFrame;
-
-    if (mode === "i2i" && !activeInputImage) {
-      const modelToUse = "gemini-2.5-flash-image";
       const ethnicityContext =
         characterStyle === "Afro-toon"
           ? "Subject: African/Black person."
           : `Subject: Person from ${selectedCountry}.`;
-      const finalImgPrompt = `Visual Medium: [${visualStyle}]. ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
+      const styleContext = `Visual Medium: [${visualStyle}].`;
+      const finalPrompt = `${styleContext} ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
 
-      activeInputImage = (await handleGenerate(
-        [finalImgPrompt],
+      await handleGenerate(
+        [finalPrompt],
         "footage",
-        undefined,
+        refImage,
         modelToUse,
         true
-      )) as string;
+      );
+      return;
     }
 
-    // 2. Generate Video
-    const ethnicityContext =
-      characterStyle === "Afro-toon"
-        ? "Subject: African person."
-        : `Subject: Person from ${selectedCountry}.`;
-    const styleContext = `Visual Style: ${visualStyle}.`;
-    const finalVidPrompt = `${styleContext} ${ethnicityContext} Action: ${prompt}`;
+    // VIDEO WORKFLOW
+    await ensureApiKey();
+    setIsGenerating(true);
 
-    const { videoUrl, videoObject } = await generateVideoFromScene(
-      { src: activeInputImage, prompt: prompt },
-      aspectRatio,
-      finalVidPrompt,
-      endFrame,
+    const action = videoTier === "veo31-quality" ? "VIDEO_HQ" : "VIDEO_FAST";
 
-      visualStyle,
-      selectedCountry,
-      videoTier === "veo31-quality"
-        ? "veo-3.1-generate-preview"
-        : "veo-3.1-fast-generate-preview",
-      videoResolution as any,
-      "Zoom In (Focus In)",
-      () => {},
-      characters
-    );
+    try {
+      // DEDUCTION FIRST
+      await consumeCredits(action as any);
 
-    if (videoUrl) {
-      // DO add comment: Update history item with video data once generation completes.
+      // 1. If I2I but NO input image, generate one first
+      let activeInputImage = startFrame;
+
+      if (mode === "i2i" && !activeInputImage) {
+        const modelToUse = "gemini-2.5-flash-image";
+        const ethnicityContext =
+          characterStyle === "Afro-toon"
+            ? "Subject: African/Black person."
+            : `Subject: Person from ${selectedCountry}.`;
+        const finalImgPrompt = `Visual Medium: [${visualStyle}]. ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
+
+        activeInputImage = (await handleGenerate(
+          [finalImgPrompt],
+          "footage",
+          undefined,
+          modelToUse,
+          true
+        )) as string;
+      }
+
+      // 2. Generate Video
+      const ethnicityContext =
+        characterStyle === "Afro-toon"
+          ? "Subject: African person."
+          : `Subject: Person from ${selectedCountry}.`;
+      const styleContext = `Visual Style: ${visualStyle}.`;
+      const finalVidPrompt = `${styleContext} ${ethnicityContext} Action: ${prompt}`;
+
+      const { videoUrl, videoObject } = await generateVideoFromScene(
+        { src: activeInputImage, prompt: prompt },
+        aspectRatio,
+        finalVidPrompt,
+        endFrame,
+
+        visualStyle,
+        selectedCountry,
+        videoTier === "veo31-quality"
+          ? "veo-3.1-generate-preview"
+          : "veo-3.1-fast-generate-preview",
+        videoResolution as any,
+        "Zoom In (Focus In)",
+        () => {},
+        characters
+      );
+
+      if (videoUrl) {
+        // DO add comment: Update history item with video data once generation completes.
+        setFootageHistory((prev) =>
+          prev.map((item) =>
+            item.sceneId === tempId
+              ? { ...item, videoUrl, status: "complete", videoObject }
+              : item
+          )
+        );
+      }
+    } catch (e: any) {
+      console.error(e);
       setFootageHistory((prev) =>
         prev.map((item) =>
           item.sceneId === tempId
-            ? { ...item, videoUrl, status: "complete", videoObject }
+            ? { ...item, status: "error", error: parseErrorMessage(e) }
             : item
         )
       );
+    } finally {
+      setIsGenerating(false);
     }
-  } catch (e: any) {
-    console.error(e);
-    setFootageHistory((prev) =>
-      prev.map((item) =>
-        item.sceneId === tempId
-          ? { ...item, status: "error", error: parseErrorMessage(e) }
-          : item
-      )
-    );
-  } finally {
-    setIsGenerating(false);
-  }
-};;
+  };
 
   const handleAnimateFootage = async (item: any) => {
     await ensureApiKey();
@@ -1140,12 +1184,12 @@ const handleFootageProduce = async (
           h.type === "storybook"
             ? "StorybookSection"
             : h.type === "upload"
-            ? "UploadedSection"
-            : h.type === "timeline"
-            ? "TimelineSection"
+              ? "UploadedSection"
+              : h.type === "timeline"
+                ? "TimelineSection"
                 : h.type === "footage"
                   ? "FootageFrontSection"
-            : "FootageFrontSection"
+                  : "FootageFrontSection"
       }))
     );
   }, [history]);
@@ -1643,7 +1687,7 @@ const handleFootageProduce = async (
   ) => {
     await ensureApiKey();
     const action = videoModel.includes("fast") ? "VIDEO_FAST" : "VIDEO_HQ";
-    
+
     const item = history.find((h) => h.id === genId);
     const sceneIdx = item.imageSet.findIndex((s: any) => s.sceneId === sceneId);
     setHistory((prev) =>
@@ -1864,7 +1908,7 @@ const handleFootageProduce = async (
                   c.id === tempId
                     ? {
                         ...c,
-                        
+
                         description,
                         // DO add comment: Map detectedStyle to detectedImageStyle for Character state update.
                         detectedImageStyle: detectedStyle,
@@ -2096,7 +2140,11 @@ const handleFootageProduce = async (
         setAudioClips((p) => p.map((c) => (c.id === id ? { ...c, ...u } : c)))
       }
       onExport={() => {
-        setModalData({ clips: timelineClips });
+        setModalData({
+          clips: timelineClips,
+          audioClips: audioClips,
+          textClips: textClips
+        });
         setActiveModal("export-video");
       }}
       onAddClip={onAddTimelineClip}
@@ -2213,8 +2261,8 @@ const handleFootageProduce = async (
             {!isGiftMode && (
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-600/10 border border-indigo-500/30 rounded-full">
                 <span className="text-[10px] font-black text-indigo-400  tracking-widest italic">
-              Pay-As-You-Produce • NOT a subscription
-            </span>
+                  Pay-As-You-Produce • NOT a subscription
+                </span>
               </div>
             )}
           </div>
@@ -2234,7 +2282,7 @@ const handleFootageProduce = async (
             </h3>
             <div className="flex items-baseline gap-1 mb-3">
               <span className="text-2xl font-black text-white tracking-tighter">
-                €10
+                €12
               </span>
               <span className="text-[8px] font-bold text-gray-500  tracking-widest">
                 One-time
@@ -2276,25 +2324,25 @@ const handleFootageProduce = async (
                 ) : (
                   <SparklesIcon className="w-6 h-6" />
                 )}
-            </div>
+              </div>
               <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter  leading-none">
                 {isGiftMode ? "Gift Pack: Production" : "Production"}
-            </h3>
+              </h3>
               <div className="flex items-baseline gap-1 mb-4">
                 <span className="text-3xl font-black text-white tracking-tighter">
-                  €20
-              </span>
+                  €25
+                </span>
                 <span className="text-[10px] font-bold text-gray-400  tracking-widest italic">
-                Best Value
-              </span>
-            </div>
-            <a
+                  Best Value
+                </span>
+              </div>
+              <a
                 href={`${PAYPAL_PRO_LINK}${isGiftMode && giftRecipientEmail ? `&custom=${giftRecipientEmail}` : ""}`}
-              target="_blank"
+                target="_blank"
                 className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-all ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-white text-black hover:bg-gray-200"}`}
-            >
+              >
                 {isGiftMode ? "Gift 300 Credits" : "Fuel Vision"}
-            </a>
+              </a>
               <div className="w-full space-y-2 text-left border-t border-white/10 pt-4">
                 <div
                   className={`flex items-center gap-2 ${isGiftMode ? "text-amber-400" : "text-white"}`}
@@ -2304,7 +2352,7 @@ const handleFootageProduce = async (
                   />
                   <span className="text-[10px] font-black  tracking-wider">
                     300 Credits
-                </span>
+                  </span>
                 </div>
               </div>
             </div>
@@ -2323,7 +2371,7 @@ const handleFootageProduce = async (
             </h3>
             <div className="flex items-baseline gap-1 mb-4">
               <span className="text-3xl font-black text-white tracking-tighter">
-                €40
+                €45
               </span>
               <span className="text-[10px] font-bold text-gray-400  tracking-widest">
                 Max Power
@@ -2340,7 +2388,7 @@ const handleFootageProduce = async (
               <div className="flex items-center gap-2 text-amber-400">
                 <CheckIcon className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-black  tracking-wider">
-                  600 Credits
+                  700 Credits
                 </span>
               </div>
             </div>
@@ -2425,13 +2473,13 @@ const handleFootageProduce = async (
       <main className="flex-1 h-full overflow-hidden relative flex flex-col bg-gray-950">
         {activeView === "welcome" && (
           <div className="absolute inset-0 z-0">
-          <WelcomePage
-            session={session}
-            onEnter={() => {
-              if (!session) setActiveView("welcome");
+            <WelcomePage
+              session={session}
+              onEnter={() => {
+                if (!session) setActiveView("welcome");
                 else setActiveView("welcome");
-            }}
-          />
+              }}
+            />
           </div>
         )}
 
@@ -2445,25 +2493,25 @@ const handleFootageProduce = async (
               <div className="flex-1 h-full overflow-hidden flex flex-col">
                 {(activeView === "menu" ||
                   (activeView === "welcome" && session)) && (
-              <Sidebar
-                activeView={activeView}
-                setActiveView={setActiveView}
-                visualStyle={visualStyle}
-                setVisualStyle={setVisualStyle}
-                aspectRatio={aspectRatio}
-                setAspectRatio={setAspectRatio}
-                characterStyle={characterStyle}
-                setCharacterStyle={setCharacterStyle}
-                selectedCountry={selectedCountry}
-                setSelectedCountry={setSelectedCountry}
-                onLogout={() => {
-                  supabase.auth.signOut();
-                  setActiveView("welcome");
-                }}
-                creditBalance={creditSettings.creditBalance}
-                session={session}
-              />
-            )}
+                  <Sidebar
+                    activeView={activeView}
+                    setActiveView={setActiveView}
+                    visualStyle={visualStyle}
+                    setVisualStyle={setVisualStyle}
+                    aspectRatio={aspectRatio}
+                    setAspectRatio={setAspectRatio}
+                    characterStyle={characterStyle}
+                    setCharacterStyle={setCharacterStyle}
+                    selectedCountry={selectedCountry}
+                    setSelectedCountry={setSelectedCountry}
+                    onLogout={() => {
+                      supabase.auth.signOut();
+                      setActiveView("welcome");
+                    }}
+                    creditBalance={creditSettings.creditBalance}
+                    session={session}
+                  />
+                )}
                 {activeView === "roster" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
                     <ViewHeader
@@ -2474,75 +2522,78 @@ const handleFootageProduce = async (
                     {renderRoster()}
                   </div>
                 )}
-            {activeView === "storybook" && (
+                {activeView === "storybook" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
                     <ViewHeader
                       title="Story writer"
                       onBack={closeSubPage}
                       layout={layoutMode}
                     />
-                {renderStorybook()}
+                    {renderStorybook()}
                   </div>
-            )}
+                )}
 
-            {activeView === "storyboard" && (
+                {activeView === "storyboard" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
                     <ViewHeader
                       title="Production stage"
                       onBack={closeSubPage}
                       layout={layoutMode}
                     />
-                {renderStoryboard()}
+                    {renderStoryboard()}
                   </div>
-            )}
+                )}
 
-            {activeView === "timeline" && (
+                {activeView === "timeline" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
                     <ViewHeader
                       title="Story timeline"
                       onBack={closeSubPage}
                       layout={layoutMode}
                     />
-                {renderTimeline()}
+                    {renderTimeline()}
                   </div>
-            )}
+                )}
 
-            {activeView === "history" && (
+                {activeView === "history" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
                     <ViewHeader
                       title="Production history"
                       onBack={closeSubPage}
                       layout={layoutMode}
                     />
-                {renderHistory()}
+                    {renderHistory()}
                   </div>
-            )}
+                )}
 
-            {activeView === "buy-credits" && (
+                {activeView === "buy-credits" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
                     <ViewHeader
                       title="Get credits"
                       onBack={closeSubPage}
                       layout={layoutMode}
                     />
-                {renderCredits()}
+                    {renderCredits()}
                   </div>
-            )}
+                )}
 
-            {activeView === "footage" && (
+                {activeView === "footage" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
                     <ViewHeader
                       title="Quick footage desk"
                       onBack={closeSubPage}
                       layout={layoutMode}
                     />
-                {renderFootageDesk()}
+                    {renderFootageDesk()}
                   </div>
                 )}
 
                 {activeView === "directors-cut" && (
                   <div className="flex-1 h-full overflow-hidden flex flex-col animate-in slide-in-from-right-2 duration-300">
-                    <DirectorsCut onClose={() => setActiveView("menu")} />
+                    <DirectorsCut
+                      onClose={() => setActiveView("menu")}
+                      consumeCredits={consumeCredits}
+                    />
                   </div>
                 )}
               </div>
@@ -2564,6 +2615,7 @@ const handleFootageProduce = async (
       <Modals
         activeModal={activeModal}
         setActiveModal={setActiveModal}
+        creditWarning={creditWarning}
         modalData={modalData}
         onClose={() => setActiveModal(null)}
         storybookContent={storybook}
@@ -2742,7 +2794,7 @@ const handleFootageProduce = async (
                 c.id === tempId
                   ? {
                       ...c,
-                       
+
                       description,
                       // DO add comment: Map detectedStyle to detectedImageStyle for Character state update.
                       detectedImageStyle: detectedStyle,

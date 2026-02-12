@@ -268,6 +268,62 @@ function extractJson(text: string): string {
   return clean;
 }
 
+// DO add comment: Added DIRECTOR ASSISTANCE ENGINE.
+// This function centralizes all "reaction video / director insight" logic
+// so UI components never call GoogleGenAI directly.
+// It enforces structured JSON output for titles, talking points, and vibe.
+
+
+
+
+export async function generateDirectorAssistance(context: string): Promise<{
+  suggestedTitles: string[];
+  talkingPoints: string[];
+  vibe: string;
+} | null> {
+  const ai = getAiClient();
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `You are a professional video director and script writer for reaction videos.
+
+Context:
+${context}
+
+Generate:
+- 3 catchy titles
+- 5 key talking points for commentary
+- A short vibe description.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            suggestedTitles: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            talkingPoints: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            },
+            vibe: { type: Type.STRING }
+          },
+          required: ["suggestedTitles", "talkingPoints", "vibe"]
+        }
+      }
+    });
+
+    const text = response.text || "{}";
+    return JSON.parse(extractJson(text));
+  } catch (error) {
+    console.error("Director Assistance Error", error);
+    return null;
+  }
+}
+
+
 export function detectMimeType(base64: string): string {
   if (!base64) return "image/png";
   if (base64.startsWith("data:")) {

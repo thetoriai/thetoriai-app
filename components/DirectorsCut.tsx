@@ -75,8 +75,18 @@ const DEFAULT_TRANSFORM: Transform = {
   cropRight: 0
 };
 
-const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
-  onClose: externalClose
+interface DirectorsCutProps {
+  onClose?: () => void;
+  consumeCredits: (action: string) => Promise<boolean>;
+  onGenerateImage?: (prompt: string) => Promise<string>;
+  onGenerateVideo?: (prompt: string) => Promise<any>;
+}
+
+const DirectorsCut: React.FC<DirectorsCutProps> = ({
+  onClose: externalClose,
+  consumeCredits,
+  onGenerateImage,
+  onGenerateVideo
 }) => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [visibleAssetIds, setVisibleAssetIds] = useState<string[]>([]);
@@ -126,6 +136,7 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
   const gainNodeRef = useRef<GainNode | null>(null);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const activeStreamRef = useRef<MediaStream | null>(null);
+  const wakeLockRef = useRef<any>(null);
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
@@ -1117,9 +1128,30 @@ const DirectorsCut: React.FC<{ onClose?: () => void }> = ({
         videoRef.current.pause();
         setIsAssetPlaying(false);
       }
+      // Release wake lock
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release();
+          wakeLockRef.current = null;
+        } catch (err) {
+          console.warn("Wake lock release failed", err);
+        }
+      }
     } else {
       // --- MASTER START ---
       if (!canvasRef.current) return;
+
+      // Request wake lock to keep screen active
+      if ("wakeLock" in navigator) {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request(
+            "screen"
+          );
+        } catch (err) {
+          console.warn("Wake lock request failed", err);
+        }
+      }
+
       if (!audioContextRef.current)
         audioContextRef.current = new (
           window.AudioContext || (window as any).webkitAudioContext

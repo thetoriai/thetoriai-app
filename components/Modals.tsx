@@ -32,6 +32,7 @@ import {
 interface ModalsProps {
   activeModal: string | null;
   setActiveModal: (modal: string | null) => void;
+  creditWarning?: string | null;
   modalData: any;
   onClose: () => void;
   onConfirm?: () => void;
@@ -211,10 +212,12 @@ const ModalWrapper = ({
  * Fixed: 'Black first frame' issue.
  * Added: Pre-warming phase for MediaRecorder and robust composition logic.
  */
-const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
-  clips,
-  onClose
-}) => {
+const VideoExporter: React.FC<{
+  clips: any[];
+  audioClips: any[];
+  textClips: any[];
+  onClose: () => void;
+}> = ({ clips, audioClips = [], textClips = [], onClose }) => {
   const [isExporting, setIsExporting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [projectName, setProjectName] = useState("");
@@ -354,6 +357,7 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
       await renderFrameToCapture(0);
 
       const stream = captureCanvas.captureStream(30);
+      
       const supportedTypes = [
         "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
         "video/mp4;codecs=h264",
@@ -433,12 +437,12 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
     }
 
     const url = URL.createObjectURL(exportBlob);
-          const link = document.createElement("a");
-          link.href = url;
+    const link = document.createElement("a");
+    link.href = url;
     link.download = filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
@@ -472,12 +476,12 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
             >
               <DownloadIcon className="w-5 h-5" /> Save Reel to Device
             </button>
-          <button
-            onClick={onClose}
-            className="px-16 py-4 bg-white/5 hover:bg-white/10 text-white font-black  tracking-[0.3em] rounded-2xl transition-all text-[10px] border border-white/5"
-          >
+            <button
+              onClick={onClose}
+              className="px-16 py-4 bg-white/5 hover:bg-white/10 text-white font-black  tracking-[0.3em] rounded-2xl transition-all text-[10px] border border-white/5"
+            >
               Return to Desk
-          </button>
+            </button>
           </div>
         </div>
       ) : (
@@ -503,37 +507,37 @@ const VideoExporter: React.FC<{ clips: any[]; onClose: () => void }> = ({
               </p>
             </div>
 
-      {isExporting ? (
+            {isExporting ? (
               <div className="space-y-6">
                 <div className="h-2.5 bg-gray-900 rounded-full overflow-hidden border border-white/5">
-            <div
-              className="h-full bg-indigo-600 transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+                  <div
+                    className="h-full bg-indigo-600 transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
                 <div className="flex items-center justify-center gap-3">
                   <LoaderIcon className="w-4 h-4 animate-spin text-indigo-500" />
                   <p className="text-[10px] font-black text-indigo-400  tracking-[0.4em] animate-pulse">
-            Rendering Master Reel... {progress}%
-          </p>
+                    Rendering Master Reel... {progress}%
+                  </p>
                 </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button
-            onClick={handleExport}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 w-full max-w-xs">
+                <button
+                  onClick={handleExport}
                   className="w-full py-6 bg-indigo-600 hover:bg-indigo-500 text-white font-black  tracking-[0.4em] rounded-[2rem] shadow-2xl transition-all active:scale-95 text-[12px] border border-indigo-400/20"
-          >
+                >
                   Start Master Render
-          </button>
-          <button
-            onClick={onClose}
-            className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-400 font-black  tracking-widest rounded-xl transition-all text-[10px]"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-400 font-black  tracking-widest rounded-xl transition-all text-[10px]"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
             {error && (
               <div className="p-4 bg-red-900/10 border border-red-500/20 rounded-2xl flex items-start gap-3 animate-in shake">
                 <ExclamationTriangleIcon className="w-5 h-5 text-red-500 shrink-0" />
@@ -613,7 +617,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group transition-all hover:scale-[1.02]`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter  tracking-widest">
-              €10 (100C)
+              €12 (100C)
             </h3>
             <a
               href={getPurchaseLink(PAYPAL_STARTER_LINK)}
@@ -627,7 +631,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             className={`border-2 rounded-2xl flex flex-col items-center text-center shadow-xl p-6 transition-all hover:scale-[1.02] ${isGiftMode ? "bg-[#221c0e] border-amber-500/30" : "bg-[#111827] border-white/20"}`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
-              €20 (300C)
+              €25 (300C)
             </h3>
             <a
               href={getPurchaseLink(PAYPAL_PRO_LINK)}
@@ -641,7 +645,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group transition-all hover:scale-[1.02]`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
-              €40 (600C)
+              €45 (700C)
             </h3>
             <a
               href={getPurchaseLink(PAYPAL_STUDIO_LINK)}
@@ -773,7 +777,12 @@ export const Modals: React.FC<ModalsProps> = ({
   if (activeModal === "export-video") {
     return (
       <ModalWrapper title="Final Production Render" onClose={onClose}>
-        <VideoExporter clips={modalData.clips} onClose={onClose} />
+        <VideoExporter
+          clips={timelineClips}
+          audioClips={audioClips}
+          textClips={textClips}
+          onClose={onClose}
+        />
       </ModalWrapper>
     );
   }
