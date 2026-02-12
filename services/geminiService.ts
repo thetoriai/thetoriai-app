@@ -810,10 +810,99 @@ export async function generateStructuredStory(
      `
     : ``;
 
+  // DO add comment: BIBLE NARRATION PROTOCOL. Activates scripture narration when Religion genre is selected.
+  const bibleMandate =
+    genre === "Religion"
+      ? `
+BIBLE NARRATION PROTOCOL ACTIVE:
+
+NARRATION AUTHORITY:
+- Narration MUST strictly imitate Holy Bible narration style.
+- Tone must be sacred, solemn, direct, and authoritative.
+- Narration must feel like scripture, not modern storytelling.
+
+STRUCTURE REQUIREMENTS:
+- Use scripture narrative phrases such as:
+  "And it came to pass..."
+  "And behold..."
+  "And the Lord said..."
+  "For the Lord was with him..."
+  "Thus saith the Lord..."
+  "And he went forth..."
+
+SOURCE INSPIRATION RULE:
+- Stories must follow Biblical themes, events, or structure.
+- Examples include faith, trials, obedience, miracles, divine encounters, victory through God.
+
+DIALOGUE RULE:
+- Dialogue MUST sound scriptural.
+Example:
+David: The Lord is my shepherd; I shall not want.
+
+FORBIDDEN:
+- No slang
+- No modern casual speech
+- No cinematic Hollywood narration tone
+- No modern expressions
+
+OUTPUT INTENT:
+- Story must feel like an actual Bible passage.
+- Direct, clear, sacred narration.
+`
+      : "";
+
+  // DO add comment: CANONICAL BIBLICAL CHARACTER PROTECTION PROTOCOL.
+  // Prevents user-loaded characters from replacing Jesus, Moses, Mary, etc.
+  // Forces user characters to interact with canonical Biblical figures instead.
+  const canonicalBiblicalProtection =
+    genre === "Religion"
+      ? `
+CANONICAL BIBLICAL CHARACTER PROTECTION PROTOCOL ACTIVE:
+
+HIERARCHY RULE:
+- Biblical figures such as Jesus, Moses, Mary, David, Abraham, Angels are CANONICAL CHARACTERS.
+- Canonical characters MUST NEVER be replaced by user-loaded characters.
+
+IDENTITY LOCK RULE:
+- Jesus MUST remain Jesus.
+- Moses MUST remain Moses.
+- Mary MUST remain Mary.
+- These identities are PERMANENT and PROTECTED.
+
+USER CHARACTER ROLE RULE:
+- User-loaded characters MUST exist as separate individuals.
+- User characters may:
+  witness events
+  follow Jesus
+  speak to Jesus
+  react emotionally
+  participate in scenes
+
+- User characters MUST NOT become Jesus or replace any Biblical figure.
+
+INTERACTION RULE:
+- Canonical character speaks and acts.
+- User character responds, follows, or observes.
+
+Example correct structure:
+Jesus: Follow me.
+Michael: Lord, I will follow thee.
+
+Example forbidden structure:
+Michael: I am Jesus.
+
+VISUAL RULE:
+- Canonical characters appear as distinct individuals.
+- User characters retain their uploaded face and identity.
+`
+      : "";
 
   const system = `You are a professional cinematic screenwriter. 
+  ${musicVideoMandate}
+  ${bibleMandate}
+  ${canonicalBiblicalProtection}
     TARGET MEDIUM: [${movieStyle}]. 
-    DIALOGUE MANDATE: ${includeDialogue  ? "Include speaker-prefixed dialogue (Name: Dialogue)." : "STRICTLY NO DIALOGUE. DO NOT use the 'Name: ' speaker format. Instead, write cinematic action beats using the characters' names naturally (e.g., '[Name] enters the room') to explain the action in the video."}
+    DIALOGUE MANDATE: ${includeDialogue ? "Include speaker-prefixed dialogue (Name: Dialogue)." : "STRICTLY NO DIALOGUE. DO NOT use the 'Name: ' speaker format. Instead, write cinematic action beats using the characters' names naturally (e.g., '[Name] enters the room') to explain the action in the video."}
     CAST: ${castNotes}.
     Return JSON with 'title', 'storyNarrative', and 'scenes' (array of {imageDescription, script}).
     Scene script (Narrative/Dialogue) must be speakable within 8 seconds.`;
@@ -832,21 +921,71 @@ export async function generateStructuredStory(
   return JSON.parse(extractJson(response.text || "{}"));
 }
 
+// DO add comment: Added genre parameter to enable Bible narration protocol detection.
 export async function generateScenesFromNarrative(
   narrative: string,
   characters: Character[],
   includeDialogue: boolean,
   characterStyle: string,
   movieStyle: string,
-  country: string
+  country: string,
+  genre?: string
 ): Promise<any[]> {
   const ai = getAiClient();
   const castNotes = characters
     .map((c) => `${c.name}: ${c.description}`)
     .join("; ");
-  const system = `Parse this ${narrative} into 8-second production scenes for ${movieStyle} production in ${country}.
-    CAST: ${castNotes}.
-    Return JSON: { scenes: [{imageDescription, script}] }. Scene script MUST begin with "Name:".`;
+
+  // DO add comment: Bible narration enforcement for scene breakdown.
+  const bibleMandate =
+    genre === "Religion"
+      ? `
+BIBLE NARRATION PROTOCOL ACTIVE:
+
+- Rewrite scenes in Biblical scripture narration style.
+- Maintain sacred tone.
+- Use phrases like:
+  "And it came to pass..."
+  "And behold..."
+  "For the Lord was with him..."
+
+- Dialogue must sound scriptural, not modern.
+
+`
+      : "";
+  // DO add comment: CANONICAL BIBLICAL CHARACTER PROTECTION PROTOCOL for scene breakdown.
+  const canonicalBiblicalProtection =
+    genre === "Religion"
+      ? `
+CANONICAL BIBLICAL CHARACTER PROTECTION PROTOCOL ACTIVE:
+
+- Jesus, Moses, Mary, Abraham, Angels MUST remain canonical.
+- They MUST NEVER be replaced by user-loaded characters.
+
+- User-loaded characters MUST remain separate individuals.
+- User characters may follow, observe, or speak to Biblical figures.
+
+Example correct:
+Jesus: Follow me.
+Michael: Lord, I will follow thee.
+
+Example forbidden:
+Michael: I am Jesus.
+`
+      : "";
+
+  const system = `
+${bibleMandate}
+${canonicalBiblicalProtection}
+
+Parse this ${narrative} into 8-second production scenes for ${movieStyle} production in ${country}.
+
+CAST: ${castNotes}.
+
+Return JSON: { scenes: [{imageDescription, script}] }.
+
+Scene script MUST begin with "Name:".
+`;
 
   const response: GenerateContentResponse = await withRetry(() =>
     ai.models.generateContent({
