@@ -225,6 +225,22 @@ const VideoExporter: React.FC<{
   const [exportBlob, setExportBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const hexToRgba = (hex: string, alpha: number) => {
+    let r = 0,
+      g = 0,
+      b = 0;
+    if (hex.length === 4) {
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    } else if (hex.length === 7) {
+      r = parseInt(hex.substring(1, 3), 16);
+      g = parseInt(hex.substring(3, 5), 16);
+      b = parseInt(hex.substring(5, 7), 16);
+    }
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
   const handleExport = useCallback(async () => {
     if (clips.length === 0) return;
     setIsExporting(true);
@@ -239,187 +255,222 @@ const VideoExporter: React.FC<{
         ...clips.map(
           (c) => (Number(c.startTime) || 0) + (Number(c.duration) || 0)
         ),
+        ...audioClips.map(
+          (a) => (Number(a.startTime) || 0) + (Number(a.duration) || 0)
+        ),
+        ...textClips.map(
+          (t) => (Number(t.startTime) || 0) + (Number(t.duration) || 0)
+        ),
         0.1
       );
 
-      // STEP 2: RESOLVE AND PRE-LOAD ALL ASSETS
-      const assetMap = new Map<string, HTMLImageElement | HTMLVideoElement>();
-      await Promise.all(
-        clips.map(async (clip) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1080;
+      canvas.height = 1920;
+      const ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx) throw new Error("Hardware acceleration unavailable.");
+
+      const audioCtx = new AudioContext();
+      const audioDest = audioCtx.createMediaStreamDestination();
+      const masterGain = audioCtx.createGain();
+      masterGain.connect(audioDest);
+
+      // Load and setup elements
+      const mediaMap = new Map<string, HTMLMediaElement | HTMLImageElement>();
+
+      await Promise.all([
+        ...clips.map(async (clip) => {
           const url =
             typeof clip.url !== "string"
               ? URL.createObjectURL(clip.url)
-              : clip.url.startsWith("data:") ||
-                  clip.url.startsWith("http") ||
-                  clip.url.startsWith("blob:")
-                ? clip.url
-                : `data:image/png;base64,${clip.url}`;
-
-          return new Promise<void>((resolve, reject) => {
+              : clip.url;
             if (clip.type === "video") {
               const v = document.createElement("video");
               v.src = url;
               v.crossOrigin = "anonymous";
-              v.muted = true;
+            v.muted = false;
               v.playsInline = true;
               v.preload = "auto";
-              v.oncanplaythrough = () => {
-                assetMap.set(clip.id, v);
-                resolve();
-              };
-              v.onerror = () =>
-                reject(new Error("Video load failed: " + clip.id));
+            await new Promise((res) => {
+              v.oncanplaythrough = res;
               v.load();
+            });
+            const source = audioCtx.createMediaElementSource(v);
+            source.connect(masterGain);
+            mediaMap.set(clip.id, v);
             } else {
               const img = new Image();
               img.src = url;
               img.crossOrigin = "anonymous";
-              img.onload = () => {
-                assetMap.set(clip.id, img);
-                resolve();
-              };
-              img.onerror = () =>
-                reject(new Error("Image load failed: " + clip.id));
-            }
+            await new Promise((res) => {
+              img.onload = res;
+            });
+            mediaMap.set(clip.id, img);
+          }
+        }),
+        ...audioClips.map(async (clip) => {
+          const url =
+            typeof clip.url !== "string"
+              ? URL.createObjectURL(clip.url)
+              : clip.url;
+          const a = document.createElement("audio");
+          a.src = url;
+          a.crossOrigin = "anonymous";
+          await new Promise((res) => {
+            a.oncanplaythrough = res;
+            a.load();
           });
+          const source = audioCtx.createMediaElementSource(a);
+          source.connect(masterGain);
+          mediaMap.set(clip.id, a);
         })
-      );
+      ]);
 
-      // STEP 3: SETUP DUAL-CANVAS SYSTEM
-      const compositionCanvas = document.createElement("canvas");
-      const captureCanvas = document.createElement("canvas");
-      compositionCanvas.width = captureCanvas.width = 1280;
-      compositionCanvas.height = captureCanvas.height = 720;
+      const canvasStream = canvas.captureStream(30);
+      const combinedStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...audioDest.stream.getAudioTracks()
+      ]);
 
-      const compCtx = compositionCanvas.getContext("2d", { alpha: false });
-      const captCtx = captureCanvas.getContext("2d", { alpha: false });
-      if (!compCtx || !captCtx)
-        throw new Error("Hardware acceleration failed.");
+      // Prioritize MP4 container
+      const mimeType = MediaRecorder.isTypeSupported(
+        "video/mp4;codecs=h264,aac"
+      )
+        ? "video/mp4;codecs=h264,aac"
+        : MediaRecorder.isTypeSupported("video/mp4")
+          ? "video/mp4"
+          : "video/webm;codecs=vp9";
 
-      // Helper to render a specific time point to the capture canvas
-      const renderFrameToCapture = async (time: number) => {
-        compCtx.fillStyle = "black";
-        compCtx.fillRect(
-          0,
-          0,
-          compositionCanvas.width,
-          compositionCanvas.height
-        );
+      const recorder = new MediaRecorder(combinedStream, {
+        mimeType,
+        videoBitsPerSecond: 12000000
+      });
+
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      const recordingPromise = new Promise<Blob>((res) => {
+        recorder.onstop = () => res(new Blob(chunks, { type: mimeType }));
+      });
+
+      recorder.start();
+      const startTime = performance.now();
+
+      const render = async () => {
+        const now = (performance.now() - startTime) / 1000;
+        if (now >= totalDuration) {
+          recorder.stop();
+          return;
+        }
+
+        setProgress(Math.min(100, Math.round((now / totalDuration) * 100)));
+
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Slightly loose filter to avoid frame-skip on zero-boundaries
         const activeClips = clips
-          .filter(
-            (c) =>
-              time >= c.startTime - 0.001 && time < c.startTime + c.duration
-          )
+          .filter((c) => now >= c.startTime && now < c.startTime + c.duration)
           .sort((a, b) => (a.layer || 0) - (b.layer || 0));
 
         for (const clip of activeClips) {
-          const asset = assetMap.get(clip.id);
-          if (!asset) continue;
+          const el = mediaMap.get(clip.id);
+          if (!el) continue;
 
-          if (asset instanceof HTMLVideoElement) {
-            const localTime = Math.min(
-              Math.max(0, time - clip.startTime),
-              asset.duration - 0.05
-            );
-            asset.currentTime = localTime;
-            await new Promise((res) => {
-              const onSeeked = () => {
-                asset.removeEventListener("seeked", onSeeked);
-                res(true);
-              };
-              asset.addEventListener("seeked", onSeeked);
-              setTimeout(res, 180);
-            });
+          if (el instanceof HTMLVideoElement) {
+            if (el.paused) el.play().catch(() => {});
+            el.volume = clip.isMuted ? 0 : (clip.volume ?? 1);
           }
 
-          const assetW =
-            asset instanceof HTMLVideoElement ? asset.videoWidth : asset.width;
-          const assetH =
-            asset instanceof HTMLVideoElement
-              ? asset.videoHeight
-              : asset.height;
-          const ratio = Math.min(
-            compositionCanvas.width / assetW,
-            compositionCanvas.height / assetH
+          const sw =
+            el instanceof HTMLVideoElement
+              ? el.videoWidth
+              : (el as HTMLImageElement).width;
+          const sh =
+            el instanceof HTMLVideoElement
+              ? el.videoHeight
+              : (el as HTMLImageElement).height;
+          const scale = clip.zoom || 1;
+          const ratio = Math.max(canvas.width / sw, canvas.height / sh) * scale;
+          const w = sw * ratio;
+          const h = sh * ratio;
+          const x = (canvas.width - w) / 2 + (clip.posX || 0) * 10;
+          const y = (canvas.height - h) / 2 + (clip.posY || 0) * 10;
+
+          ctx.save();
+          // DO add comment above each fix. Fix type mismatch: Cast el to CanvasImageSource because for visual clips it's always HTMLImageElement or HTMLVideoElement.
+          ctx.drawImage(el as CanvasImageSource, x, y, w, h);
+          ctx.restore();
+        }
+
+        // Render audio clips
+        audioClips.forEach((clip) => {
+          const a = mediaMap.get(clip.id) as HTMLAudioElement;
+          if (!a) return;
+          if (now >= clip.startTime && now < clip.startTime + clip.duration) {
+            if (a.paused) a.play().catch(() => {});
+            a.volume = clip.isMuted ? 0 : (clip.volume ?? 1);
+          } else {
+            a.pause();
+          }
+        });
+
+        // Render text
+        const activeTexts = textClips.filter(
+          (t) => now >= t.startTime && now < t.startTime + t.duration
+        );
+        for (const t of activeTexts) {
+          ctx.save();
+          const fontSize = 60;
+          ctx.font = `900 ${fontSize}px "Inter", sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+
+          if (t.fullBackground) {
+            ctx.fillStyle = hexToRgba(
+              t.bgColor || "#000000",
+              t.bgOpacity ?? 0.8
+            );
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+
+          ctx.fillStyle = "white";
+          ctx.fillText(
+            t.text,
+            canvas.width / 2,
+            canvas.height / 2 + (t.posY || 0) * 10
           );
-          const w = assetW * ratio;
-          const h = assetH * ratio;
-          const x = (compositionCanvas.width - w) / 2;
-          const y = (compositionCanvas.height - h) / 2;
-          compCtx.drawImage(asset, x, y, w, h);
+          ctx.restore();
         }
-        captCtx.drawImage(compositionCanvas, 0, 0);
+
+        requestAnimationFrame(render);
       };
 
-      // PRE-WARM: Draw the first frame BEFORE capture starts
-      await renderFrameToCapture(0);
-
-      const stream = captureCanvas.captureStream(30);
-      
-      const supportedTypes = [
-        "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-        "video/mp4;codecs=h264",
-        "video/webm;codecs=vp9",
-        "video/webm"
-      ];
-
-      let options: MediaRecorderOptions = { videoBitsPerSecond: 12000000 }; // 12Mbps for high fidelity
-      for (const type of supportedTypes) {
-        if (MediaRecorder.isTypeSupported(type)) {
-          options.mimeType = type;
-          break;
-        }
-      }
-
-      const recorder = new MediaRecorder(stream, options);
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      const recordingPromise = new Promise<Blob>((resolve) => {
-        recorder.onstop = () =>
-          resolve(new Blob(chunks, { type: options.mimeType || "video/mp4" }));
-      });
-
-      // Start recorder and wait for codec initialization
-      recorder.start();
-      await new Promise((r) => setTimeout(r, 250));
-
-      // STEP 4: TIMELINE FRAME-STEPPER LOOP
-      const fps = 30;
-      const totalFrames = Math.ceil(totalDuration * fps);
-
-      for (let f = 0; f < totalFrames; f++) {
-        const currentTime = f / fps;
-        await renderFrameToCapture(currentTime);
-
-        if (f % 10 === 0) {
-          setProgress(Math.round((f / totalFrames) * 100));
-          await new Promise((r) => requestAnimationFrame(r));
-        }
-      }
-
-      // Finalizing... Ensure last frame is encoded
-      await new Promise((r) => setTimeout(r, 1000));
-      recorder.stop();
+      render();
       const finalBlob = await recordingPromise;
+
+      // Cleanup
+      mediaMap.forEach((el) => {
+        if (el instanceof HTMLMediaElement) {
+          el.pause();
+          el.src = "";
+          el.load();
+        }
+      });
+      await audioCtx.close();
+
       setExportBlob(finalBlob);
       setExportSuccess(true);
       setIsExporting(false);
-      setProgress(100);
     } catch (err: any) {
-      console.error("Master Export Failure:", err);
-      setError(err.message || "Renderer resource exhaustion.");
+      console.error(err);
+      setError("Render Engine Error: " + err.message);
       setIsExporting(false);
     }
-  }, [clips]);
+  }, [clips, audioClips, textClips, hexToRgba]);
 
   const handleSaveToDevice = async () => {
     if (!exportBlob) return;
-    const finalTitle = projectName.trim() || `Production_Master_${Date.now()}`;
+    const finalTitle = projectName.trim() || `Master_Reel_${Date.now()}`;
     const ext = exportBlob.type.includes("mp4") ? "mp4" : "webm";
     const filename = `${finalTitle.replace(/\s+/g, "_")}.${ext}`;
 
@@ -439,10 +490,8 @@ const VideoExporter: React.FC<{
     const url = URL.createObjectURL(exportBlob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
+    link.download = `${finalTitle}.${ext}`;
     link.click();
-    document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
@@ -499,8 +548,8 @@ const VideoExporter: React.FC<{
                 type="text"
                 value={projectName}
                 onChange={(e) => setProjectName(e.target.value)}
-                placeholder="E.g. The_Lion_Of_Lagos"
-                className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-indigo-500 outline-none transition-all placeholder-gray-800 text-sm shadow-inner group-hover:border-indigo-500/50"
+                placeholder="Project_Master"
+                className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-indigo-500 outline-none transition-all placeholder-gray-800 text-sm shadow-inner"
               />
               <p className="text-[8px] text-gray-600 font-bold  tracking-widest ml-2 italic">
                 Leave blank to use cinematic defaults
@@ -517,8 +566,8 @@ const VideoExporter: React.FC<{
                 </div>
                 <div className="flex items-center justify-center gap-3">
                   <LoaderIcon className="w-4 h-4 animate-spin text-indigo-500" />
-                  <p className="text-[10px] font-black text-indigo-400  tracking-[0.4em] animate-pulse">
-                    Rendering Master Reel... {progress}%
+                  <p className="text-[10px] font-black text-indigo-400 tracking-[0.4em] animate-pulse">
+                    Rendering Master Output... {progress}%
                   </p>
                 </div>
               </div>
