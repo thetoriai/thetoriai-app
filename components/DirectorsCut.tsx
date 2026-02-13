@@ -45,7 +45,7 @@ export type DrawingShape = "free" | "circle" | "square" | "arrow";
 
 export interface DrawingItem {
   shape: DrawingShape;
-  points: Point[];
+  points: Point[]; // Coordinates relative to the source asset (0.0 to 1.0)
   color: string;
   width: number;
 }
@@ -99,6 +99,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   );
 
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordConfirming, setIsRecordConfirming] = useState(false);
   const [isAssetPlaying, setIsAssetPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -111,11 +112,18 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [isPinching, setIsPinching] = useState(false);
   const [isFullFrame, setIsFullFrame] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+
+  // New: Confirmation state for Magic button
+  const [isConfirmingMagic, setIsConfirmingMagic] = useState(false);
+  const [magicError, setMagicError] = useState<string | null>(null);
 
   // Drawing State
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawingShape, setDrawingShape] = useState<DrawingShape>("free");
-  const currentPathRef = useRef<Point[]>([]);
+  const [activePath, setActivePath] = useState<Point[]>([]);
 
   const startTouchRef = useRef({ x: 0, y: 0, scale: 0, dist: 0 });
   const isDraggingRef = useRef(false);
@@ -125,6 +133,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const penTapTimeoutRef = useRef<number | null>(null);
 
   // --- Refs ---
+  const isRecordingRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const webcamRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -137,8 +146,23 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const activeStreamRef = useRef<MediaStream | null>(null);
   const wakeLockRef = useRef<any>(null);
+  const micOnlyStreamRef = useRef<MediaStream | null>(null);
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
+
+  // Magic button timeout effect
+  useEffect(() => {
+    if (isConfirmingMagic) {
+      const timer = setTimeout(() => {
+        setIsConfirmingMagic(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isConfirmingMagic]);
+
+  useEffect(() => {
+    setIsConfirmingMagic(false);
+  }, [selectedAssetId]);
 
   // --- Visibility Logic ---
   useEffect(() => {
@@ -220,6 +244,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   );
 
   const resetApp = () => {
+    if (isFinalizing || isReviewing) return;
     assets.forEach((a) => URL.revokeObjectURL(a.url));
     setAssets([]);
     setVisibleAssetIds([]);
@@ -232,6 +257,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   };
 
   const updateAssetTransform = (id: string, updates: Partial<Transform>) => {
+    if (isFinalizing || isReviewing) return;
     setAssets((prev) =>
       prev.map((a) =>
         a.id === id
@@ -242,6 +268,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   };
 
   const deleteAsset = (id: string) => {
+    if (isFinalizing || isReviewing) return;
     const asset = assets.find((a) => a.id === id);
     if (asset) {
       URL.revokeObjectURL(asset.url);
@@ -255,13 +282,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     }
   };
 
-  const clearAssetDrawings = (id: string) => {
-    setAssets((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, drawings: [] } : a))
-    );
-  };
-
   const toggleAssetVisibility = (id: string) => {
+    if (isFinalizing || isReviewing) return;
     const asset = assets.find((a) => a.id === id);
     if (!asset) return;
     setVisibleAssetIds((prev) => {
@@ -296,6 +318,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
   const toggleAssetPlayback = useCallback(
     async (forceReset = false) => {
+      if (isFinalizing || isReviewing) return;
     const v = videoRef.current;
     if (!v || !v.src) return;
     if (!audioContextRef.current)
@@ -336,7 +359,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       setIsAssetPlaying(false);
     }
     },
-    [isLooping]
+    [isLooping, isFinalizing, isReviewing]
   );
 
   useEffect(() => {
@@ -356,6 +379,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   }, [isLooping]);
 
   const handlePlaybackInteraction = useCallback(() => {
+    if (isFinalizing || isReviewing) return;
     const now = Date.now();
     const timeSinceLastTap = now - lastTapRef.current;
     if (timeSinceLastTap < 300) {
@@ -371,9 +395,14 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         tapTimeoutRef.current = null;
       }, 300);
     }
-  }, [toggleAssetPlayback]);
+  }, [toggleAssetPlayback, isFinalizing, isReviewing]);
+
+  const clearAllDrawings = useCallback(() => {
+    setAssets((prev) => prev.map((a) => ({ ...a, drawings: [] })));
+  }, []);
 
   const handlePenInteraction = useCallback(() => {
+    if (isFinalizing || isReviewing) return;
     const now = Date.now();
     const timeSinceLastTap = now - lastPenTapRef.current;
     if (timeSinceLastTap < 300) {
@@ -393,42 +422,73 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       penTapTimeoutRef.current = window.setTimeout(() => {
         setIsDrawingMode((prev) => {
           const next = !prev;
-          if (next) setIsLocked(true);
-          else {
+          if (next) {
+            setIsLocked(true);
+          } else {
             setIsLocked(false);
+            // Delete all pen strokes on any surface when unselecting the pen
+            clearAllDrawings();
           }
           return next;
         });
         penTapTimeoutRef.current = null;
       }, 300);
     }
-  }, [selectedAssetId]);
+  }, [isFinalizing, isReviewing, clearAllDrawings]);
 
   // --- Magic Cutout Logic ---
   const processTransparency = (img: HTMLImageElement): string => {
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return img.src;
     ctx.drawImage(img, 0, 0);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
 
-    // Sample background from top-left corner
-    const bgR = data[0],
-      bgG = data[1],
-      bgB = data[2];
-    const threshold = 40;
+    // Sample more aggressively from corners and edges to find background white
+    const sampleIndices = [];
+    const inset = 2; // pixel inset
+    // Top Row
+    for (let x = 0; x < canvas.width; x += 10)
+      sampleIndices.push((inset * canvas.width + x) * 4);
+    // Bottom Row
+    for (let x = 0; x < canvas.width; x += 10)
+      sampleIndices.push(((canvas.height - inset - 1) * canvas.width + x) * 4);
+    // Left edge
+    for (let y = 0; y < canvas.height; y += 10)
+      sampleIndices.push((y * canvas.width + inset) * 4);
+    // Right edge
+    for (let y = 0; y < canvas.height; y += 10)
+      sampleIndices.push((y * canvas.width + (canvas.width - inset - 1)) * 4);
 
+    let rSum = 0,
+      gSum = 0,
+      bSum = 0,
+      count = 0;
+    sampleIndices.forEach((i) => {
+      rSum += data[i];
+      gSum += data[i + 1];
+      bSum += data[i + 2];
+      count++;
+    });
+    const avgR = rSum / count;
+    const avgG = gSum / count;
+    const avgB = bSum / count;
+
+    // Wider threshold for near-white removal
+    const threshold = 120;
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i],
         g = data[i + 1],
         b = data[i + 2];
       const dist = Math.sqrt(
-        Math.pow(r - bgR, 2) + Math.pow(g - bgG, 2) + Math.pow(b - bgB, 2)
+        Math.pow(r - avgR, 2) + Math.pow(g - avgG, 2) + Math.pow(b - avgB, 2)
       );
-      if (dist < threshold) {
+      // Specifically target high lightness/near-white even if distance isn't perfect
+      const isVeryLight = r > 240 && g > 240 && b > 240;
+      if (dist < threshold || isVeryLight) {
         data[i + 3] = 0; // Transparent
       }
     }
@@ -437,7 +497,28 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   };
 
   const handleMagicCutout = async () => {
-    if (!selectedAsset || selectedAsset.type !== "image") return;
+    if (
+      !selectedAsset ||
+      selectedAsset.type !== "image" ||
+      isFinalizing ||
+      isReviewing
+    )
+      return;
+    // CREDIT DEDUCTION
+   try {
+     const ok = await consumeCredits("IMAGE_NORMAL");
+
+     if (!ok) {
+       setMagicError("Not enough credits");
+       setTimeout(() => setMagicError(null), 2000);
+       return;
+     }
+   } catch {
+     setMagicError("Credit check failed");
+     setTimeout(() => setMagicError(null), 2000);
+     return;
+   }
+    
     setIsAiProcessing(true);
 
     try {
@@ -456,60 +537,64 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           reader.readAsDataURL(blob);
         });
       }
-
-      const prompt = `Remove the background from this image. Keep only the subject highlighted by the user markings. Return the subject as a high-quality cutout. The background must be a pure solid black color so it can be extracted for transparency. Edge quality is critical.`;
-
+      // Enhanced prompt for pure background isolation
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-image",
         contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType: "image/png" } },
-            { text: prompt }
+            {
+              text: `Precisely isolate the main subject. Place the subject on a pure, solid #FFFFFF white background. No shadows, no gradients, no borders. Ensure every background pixel is perfectly white.`
+            }
           ]
         }
       });
 
-      let resultUrl = "";
+      let rawResultUrl = "";
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) {
-          resultUrl = `data:image/png;base64,${part.inlineData.data}`;
+          rawResultUrl = `data:image/png;base64,${part.inlineData.data}`;
           break;
         }
       }
 
-      if (resultUrl) {
-        const img = new Image();
-        img.src = resultUrl;
-        img.onload = () => {
-          // Force transparency based on solid background sampling
-          const transparentUrl = processTransparency(img);
-          const finalImg = new Image();
-          finalImg.src = transparentUrl;
-          finalImg.onload = () => {
-            imageCache.current.set(selectedAsset.id, finalImg);
+      if (rawResultUrl) {
+        const tempImg = new Image();
+        tempImg.crossOrigin = "anonymous";
+        tempImg.src = rawResultUrl;
+        tempImg.onload = () => {
+          const transparentUrl = processTransparency(tempImg);
+
+          const finalTransparentImg = new Image();
+          finalTransparentImg.crossOrigin = "anonymous";
+          finalTransparentImg.src = transparentUrl;
+          finalTransparentImg.onload = () => {
+            imageCache.current.set(selectedAsset.id, finalTransparentImg);
             setAssets((prev) =>
               prev.map((a) =>
                 a.id === selectedAsset.id
                   ? {
                       ...a,
                       url: transparentUrl,
-                      width: finalImg.naturalWidth,
-                      height: finalImg.naturalHeight,
+                      width: finalTransparentImg.naturalWidth,
+                      height: finalTransparentImg.naturalHeight,
                       drawings: []
                     }
                   : a
               )
             );
+            setIsAiProcessing(false);
+            setIsConfirmingMagic(false);
           };
         };
+      } else {
+        setIsAiProcessing(false);
       }
     } catch (err) {
       console.error("Magic failed", err);
-      alert("AI processing failed. Check your connection or markings.");
-    } finally {
       setIsAiProcessing(false);
     }
-  };
+  };;
 
   useEffect(() => {
     const stopTracks = () => {
@@ -624,7 +709,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         ctx.rect(drawX, drawY, finalW, finalH);
         ctx.clip();
         ctx.drawImage(
-          source,
+          source as CanvasImageSource,
           sW * (trans.cropLeft / 100),
           sH * (trans.cropTop / 100),
           swActual,
@@ -635,15 +720,28 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           finalH
         );
 
-        const allPaths = [...asset.drawings];
-        if (id === selectedAssetId && currentPathRef.current.length > 0)
-          allPaths.push({
+        // Helper to convert source-relative points to canvas coordinates
+        const sourceToCanvas = (pt: Point) => {
+          const relX =
+            (pt.x - trans.cropLeft / 100) /
+            (1 - (trans.cropLeft + trans.cropRight) / 100);
+          const relY =
+            (pt.y - trans.cropTop / 100) /
+            (1 - (trans.cropTop + trans.cropBottom) / 100);
+          return { x: drawX + relX * finalW, y: drawY + relY * finalH };
+        };
+
+        const allDrawings = [...asset.drawings];
+        if (id === selectedAssetId && activePath.length > 0) {
+          allDrawings.push({
             shape: drawingShape,
-            points: [...currentPathRef.current],
+            points: activePath,
             color: "#eaff00",
             width: 8
           });
-        allPaths.forEach((item) => {
+                }
+
+        allDrawings.forEach((item) => {
           if (item.points.length < 1) return;
           ctx.beginPath();
           ctx.strokeStyle = item.color;
@@ -652,58 +750,48 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           ctx.lineJoin = "round";
           ctx.shadowBlur = 10;
           ctx.shadowColor = item.color;
+
+          const p0 = sourceToCanvas(item.points[0]);
+
           if (item.shape === "free") {
-            ctx.moveTo(
-              drawX + item.points[0].x * finalW,
-              drawY + item.points[0].y * finalH
-            );
-            for (let i = 1; i < item.points.length; i++)
-              ctx.lineTo(
-                drawX + item.points[i].x * finalW,
-                drawY + item.points[i].y * finalH
-              );
+            ctx.moveTo(p0.x, p0.y);
+            for (let i = 1; i < item.points.length; i++) {
+              const pi = sourceToCanvas(item.points[i]);
+              ctx.lineTo(pi.x, pi.y);
+            }
             ctx.stroke();
           } else if (item.shape === "circle" && item.points.length >= 2) {
-            const centerX = drawX + item.points[0].x * finalW,
-              centerY = drawY + item.points[0].y * finalH,
-              edgeX = drawX + item.points[1].x * finalW,
-              edgeY = drawY + item.points[1].y * finalH;
+            const p1 = sourceToCanvas(item.points[1]);
             ctx.arc(
-              centerX,
-              centerY,
-              Math.hypot(edgeX - centerX, edgeY - centerY),
+              p0.x,
+              p0.y,
+              Math.hypot(p1.x - p0.x, p1.y - p0.y),
               0,
               Math.PI * 2
             );
             ctx.stroke();
           } else if (item.shape === "square" && item.points.length >= 2) {
-            const centerX = drawX + item.points[0].x * finalW,
-              centerY = drawY + item.points[0].y * finalH,
-              edgeX = drawX + item.points[1].x * finalW,
-              edgeY = drawY + item.points[1].y * finalH,
-              side = Math.hypot(edgeX - centerX, edgeY - centerY);
-            ctx.strokeRect(centerX - side, centerY - side, side * 2, side * 2);
+            const p1 = sourceToCanvas(item.points[1]);
+            const side = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            ctx.strokeRect(p0.x - side, p0.y - side, side * 2, side * 2);
           } else if (item.shape === "arrow" && item.points.length >= 2) {
-            const targetX = drawX + item.points[0].x * finalW,
-              targetY = drawY + item.points[0].y * finalH,
-              sourceX = drawX + item.points[1].x * finalW,
-              sourceY = drawY + item.points[1].y * finalH;
-            ctx.moveTo(sourceX, sourceY);
-            ctx.lineTo(targetX, targetY);
+            const p1 = sourceToCanvas(item.points[1]);
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p0.x, p0.y);
             ctx.stroke();
-            const angle = Math.atan2(targetY - sourceY, targetX - sourceX);
+            const angle = Math.atan2(p0.y - p1.y, p0.x - p1.x);
             const hLen = 65,
               hAng = Math.PI / 4;
             ctx.beginPath();
-            ctx.moveTo(targetX, targetY);
+            ctx.moveTo(p0.x, p0.y);
             ctx.lineTo(
-              targetX - hLen * Math.cos(angle - hAng),
-              targetY - hLen * Math.sin(angle - hAng)
+              p0.x - hLen * Math.cos(angle - hAng),
+              p0.y - hLen * Math.sin(angle - hAng)
             );
-            ctx.moveTo(targetX, targetY);
+            ctx.moveTo(p0.x, p0.y);
             ctx.lineTo(
-              targetX - hLen * Math.cos(angle + hAng),
-              targetY - hLen * Math.sin(angle + hAng)
+              p0.x - hLen * Math.cos(angle + hAng),
+              p0.y - hLen * Math.sin(angle + hAng)
             );
             ctx.stroke();
           }
@@ -724,12 +812,14 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         }
 
         ctx.restore();
+        // CLEAN FEED LOGIC: Only draw border/handles if NOT recording
         if (
           id === selectedAssetId &&
           !isLocked &&
           !isFullFrame &&
           !isDrawingMode &&
-          !isAiProcessing
+          !isAiProcessing &&
+          !isRecordingRef.current
         ) {
           ctx.save();
           ctx.shadowColor = "rgba(16, 185, 129, 0.5)";
@@ -780,7 +870,9 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     isFullFrame,
     isDrawingMode,
     drawingShape,
-    isAiProcessing
+    isAiProcessing,
+    isRecording,
+    activePath
   ]);
 
   useEffect(() => {
@@ -789,7 +881,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   }, [drawFrame]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (isAiProcessing) return;
+    if (isAiProcessing || isFinalizing || isReviewing) return;
     isDraggingRef.current = false;
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY;
@@ -813,66 +905,76 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           (trans.scale / 100) *
           (selectedAsset!.height / selectedAsset!.width) *
           (shActual / selectedAsset!.height);
-      let drawX,
-        drawY,
-        finalW = drawW,
-        finalH = drawH;
+      let dX,
+        dY,
+        fW = drawW,
+        fH = drawH;
       if (isFullFrame) {
         const aR = swActual / shActual,
           fR = 1080 / 1920;
         if (aR > fR) {
-          finalW = 1080;
-          finalH = 1080 / aR;
+          fW = 1080;
+          fH = 1080 / aR;
         } else {
-          finalH = 1920;
-          finalW = 1920 * aR;
+          fH = 1920;
+          fW = 1920 * aR;
         }
-        drawX = (1080 - finalW) / 2;
-        drawY = (1920 - finalH) / 2;
+        dX = (1080 - fW) / 2;
+        dY = (1920 - fH) / 2;
       } else {
-        drawX = 1080 * (trans.x / 100) - drawW / 2;
-        drawY = 1920 * (trans.y / 100) - drawH / 2;
+        dX = 1080 * (trans.x / 100) - drawW / 2;
+        dY = 1920 * (trans.y / 100) - drawH / 2;
       }
       if (
-        canvasX >= drawX &&
-        canvasX <= drawX + finalW &&
-        canvasY >= drawY &&
-        canvasY <= drawY + finalH
+        canvasX >= dX &&
+        canvasX <= dX + fW &&
+        canvasY >= dY &&
+        canvasY <= dY + fH
       ) {
-        currentPathRef.current = [
-          { x: (canvasX - drawX) / finalW, y: (canvasY - drawY) / finalH }
-        ];
+        const rX = (canvasX - dX) / fW,
+          rY = (canvasY - dY) / fH;
+        setActivePath([
+          {
+            x:
+          trans.cropLeft / 100 +
+              rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
+            y:
+          trans.cropTop / 100 +
+              rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
+          }
+        ]);
       }
       return;
     }
     if (isLocked || isFullFrame || !selectedAssetId) return;
     if (e.touches.length === 1) {
       const trans = selectedAsset!.transform,
-        w = 1080,
-        h = 1920,
-        sW = selectedAsset!.width,
-        sH = selectedAsset!.height;
-      const swActual = sW * (1 - (trans.cropLeft + trans.cropRight) / 100),
-        shActual = sH * (1 - (trans.cropTop + trans.cropBottom) / 100);
-      const drawW = w * (trans.scale / 100) * (swActual / sW),
-        drawH = w * (trans.scale / 100) * (sH / sW) * (shActual / sH);
-      const drawX = w * (trans.x / 100) - drawW / 2,
-        drawY = h * (trans.y / 100) - drawH / 2,
-        hit = 100;
-      if (Math.abs(canvasY - drawY) < hit) setGrabbedPart("top");
-      else if (Math.abs(canvasY - (drawY + drawH)) < hit)
-        setGrabbedPart("bottom");
-      else if (Math.abs(canvasX - drawX) < hit) setGrabbedPart("left");
-      else if (Math.abs(canvasX - (drawX + drawW)) < hit)
-        setGrabbedPart("right");
+        swActual =
+          selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100),
+        shActual =
+          selectedAsset!.height *
+          (1 - (trans.cropTop + trans.cropBottom) / 100);
+      const drawW =
+          1080 * (trans.scale / 100) * (swActual / selectedAsset!.width),
+        drawH =
+          1080 *
+          (trans.scale / 100) *
+          (selectedAsset!.height / selectedAsset!.width) *
+          (shActual / selectedAsset!.height);
+      const dX = 1080 * (trans.x / 100) - drawW / 2,
+        dY = 1920 * (trans.y / 100) - drawH / 2,
+        h = 100;
+      if (Math.abs(canvasY - dY) < h) setGrabbedPart("top");
+      else if (Math.abs(canvasY - (dY + drawH)) < h) setGrabbedPart("bottom");
+      else if (Math.abs(canvasX - dX) < h) setGrabbedPart("left");
+      else if (Math.abs(canvasX - (dX + drawW)) < h) setGrabbedPart("right");
       else if (
-        canvasX > drawX &&
-        canvasX < drawX + drawW &&
-        canvasY > drawY &&
-        canvasY < drawY + drawH
+        canvasX > dX &&
+        canvasX < dX + drawW &&
+        canvasY > dY &&
+        canvasY < dY + drawH
       )
         setGrabbedPart("move");
-      else setGrabbedPart(null);
       startTouchRef.current = {
         ...startTouchRef.current,
         x: clientX,
@@ -892,7 +994,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (isAiProcessing) return;
+    if (isAiProcessing || isFinalizing || isReviewing) return;
     isDraggingRef.current = true;
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY,
@@ -900,9 +1002,9 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     if (!rect) return;
     if (isDrawingMode) {
       e.preventDefault();
-      if (!selectedAssetId || currentPathRef.current.length === 0) return;
-      const canvasX = (clientX - rect.left) * (1080 / rect.width),
-        canvasY = (clientY - rect.top) * (1920 / rect.height);
+      if (!selectedAssetId || activePath.length === 0) return;
+      const cX = (clientX - rect.left) * (1080 / rect.width),
+        cY = (clientY - rect.top) * (1920 / rect.height);
       const trans = selectedAsset!.transform,
         swActual =
           selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100),
@@ -916,107 +1018,120 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           (trans.scale / 100) *
           (selectedAsset!.height / selectedAsset!.width) *
           (shActual / selectedAsset!.height);
-      let drawX,
-        drawY,
-        finalW = drawW,
-        finalH = drawH;
+      let dX,
+        dY,
+        fW = drawW,
+        fH = drawH;
       if (isFullFrame) {
         const aR = swActual / shActual,
           fR = 1080 / 1920;
         if (aR > fR) {
-          finalW = 1080;
-          finalH = 1080 / aR;
+          fW = 1080;
+          fH = 1080 / aR;
         } else {
-          finalH = 1920;
-          finalW = 1920 * aR;
+          fH = 1920;
+          fW = 1920 * aR;
         }
-        drawX = (1080 - finalW) / 2;
-        drawY = (1920 - finalH) / 2;
+        dX = (1080 - fW) / 2;
+        dY = (1920 - fH) / 2;
       } else {
-        drawX = 1080 * (trans.x / 100) - drawW / 2;
-        drawY = 1920 * (trans.y / 100) - drawH / 2;
+        dX = 1080 * (trans.x / 100) - drawW / 2;
+        dY = 1920 * (trans.y / 100) - drawH / 2;
       }
+      const rX = (Math.max(dX, Math.min(dX + fW, cX)) - dX) / fW,
+        rY = (Math.max(dY, Math.min(dY + fH, cY)) - dY) / fH;
       const newPt = {
         x:
-          (Math.max(drawX, Math.min(drawX + finalW, canvasX)) - drawX) / finalW,
-        y: (Math.max(drawY, Math.min(drawY + finalH, canvasY)) - drawY) / finalH
+        trans.cropLeft / 100 +
+          rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
+        y:
+        trans.cropTop / 100 +
+          rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
       };
-      if (drawingShape === "free")
-        currentPathRef.current = [...currentPathRef.current, newPt];
-      else currentPathRef.current = [currentPathRef.current[0], newPt];
+      if (drawingShape === "free") {
+        setActivePath((prev) => [...prev, newPt]);
+      } else {
+        setActivePath((prev) => [prev[0], newPt]);
+      }
       return;
     }
     if (isLocked || isFullFrame || !selectedAssetId) return;
     if (grabbedPart && e.touches.length === 1) {
-      const w = 1080,
-        h = 1920,
-        dx = (clientX - startTouchRef.current.x) * (w / rect.width),
-        dy = (clientY - startTouchRef.current.y) * (h / rect.height);
+      const dx = (clientX - startTouchRef.current.x) * (1080 / rect.width),
+        dy = (clientY - startTouchRef.current.y) * (1920 / rect.height);
       const trans = { ...selectedAsset!.transform },
-        sW = selectedAsset!.width,
-        sH = selectedAsset!.height,
-        baseDrawW = w * (trans.scale / 100),
-        baseDrawH = baseDrawW * (sH / sW);
+        baseDrawW = 1080 * (trans.scale / 100),
+        baseDrawH = baseDrawW * (selectedAsset!.height / selectedAsset!.width);
       if (grabbedPart === "move")
         updateAssetTransform(selectedAssetId, {
-          x: trans.x + (dx / w) * 100,
-          y: trans.y + (dy / h) * 100
+          x: trans.x + (dx / 1080) * 100,
+          y: trans.y + (dy / 1920) * 100
         });
       else {
-        const swAct = sW * (1 - (trans.cropLeft + trans.cropRight) / 100),
-          shAct = sH * (1 - (trans.cropTop + trans.cropBottom) / 100);
-        const xL = (w * trans.x) / 100 - (baseDrawW * swAct) / sW / 2,
-          xR = (w * trans.x) / 100 + (baseDrawW * swAct) / sW / 2;
-        const yT = (h * trans.y) / 100 - (baseDrawH * shAct) / sH / 2,
-          yB = (h * trans.y) / 100 + (baseDrawH * shAct) / sH / 2;
+        const swAct =
+            selectedAsset!.width *
+            (1 - (trans.cropLeft + trans.cropRight) / 100),
+          shAct =
+            selectedAsset!.height *
+            (1 - (trans.cropTop + trans.cropBottom) / 100);
+        const xL =
+            (1080 * trans.x) / 100 -
+            (baseDrawW * swAct) / selectedAsset!.width / 2,
+          xR =
+            (1080 * trans.x) / 100 +
+            (baseDrawW * swAct) / selectedAsset!.width / 2;
+        const yT =
+            (1920 * trans.y) / 100 -
+            (baseDrawH * shAct) / selectedAsset!.height / 2,
+          yB =
+            (1920 * trans.y) / 100 +
+            (baseDrawH * shAct) / selectedAsset!.height / 2;
         if (grabbedPart === "left") {
-          const newCrop = Math.max(
+          const nc = Math.max(
             0,
             Math.min(90, trans.cropLeft + (dx / baseDrawW) * 100)
           );
           updateAssetTransform(selectedAssetId, {
-            cropLeft: newCrop,
+            cropLeft: nc,
             x:
-              ((xR -
-                (baseDrawW * (1 - (newCrop + trans.cropRight) / 100)) / 2) /
-                w) *
+              ((xR - (baseDrawW * (1 - (nc + trans.cropRight) / 100)) / 2) /
+                1080) *
               100
           });
         } else if (grabbedPart === "right") {
-          const newCrop = Math.max(
+          const nc = Math.max(
             0,
             Math.min(90, trans.cropRight - (dx / baseDrawW) * 100)
           );
           updateAssetTransform(selectedAssetId, {
-            cropRight: newCrop,
+            cropRight: nc,
             x:
-              ((xL + (baseDrawW * (1 - (trans.cropLeft + newCrop) / 100)) / 2) /
-                w) *
+              ((xL + (baseDrawW * (1 - (trans.cropLeft + nc) / 100)) / 2) /
+                1080) *
               100
           });
         } else if (grabbedPart === "top") {
-          const newCrop = Math.max(
+          const nc = Math.max(
             0,
             Math.min(90, trans.cropTop + (dy / baseDrawH) * 100)
           );
           updateAssetTransform(selectedAssetId, {
-            cropTop: newCrop,
+            cropTop: nc,
             y:
-              ((yB -
-                (baseDrawH * (1 - (newCrop + trans.cropBottom) / 100)) / 2) /
-                h) *
+              ((yB - (baseDrawH * (1 - (nc + trans.cropBottom) / 100)) / 2) /
+                1920) *
               100
           });
         } else if (grabbedPart === "bottom") {
-          const newCrop = Math.max(
+          const nc = Math.max(
             0,
             Math.min(90, trans.cropBottom - (dy / baseDrawH) * 100)
           );
           updateAssetTransform(selectedAssetId, {
-            cropBottom: newCrop,
+            cropBottom: nc,
             y:
-              ((yT + (baseDrawH * (1 - (trans.cropTop + newCrop) / 100)) / 2) /
-                h) *
+              ((yT + (baseDrawH * (1 - (trans.cropTop + nc) / 100)) / 2) /
+                1920) *
               100
           });
         }
@@ -1045,7 +1160,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   };
 
   const handleTouchEnd = () => {
-    if (isAiProcessing) return;
+    if (isAiProcessing || isFinalizing || isReviewing) return;
     if (
       !isDraggingRef.current &&
       !isPinching &&
@@ -1055,17 +1170,22 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     ) {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
-        const cX = (startTouchRef.current.x - rect.left) * (1080 / rect.width);
-        const cY = (startTouchRef.current.y - rect.top) * (1920 / rect.height);
+        const cX = (startTouchRef.current.x - rect.left) * (1080 / rect.width),
+          cY = (startTouchRef.current.y - rect.top) * (1920 / rect.height);
         const trans = selectedAsset!.transform,
-          w = 1080,
-          h = 1920,
-          sW = selectedAsset!.width,
-          sH = selectedAsset!.height;
-        const swAct = sW * (1 - (trans.cropLeft + trans.cropRight) / 100),
-          shAct = sH * (1 - (trans.cropTop + trans.cropBottom) / 100);
-        const drawW = w * (trans.scale / 100) * (swAct / sW),
-          drawH = w * (trans.scale / 100) * (sH / sW) * (shAct / sH);
+          swAct =
+            selectedAsset!.width *
+            (1 - (trans.cropLeft + trans.cropRight) / 100),
+          shAct =
+            selectedAsset!.height *
+            (1 - (trans.cropTop + trans.cropBottom) / 100);
+        const drawW =
+            1080 * (trans.scale / 100) * (swAct / selectedAsset!.width),
+          drawH =
+            1080 *
+            (trans.scale / 100) *
+            (selectedAsset!.height / selectedAsset!.width) *
+            (shAct / selectedAsset!.height);
         let dX,
           dY,
           fW = drawW,
@@ -1073,51 +1193,55 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         if (isFullFrame) {
           // Full frame might have different layout, but usually it fills the 9:16 target
           const aR = swAct / shAct,
-            fR = w / h;
+            fR = 1080 / 1920;
           if (aR > fR) {
-            fW = w;
-            fH = w / aR;
+            fW = 1080;
+            fH = 1080 / aR;
           } else {
-            fH = h;
-            fW = h * aR;
+            fH = 1920;
+            fW = 1920 * aR;
           }
-          dX = (w - fW) / 2;
-          dY = (h - fH) / 2;
+          dX = (1080 - fW) / 2;
+          dY = (1920 - fH) / 2;
         } else {
-          dX = w * (trans.x / 100) - drawW / 2;
-          dY = h * (trans.y / 100) - drawH / 2;
+          dX = 1080 * (trans.x / 100) - drawW / 2;
+          dY = 1920 * (trans.y / 100) - drawH / 2;
         }
-
-        // Hit detection specifically for the video clip on the canvas
-        if (cX > dX && cX < dX + fW && cY > dY && cY < dY + fH) {
+        if (cX > dX && cX < dX + fW && cY > dY && cY < dY + fH)
           handlePlaybackInteraction();
         }
       }
-    }
-
-    if (isDrawingMode && currentPathRef.current.length > 0 && selectedAssetId) {
-      const item: DrawingItem = {
-        shape: drawingShape,
-        points: [...currentPathRef.current],
-        color: "#eaff00",
-        width: 8
-      };
+    if (isDrawingMode && activePath.length > 0 && selectedAssetId) {
       setAssets((p) =>
         p.map((a) =>
           a.id === selectedAssetId
-            ? { ...a, drawings: [...a.drawings, item] }
+            ? {
+                ...a,
+                drawings: [
+                  ...a.drawings,
+                  {
+        shape: drawingShape,
+                    points: [...activePath],
+        color: "#eaff00",
+        width: 8
+                  }
+                ]
+              }
             : a
         )
       );
     }
     setGrabbedPart(null);
     setIsPinching(false);
-    currentPathRef.current = [];
+    setActivePath([]);
   };
 
   const toggleRecording = async () => {
     if (isRecording) {
-      // --- MASTER STOP ---
+      // Stop recording
+      setIsFinalizing(true);
+      isRecordingRef.current = false;
+      setIsRecording(false);
       mediaRecorderRef.current?.stop();
       setIsRecording(false);
       if (recordingIntervalRef.current)
@@ -1128,30 +1252,28 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         videoRef.current.pause();
         setIsAssetPlaying(false);
       }
-      // Release wake lock
-      if (wakeLockRef.current) {
+      if (wakeLockRef.current)
         try {
           await wakeLockRef.current.release();
           wakeLockRef.current = null;
-        } catch (err) {
-          console.warn("Wake lock release failed", err);
-        }
+        } catch (err) {}
+      if (micOnlyStreamRef.current) {
+        micOnlyStreamRef.current.getTracks().forEach((t) => t.stop());
+        micOnlyStreamRef.current = null;
       }
-    } else {
-      // --- MASTER START ---
+    } else if (isRecordConfirming) {
+      // Actually start recording
       if (!canvasRef.current) return;
+      setIsRecordConfirming(false);
+      isRecordingRef.current = true;
+      setIsRecording(true);
 
-      // Request wake lock to keep screen active
-      if ("wakeLock" in navigator) {
+      if ("wakeLock" in navigator)
         try {
           wakeLockRef.current = await (navigator as any).wakeLock.request(
             "screen"
           );
-        } catch (err) {
-          console.warn("Wake lock request failed", err);
-        }
-      }
-
+        } catch (err) {}
       if (!audioContextRef.current)
         audioContextRef.current = new (
           window.AudioContext || (window as any).webkitAudioContext
@@ -1160,10 +1282,22 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       if (audioCtx.state === "suspended") await audioCtx.resume();
 
       const dest = audioCtx.createMediaStreamDestination();
-      const webcamStream = webcamRef.current?.srcObject as MediaStream;
-      if (webcamStream?.getAudioTracks().length > 0)
-        audioCtx.createMediaStreamSource(webcamStream).connect(dest);
 
+      let commentary: MediaStream | null = webcamRef.current
+        ?.srcObject as MediaStream;
+      if (!commentary || commentary.getAudioTracks().length === 0) {
+        try {
+          commentary = await navigator.mediaDevices.getUserMedia({
+            audio: true
+          });
+          micOnlyStreamRef.current = commentary;
+        } catch (err) {
+          console.warn("Mic access denied, continuing without audio.");
+        }
+      }
+
+      if (commentary && commentary.getAudioTracks().length > 0)
+        audioCtx.createMediaStreamSource(commentary).connect(dest);
       if (videoRef.current?.src) {
         if (!videoSourceNodeRef.current) {
           videoSourceNodeRef.current = audioCtx.createMediaElementSource(
@@ -1176,50 +1310,62 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         gainNodeRef.current.connect(dest);
       }
 
-      const compositeStream = canvasRef.current.captureStream(30);
-      dest.stream
-        .getAudioTracks()
-        .forEach((track) => compositeStream.addTrack(track));
+      const stream = canvasRef.current.captureStream(30);
+      dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
 
       const mime =
         ["video/mp4;codecs=h264,aac", "video/mp4", "video/webm"].find((m) =>
           MediaRecorder.isTypeSupported(m)
         ) || "video/webm";
-      const recorder = new MediaRecorder(compositeStream, { mimeType: mime });
+      const recorder = new MediaRecorder(stream, { mimeType: mime });
       const chunks: Blob[] = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
       };
+      recorder.onstop = () => {
+        setRecordedBlob(new Blob(chunks, { type: mime }));
+        setRecordingTime(0);
+        setIsFinalizing(false);
+        setIsReviewing(true);
+      };
+      recorder.start(1000);
+      mediaRecorderRef.current = recorder;
+      recordingIntervalRef.current = window.setInterval(
+        () => setRecordingTime((p) => p + 1),
+        1000
+      );
+    } else {
+      // Prompt for confirmation
+      setIsRecordConfirming(true);
+      // Auto-cancel confirmation if not acted upon
+      setTimeout(
+        () => setIsRecordConfirming((prev) => (prev ? false : false)),
+        4000
+      );
+    }
+  };
 
-      recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: mime });
+  const handleFinalSave = async () => {
+    if (!recordedBlob) return;
         const fileName = `directors-cut-${Date.now()}.mp4`;
 
-        const tryShare = async () => {
-          const file = new File([blob], fileName, { type: mime });
-          if (
-            navigator.share &&
-            navigator.canShare &&
-            navigator.canShare({ files: [file] })
-          ) {
+        // --- Web Share API Integration ---
+        if (navigator.share && navigator.canShare) {
+      const file = new File([recordedBlob], fileName, {
+        type: recordedBlob.type
+      });
+          if (navigator.canShare({ files: [file] })) {
             try {
               await navigator.share({
                 files: [file],
-                title: "Director's Cut Studio",
-                text: "My new reaction montage!"
+            title: "My Reaction",
+            text: "Made with Director's Cut"
               });
-              return true;
-            } catch (err) {
-              console.warn("Share failed or cancelled", err);
-              return false;
+              return;
+        } catch (err) {}
             }
           }
-          return false;
-        };
-
-        const success = await tryShare();
-        if (!success) {
-          const url = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(recordedBlob);
           const a = document.createElement("a");
           a.href = url;
           a.download = fileName;
@@ -1227,65 +1373,113 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-        }
-        setRecordingTime(0);
-      };
-
-      recorder.start(1000);
-      mediaRecorderRef.current = recorder;
-      setIsRecording(true);
-      recordingIntervalRef.current = window.setInterval(
-        () => setRecordingTime((p) => p + 1),
-        1000
-      );
-    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isFinalizing || isReviewing) return;
     const file = e.target.files?.[0];
     if (!file) return;
-    const type = file.type.startsWith("video") ? "video" : "image",
-      url = URL.createObjectURL(file),
+    const type = (file.type.startsWith("video") ? "video" : "image") as
+      | "video"
+      | "image";
+    const url = URL.createObjectURL(file),
       id = Date.now().toString();
     if (type === "video") {
       const v = document.createElement("video");
-      v.src = url;
+      v.preload = "auto";
       v.muted = true;
       v.playsInline = true;
-      v.crossOrigin = "anonymous";
-      v.load();
-      v.onloadeddata = () => {
-        v.currentTime = 0.5;
+
+      v.onloadedmetadata = () => {
+        // Seek to 0.1s to avoid potential black start frames
+        v.currentTime = 0.1;
       };
+
       v.onseeked = () => {
         const cap = document.createElement("canvas");
         cap.width = 160;
         cap.height = 160;
         const ctx = cap.getContext("2d");
-        if (ctx) ctx.drawImage(v, 0, 0, 160, 160);
-        const thumb = cap.toDataURL("image/jpeg");
-        const newAsset: Asset = {
+        if (ctx) {
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, 160, 160);
+          const vWidth = v.videoWidth;
+          const vHeight = v.videoHeight;
+          const vRatio = vWidth / vHeight;
+          let dWidth, dHeight, dx, dy;
+          // Maintain aspect ratio while covering the 160x160 area
+          if (vRatio > 1) {
+            dWidth = 160 * vRatio;
+            dHeight = 160;
+            dx = (160 - dWidth) / 2;
+            dy = 0;
+          } else {
+            dWidth = 160;
+            dHeight = 160 / vRatio;
+            dx = 0;
+            dy = (160 - dHeight) / 2;
+          }
+          ctx.drawImage(v, dx, dy, dWidth, dHeight);
+        }
+
+        const thumbnail = cap.toDataURL("image/jpeg");
+        setAssets((p) => {
+          const next: Asset[] = [
+            ...p,
+            {
           id,
           name: file.name,
           type,
           url,
-          thumbnail: thumb,
+              thumbnail,
           width: v.videoWidth,
           height: v.videoHeight,
           transform: { ...DEFAULT_TRANSFORM },
           drawings: []
-        };
+            }
+          ];
+          selectAndShowAsset(id, "video", next);
+          return next;
+        });
+        // Cleanup listeners
+        v.onseeked = null;
+        v.onloadedmetadata = null;
+      };
+
+      v.onerror = () => {
+        console.error("Error loading video for thumbnail");
         setAssets((p) => {
-          const next = [...p, newAsset];
+          const next: Asset[] = [
+            ...p,
+            {
+              id,
+              name: file.name,
+              type,
+              url,
+              thumbnail: "",
+              width: 1920,
+              height: 1080,
+              transform: { ...DEFAULT_TRANSFORM },
+              drawings: []
+            }
+          ];
           selectAndShowAsset(id, "video", next);
           return next;
         });
       };
+
+      v.src = url;
+      v.load();
     } else {
       const img = new Image();
+      img.crossOrigin = "anonymous";
       img.src = url;
       img.onload = () => {
-        const newAsset: Asset = {
+        imageCache.current.set(id, img);
+        setAssets((p) => {
+          const next: Asset[] = [
+            ...p,
+            {
           id,
           name: file.name,
           type,
@@ -1294,10 +1488,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           height: img.naturalHeight,
           transform: { ...DEFAULT_TRANSFORM },
           drawings: []
-        };
-        imageCache.current.set(id, img);
-        setAssets((p) => {
-          const next = [...p, newAsset];
+            }
+          ];
           selectAndShowAsset(id, "image", next);
           return next;
         });
@@ -1333,154 +1525,195 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
         <button
           onClick={resetApp}
-          className="absolute top-6 left-6 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl active:scale-90"
+          disabled={isFinalizing || isReviewing}
+          className="absolute top-6 left-6 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
         >
           <XIcon className="text-xs" />
         </button>
 
         <button
           onClick={() =>
+            !isFinalizing &&
+            !isReviewing &&
             setCameraFacing((p) => (p === "user" ? "environment" : "user"))
           }
-          className="absolute top-6 right-6 z-50 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl active:scale-90"
+          disabled={isFinalizing || isReviewing}
+          className="absolute top-6 right-6 z-50 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
         >
           <ArrowsRightLeftIcon className="text-xs" />
         </button>
 
-        {/* LEFT SIDEBAR - Playback & Tools */}
-        <div
-          className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30"
-          onPointerDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-        >
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
           <button
             onClick={handlePenInteraction}
-            className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center transition-all ${isDrawingMode ? "bg-yellow-400 text-black shadow-[0_0_15px_rgba(234,255,0,0.5)]" : "bg-white text-black shadow-xl"} active:scale-90`}
+            disabled={isFinalizing || isReviewing}
+            className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center transition-all ${isDrawingMode ? "bg-yellow-400 text-black shadow-[0_0_20px_#eaff0080]" : "bg-white text-black"} disabled:opacity-20`}
           >
             {drawingShape === "free" ? (
-              <PenIcon className="text-lg" />
+              <PenIcon />
             ) : drawingShape === "circle" ? (
-              <CircleIcon className="text-lg" />
+              <CircleIcon />
             ) : drawingShape === "square" ? (
-              <SquareIcon className="text-lg" />
+              <SquareIcon />
             ) : (
-              <ArrowPointerIcon className="text-lg" />
+              <ArrowPointerIcon />
             )}
-            <span className="text-[5px] font-black mt-0.5 tracking-tighter uppercase">
-              {isDrawingMode ? "PEN ON" : "DRAW"}
+            <span className="text-[5px] font-black mt-0.5 uppercase">
+              {isDrawingMode ? "ON" : "DRAW"}
             </span>
           </button>
-
           {selectedAsset?.type === "video" && (
             <div className="flex flex-col space-y-3">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handlePlaybackInteraction();
-                }}
-                className={`w-14 h-14 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${isAssetPlaying ? "text-emerald-400" : "text-white/40"}`}
+                onClick={handlePlaybackInteraction}
+                disabled={isFinalizing || isReviewing}
+                className={`w-14 h-14 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${isAssetPlaying ? "text-emerald-400" : "text-white/40"} disabled:opacity-20`}
               >
                 {isAssetPlaying ? (
                   <PauseIcon className="text-2xl" />
                 ) : (
                   <PlayIcon className="text-2xl" />
                 )}
-                <span className="text-[8px] font-black mt-1 tracking-tighter uppercase">
-                  {isAssetPlaying ? "Playing" : "Play"}
+                <span className="text-[8px] font-black mt-1 uppercase">
+                  Play
                 </span>
               </button>
-
-              {/* Loop & Mute Button */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsLooping(!isLooping);
-                }}
-                className={`w-14 h-14 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${isLooping ? "bg-indigo-600 text-white border-indigo-400" : "bg-white/10 text-white/40"}`}
+                onClick={() => setIsLooping(!isLooping)}
+                disabled={isFinalizing || isReviewing}
+                className={`w-14 h-14 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${isLooping ? "bg-indigo-600 shadow-[0_0_20px_#4f46e580]" : "bg-white/10 text-white/40"} disabled:opacity-20`}
               >
-                {isLooping ? (
-                  <RepeatIcon className="text-xl" />
-                ) : (
-                  <VolumeXIcon className="text-xl" />
-                )}
-                <span className="text-[7px] font-black mt-1 tracking-tighter uppercase">
-                  {isLooping ? "Looping" : "Normal"}
+                <RepeatIcon />
+                <span className="text-[7px] font-black mt-1 uppercase">
+                  Loop
                 </span>
               </button>
             </div>
           )}
         </div>
 
-        {/* RIGHT SIDEBAR - View & Camera */}
-        <div
-          className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col space-y-3 z-30"
-          onPointerDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-        >
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col space-y-3 z-30">
           <button
-            onClick={() => setWebcamActive(!webcamActive)}
-            className={`w-12 h-12 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${webcamActive ? "text-white" : "text-white/30"}`}
+            onClick={() =>
+              !isFinalizing && !isReviewing && setWebcamActive(!webcamActive)
+            }
+            disabled={isFinalizing || isReviewing}
+            className={`w-12 h-12 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${webcamActive ? "text-white shadow-[0_0_15px_#ffffff40]" : "text-white/30"} disabled:opacity-20`}
           >
-            <CameraIcon className="text-lg" />
-            <span className="text-[7px] font-black mt-1 tracking-widest uppercase">
-              Sight
-            </span>
+            <CameraIcon />
+            <span className="text-[7px] font-black mt-1 uppercase">Sight</span>
           </button>
-
-          {/* Magic Button (Relocated back to sidebar) */}
           {selectedAsset?.type === "image" && (
-          <button
-              onClick={handleMagicCutout}
-              disabled={isAiProcessing}
-              className={`w-12 h-12 bg-gradient-to-tr from-purple-600 to-indigo-600 border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 text-white shadow-xl ${isAiProcessing ? "animate-pulse" : ""}`}
-          >
+            <button
+              onClick={() =>
+                !isConfirmingMagic
+                  ? setIsConfirmingMagic(true)
+                  : handleMagicCutout()
+              }
+              disabled={isAiProcessing || isFinalizing || isReviewing}
+              className={`w-12 h-12 border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all disabled:opacity-20 ${isAiProcessing ? "bg-zinc-800 animate-pulse" : isConfirmingMagic ? "bg-emerald-600" : "bg-gradient-to-tr from-purple-600 to-indigo-600 shadow-xl"}`}
+            >
               {isAiProcessing ? (
-                <LoaderIcon className="text-lg" />
+                <LoaderIcon />
+              ) : isConfirmingMagic ? (
+                <span className="text-base font-black italic">1C</span>
               ) : (
-            <SparklesIcon className="text-lg" />
+                <SparklesIcon />
               )}
-              <span className="text-[7px] font-black mt-1 tracking-tighter uppercase">
+              <span className="text-[7px] font-black mt-1 uppercase">
                 Magic
-            </span>
-          </button>
+              </span>
+              {magicError && (
+                <span className="text-[7px] font-black text-red-400">
+                  {magicError}
+                </span>
+              )}
+            </button>
           )}
-
           {selectedAssetId && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsFullFrame(!isFullFrame);
-              }}
-              className={`w-12 h-12 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 ${isFullFrame ? "bg-emerald-600 text-white border-emerald-400" : "bg-white/10 text-white"}`}
+              onClick={() =>
+                !isFinalizing && !isReviewing && setIsFullFrame(!isFullFrame)
+              }
+              disabled={isFinalizing || isReviewing}
+              className={`w-12 h-12 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${isFullFrame ? "bg-emerald-600" : "bg-white/10"} disabled:opacity-20`}
             >
-              {isFullFrame ? (
-                <CompressIcon className="text-lg" />
-              ) : (
-                <ExpandIcon className="text-lg" />
-              )}
-              <span className="text-[7px] font-black mt-1 tracking-tighter uppercase">
-                View
-              </span>
+              {isFullFrame ? <CompressIcon /> : <ExpandIcon />}
+              <span className="text-[7px] font-black mt-1 uppercase">View</span>
             </button>
           )}
         </div>
 
-        {/* FLOATING DELETE */}
-        {selectedAssetId && (
+        {selectedAssetId && !isFinalizing && !isReviewing && (
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              deleteAsset(selectedAssetId);
-            }}
-            className="absolute bottom-6 right-6 z-50 w-14 h-14 bg-black/60 backdrop-blur-xl border-2 border-red-500/40 rounded-2xl flex flex-col items-center justify-center transition-all active:scale-90 text-red-500 hover:bg-red-500/20"
+            onClick={() => deleteAsset(selectedAssetId)}
+            className="absolute bottom-6 right-6 z-50 w-14 h-14 bg-black/60 backdrop-blur-xl border-2 border-red-500/40 rounded-2xl flex flex-col items-center justify-center text-red-500"
           >
             <TrashIcon className="text-xs" />
-            <span className="text-[5px] font-black mt-0.5 tracking-tighter uppercase">
+            <span className="text-[5px] font-black mt-0.5 uppercase">
               Remove
             </span>
           </button>
+        )}
+
+        {/* 
+            Finalizing Overlay:
+            Now uses pointer-events-auto to strictly block all clicks to the studio behind it.
+        */}
+        {isFinalizing && (
+          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-8 text-center pointer-events-auto">
+            <div className="w-20 h-20 mb-8 bg-red-600 rounded-[2rem] flex items-center justify-center shadow-[0_0_50px_rgba(220,38,38,0.5)]">
+              <LoaderIcon className="text-4xl text-white" />
+            </div>
+            <h2 className="text-2xl font-black tracking-tight mb-2 uppercase italic">
+              Finalizing Cut
+            </h2>
+            <p className="text-white/40 text-sm font-medium tracking-widest">
+              Applying cuts and filters...
+            </p>
+          </div>
+        )}
+
+        {/* Review & Choice Screen */}
+        {isReviewing && (
+          <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-10 text-center pointer-events-auto animate-fade-in">
+            <div className="w-24 h-24 mb-10 bg-emerald-600 rounded-[2rem] flex items-center justify-center shadow-[0_20px_50px_rgba(16,185,129,0.4)] animate-bounce">
+              <FilmIcon className="text-5xl text-white" />
+            </div>
+            <div className="space-y-2 mb-12">
+              <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">
+                Production Ready
+              </h2>
+              <p className="text-emerald-400/60 text-xs font-bold tracking-[0.4em] uppercase">
+                Cut #{(assets.length + 1).toString().padStart(3, "0")}
+              </p>
+            </div>
+
+            <div className="w-full max-w-sm space-y-4">
+              <button
+                onClick={handleFinalSave}
+                className="w-full bg-white text-black py-6 rounded-3xl font-black uppercase text-sm tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center space-x-3"
+              >
+                <i className="fa-solid fa-share-nodes"></i>
+                <span>Share / Save Video</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsReviewing(false);
+                  setRecordedBlob(null);
+                }}
+                className="w-full bg-white/5 border border-white/10 text-white/60 py-5 rounded-3xl font-bold uppercase text-xs tracking-[0.2em] active:scale-95 transition-all"
+              >
+                Close & Return to Studio
+              </button>
+            </div>
+
+            <p className="mt-12 text-[10px] text-white/20 font-medium max-w-[200px]">
+              The video file is processed and ready for your gallery or social
+              media.
+            </p>
+          </div>
         )}
 
         <div className="fixed top-0 left-0 opacity-0 pointer-events-none w-10 h-10 -z-50 overflow-hidden">
@@ -1496,7 +1729,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         </div>
       </section>
 
-      <footer className="relative flex-none bg-black flex flex-col items-center justify-between pb-safe pt-2 px-4 z-40 overflow-hidden min-h-[140px] border-t border-white/5">
+      <footer className="relative flex-none bg-black flex flex-col items-center justify-between pb-safe pt-2 px-4 z-40 min-h-[140px] border-t border-white/5">
         <div className="w-full flex items-center justify-center space-x-2 mt-2 overflow-x-auto no-scrollbar">
           {assets.map((asset) => {
             const isVisible = visibleAssetIds.includes(asset.id),
@@ -1505,67 +1738,88 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
               <button
                 key={asset.id}
                 onClick={() => toggleAssetVisibility(asset.id)}
-                className={`shrink-0 w-12 h-12 rounded-xl border-2 transition-all overflow-hidden relative flex items-center justify-center bg-zinc-900 ${isVisible ? (isSelected ? "border-emerald-500 opacity-100" : "border-white opacity-80") : "border-zinc-800 opacity-30"} ${isSelected ? "scale-110 shadow-lg shadow-emerald-500/20" : "scale-100"}`}
+                disabled={isFinalizing || isReviewing}
+                className={`shrink-0 w-12 h-12 rounded-xl border-2 transition-all relative flex items-center justify-center bg-zinc-900 ${isVisible ? (isSelected ? "border-emerald-500 opacity-100 shadow-[0_0_15px_#10b98160]" : "border-white opacity-80") : "border-zinc-800 opacity-30"} ${isSelected ? "scale-110" : "scale-100"} disabled:opacity-20`}
               >
                 <img
                   src={asset.type === "video" ? asset.thumbnail : asset.url}
-                  className="w-full h-full object-cover pointer-events-none"
+                  className="w-full h-full object-cover"
                 />
                 <div className="absolute top-1 right-1">
                   {asset.type === "video" ? (
-                    <FilmIcon className="text-[14px] text-white/90 bg-black/70 p-1.5 rounded-sm" />
+                    <FilmIcon className="text-[10px] bg-black/50 p-1" />
                   ) : (
-                    <ImageIcon className="text-[14px] text-white/90 bg-black/70 p-1.5 rounded-sm" />
+                    <ImageIcon className="text-[10px] bg-black/50 p-1" />
                   )}
                 </div>
               </button>
             );
           })}
-          <label className="shrink-0 w-14 h-14 bg-zinc-900 border-2 border-zinc-800 border-dashed rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95">
-            <PlusIcon className="w-6 h-6 text-zinc-500" />
-            <input
-              type="file"
-              className="hidden"
-              onChange={handleFileUpload}
-              accept="image/*,video/*"
-            />
-          </label>
+          {!isFinalizing && !isReviewing && (
+            <label className="shrink-0 w-12 h-12 bg-zinc-900 border-2 border-zinc-800 border-dashed rounded-xl flex items-center justify-center cursor-pointer active:scale-95 transition-all hover:border-zinc-500">
+              <PlusIcon className="text-zinc-500 text-lg" />
+              <input
+                type="file"
+                className="hidden"
+                onChange={handleFileUpload}
+                accept="image/*,video/*"
+              />
+            </label>
+          )}
         </div>
-        <div className="relative w-full flex justify-center py-4">
+        <div className="relative w-full flex flex-col items-center justify-center py-4">
+          {isRecordConfirming && (
+            <div className="absolute bottom-20 bg-emerald-600/90 backdrop-blur-lg px-4 py-2 rounded-2xl text-[10px] font-black tracking-widest uppercase text-white shadow-2xl animate-bounce">
+              Are you sure?
+            </div>
+          )}
           <button
             onClick={toggleRecording}
-            disabled={visibleAssetIds.length === 0}
-            className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-30 shadow-2xl border-4 ${isRecording ? "bg-red-600 border-red-500" : "bg-white border-zinc-300"}`}
+            disabled={
+              visibleAssetIds.length === 0 || isFinalizing || isReviewing
+            }
+            className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-95 disabled:opacity-30 border-4 ${isRecording ? "bg-red-600 border-red-500 shadow-[0_0_30px_#ef444480]" : isRecordConfirming ? "bg-emerald-600 border-emerald-400" : "bg-white border-zinc-300 shadow-xl"}`}
           >
-            <div
-              className={`transition-all duration-300 ${isRecording ? "w-5 h-5 bg-white rounded-sm" : "w-7 h-7 bg-red-600 rounded-full"}`}
-            />
+            {isRecording ? (
+              <div className="w-6 h-6 bg-white rounded-sm animate-pulse" />
+            ) : isRecordConfirming ? (
+              <span className="text-white text-[10px] font-black">START?</span>
+            ) : (
+              <div className="w-8 h-8 bg-red-600 rounded-full" />
+            )}
           </button>
           {isRecording && (
-            <div className="absolute top-1/2 -translate-y-1/2 right-4 bg-red-600 px-3 py-1 rounded-full text-[10px] font-black tracking-widest text-white shadow-lg flex items-center">
+            <div className="absolute top-1/2 -translate-y-1/2 right-4 bg-red-600 px-3 py-1 rounded-full text-[10px] font-black tracking-widest text-white shadow-lg flex items-center transition-all">
               <span className="w-2.5 h-2.5 bg-white rounded-full mr-1.5 animate-ping" />
-              {Math.floor(recordingTime / 60)}:
+              REC {Math.floor(recordingTime / 60)}:
               {(recordingTime % 60).toString().padStart(2, "0")}
             </div>
           )}
+          {!isRecording &&
+            !isRecordConfirming &&
+            visibleAssetIds.length > 0 && (
+              <div className="absolute top-1/2 -translate-y-1/2 right-4 bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[7px] font-bold tracking-widest text-white/40 uppercase">
+                Ready to Record
+              </div>
+            )}
         </div>
       </footer>
 
-      {assets.length === 0 && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 text-center space-y-12 ">
-          <div className="w-24 h-24 bg-red-600 rounded-[0.5rem] flex items-center justify-center transform -rotate-12 shadow-[0_30px_70px_-1px_rgba(220,38,38,0.6)] overflow-hidden ">
-            <ClapperboardIcon className="text-7xl text-white  " />
+      {assets.length === 0 && !isFinalizing && !isReviewing && (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 text-center space-y-12 animate-fade-in">
+          <div className="w-28 h-28 bg-red-600 rounded-[2rem] flex items-center justify-center transform -rotate-12 shadow-[0_30px_60px_-15px_rgba(220,38,38,0.6)]">
+            <ClapperboardIcon className="text-6xl text-white" />
           </div>
-          <div className="space-y-2 ">
-            <h1 className="text-4xl font-black italic tracking-tighter text-white  leading-none ">
-              Direct Cut
+          <div className="space-y-2">
+            <h1 className="text-5xl font-black italic tracking-tighter text-white uppercase leading-none">
+              Direct CUT
             </h1>
-            <p className="text-white/30 text-[12px] font-bold tracking-[0.6em]  ">
+            <p className="text-white/30 text-[10px] font-bold tracking-[0.6em] uppercase">
               Reaction Assembly Studio
             </p>
           </div>
-          <div className="w-full max-w-xs space-y-4 ">
-            <label className="block w-full bg-white text-black py-5 rounded-3xl font-black cursor-pointer active:scale-95 text-center text-sm tracking-widest shadow-2xl transition-transform ">
+          <div className="w-full max-w-xs pt-4">
+            <label className="block w-full bg-white text-black py-5 rounded-3xl font-black cursor-pointer active:scale-95 text-center text-sm tracking-widest uppercase shadow-2xl">
               Import Media
               <input
                 type="file"
@@ -1587,7 +1841,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        .animate-fade-in { animation: fade-in 0.3s ease-out; }
+        .animate-fade-in { animation: fade-in 0.4s ease-out; }
       `
         }}
       />

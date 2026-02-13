@@ -33,6 +33,7 @@ interface FootageProps {
   aspectRatio: string;
   characterStyle: string;
   selectedCountry: string;
+  consumeCredits: (action: string) => Promise<boolean>;
   onProduce: (
     prompt: string,
     mode: "image" | "video" | "i2i",
@@ -206,6 +207,7 @@ export const Footage: React.FC<FootageProps> = ({
   aspectRatio,
   characterStyle,
   selectedCountry,
+  consumeCredits,
   onProduce,
   isGenerating = false,
   onUpdateCountry,
@@ -270,8 +272,7 @@ export const Footage: React.FC<FootageProps> = ({
     }
   }, [isGenerating, isConfirming]);
 
-
-  const handleProduceClick = () => {
+  const handleProduceClick = async () => {
     if (!footagePrompt.trim() || isGenerating) return;
 
     if (!isConfirming) {
@@ -279,15 +280,38 @@ export const Footage: React.FC<FootageProps> = ({
       return;
     }
 
+    let action = "IMAGE_FAST";
+
+    if (hasRefImages) {
+      action = footageImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
+    } else if (footageMode === "image") {
+      action = footageImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
+    } else {
+      action = footageVideoTier === "veo31-quality" ? "VIDEO_HD" : "VIDEO_FAST";
+    }
+
+    try {
+      const ok = await consumeCredits(action);
+
+      if (!ok) {
+        setIsConfirming(false);
+        return;
+      }
+    } catch {
+      setIsConfirming(false);
+      return;
+    }
+
     const activeMode = hasRefImages ? "i2i" : footageMode;
-   onProduce(
-     footagePrompt,
-     activeMode as any,
-     footageRefImages[0] || undefined,
-     footageVideoTier,
-     footageImageTier,
-     footageRefImages[1] || undefined
-   );
+
+    onProduce(
+      footagePrompt,
+      activeMode as any,
+      footageRefImages[0] || undefined,
+      footageVideoTier,
+      footageImageTier,
+      footageRefImages[1] || undefined
+    );
 
     setIsConfirming(false);
   };
@@ -312,7 +336,6 @@ export const Footage: React.FC<FootageProps> = ({
       setActiveSlotIdx(null);
     }
   };
-
 
   const selectFromHistory = (src: string) => {
     if (activeSlotIdx !== null) {

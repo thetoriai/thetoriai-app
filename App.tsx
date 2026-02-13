@@ -2164,6 +2164,7 @@ const App: React.FC = () => {
       aspectRatio={aspectRatio}
       characterStyle={characterStyle}
       selectedCountry={selectedCountry}
+      consumeCredits={consumeCredits}
       onProduce={handleFootageProduce}
       isGenerating={isGenerating}
       creditBalance={creditSettings.creditBalance}
