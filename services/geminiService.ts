@@ -697,6 +697,87 @@ export async function generateCharacterVisual(
     );
   }
 }
+// DO add comment: Dialogue Performance Converter. Converts "Name: Dialogue" into mandatory spoken instruction with identity binding.
+function convertDialogueToPerformance(script: string, characters?: Character[]): string {
+
+  if (!script) return "";
+
+  const match = script.match(/^([^:]+):\s*(.+)$/);
+
+  if (!match) {
+    return `
+MANDATORY PERFORMANCE:
+The character performs the described action.
+Script:
+${script}
+`;
+  }
+
+  const speakerName = match[1].trim();
+  const dialogue = match[2].trim();
+
+  const characterMatch = characters?.find(
+    c => c.name.toLowerCase() === speakerName.toLowerCase()
+  );
+
+  const identity = characterMatch?.description || speakerName;
+
+  return `
+IDENTITY LOCK: ${speakerName}
+IDENTITY DNA: ${identity}
+
+MANDATORY SPEECH PERFORMANCE:
+${speakerName} MUST speak the following dialogue aloud clearly and audibly.
+
+MANDATORY LIP SYNC:
+The mouth movement MUST match the spoken words exactly.
+
+MANDATORY ACTOR BINDING:
+This exact character MUST deliver the line. No character substitution allowed.
+
+DIALOGUE TO SPEAK:
+"${dialogue}"
+
+PERFORMANCE INSTRUCTION:
+Show the character physically speaking while delivering the dialogue naturally.
+`;
+}
+
+// DO add comment: Performance Parser. Separates action and dialogue for precise cinematic execution.
+function parsePerformance(script: string, characters?: Character[]) {
+
+  if (!script) {
+    return {
+      action: "",
+      dialogue: "",
+      speaker: ""
+    };
+  }
+
+  const lines = script.split("\n").map(l => l.trim()).filter(Boolean);
+
+  let actionLines: string[] = [];
+  let speaker = "";
+  let dialogue = "";
+
+  for (const line of lines) {
+
+    const match = line.match(/^([^:]+):\s*(.+)$/);
+
+    if (match) {
+      speaker = match[1].trim();
+      dialogue = match[2].trim();
+    } else {
+      actionLines.push(line);
+    }
+  }
+
+  return {
+    action: actionLines.join(" "),
+    dialogue,
+    speaker
+  };
+}
 
 export async function generateVideoFromScene(
   scene: any,
@@ -716,7 +797,69 @@ export async function generateVideoFromScene(
     characters?.map((c) => `${c.name}: ${c.description}`).join("; ") || "";
 
   // DO add comment: Style Fidelity in Video. Forced visual medium prefix into video generation prompts to prevent the "photorealistic video" shift.
-  const fullPrompt = `STYLE: ${style}. Visual Medium: [${style}]. Character Context: ${castNotes}. Action: ${prompt}. Camera: ${cameraMovement}.`;
+  // DO add comment: Dialogue Binding Protocol. Forces Veo to bind spoken dialogue to the correct character identity.
+  // DO add comment: Structured Actor Performance Protocol. Correctly separates action and dialogue and binds both to the same character identity.
+  const perf = parsePerformance(prompt, characters);
+
+  let identityDNA = "";
+  if (perf.speaker && characters) {
+    const match = characters.find(
+      (c) => c.name.toLowerCase() === perf.speaker.toLowerCase()
+    );
+    if (match) {
+      identityDNA = match.description || "";
+    }
+  }
+
+  const fullPrompt = `
+STRICT CINEMATIC VIDEO GENERATION PROTOCOL
+
+CHARACTER CAST DNA:
+${castNotes}
+
+IDENTITY LOCK:
+${perf.speaker || "Primary Character"}
+
+IDENTITY DNA:
+${identityDNA}
+
+ACTION PERFORMANCE:
+${perf.action || "Character holds natural presence."}
+
+${
+  perf.dialogue
+    ? `
+MANDATORY SPEECH PERFORMANCE:
+${perf.speaker} MUST speak the following words aloud clearly:
+
+"${perf.dialogue}"
+
+MANDATORY LIP SYNC:
+The character's mouth MUST visibly match the spoken dialogue.
+
+MANDATORY ACTOR BINDING:
+This exact character MUST deliver the dialogue.
+`
+    : `
+SILENT PERFORMANCE MODE:
+Character performs action with natural cinematic motion.
+`
+}
+
+CAMERA MOVEMENT:
+${cameraMovement}
+
+STYLE LOCK:
+${style}
+
+VISUAL CONSISTENCY RULE:
+The same character from the source image MUST perform the scene.
+
+FORBIDDEN:
+Do not create new characters.
+Do not transfer dialogue to another character.
+Do not ignore dialogue if present.
+`;
 
   const imagePart = scene.src
     ? {
@@ -902,7 +1045,36 @@ VISUAL RULE:
   ${bibleMandate}
   ${canonicalBiblicalProtection}
     TARGET MEDIUM: [${movieStyle}]. 
-    DIALOGUE MANDATE: ${includeDialogue ? "Include speaker-prefixed dialogue (Name: Dialogue)." : "STRICTLY NO DIALOGUE. DO NOT use the 'Name: ' speaker format. Instead, write cinematic action beats using the characters' names naturally (e.g., '[Name] enters the room') to explain the action in the video."}
+    DIALOGUE MANDATE:
+${
+  includeDialogue
+    ? `
+MANDATORY SCRIPT STRUCTURE:
+
+Each scene script MUST follow this exact two-line cinematic format:
+
+Line 1: Character action sentence describing physical movement.
+Line 2: Speaker dialogue using exact format "Name: Dialogue"
+
+Example:
+Michael walks forward with determination.
+Michael: I am ready.
+
+RULES:
+- Action MUST come before dialogue.
+- Dialogue MUST use exact "Name: Dialogue" format.
+- Do NOT write dialogue without action.
+- Do NOT combine action and dialogue in one sentence.
+- Do NOT write narration after dialogue.
+`
+    : `
+STRICTLY NO DIALOGUE.
+Only write cinematic action sentences using character names.
+Example:
+Michael walks into the room and looks around cautiously.
+`
+}
+
     CAST: ${castNotes}.
     Return JSON with 'title', 'storyNarrative', and 'scenes' (array of {imageDescription, script}).
     Scene script (Narrative/Dialogue) must be speakable within 8 seconds.`;
