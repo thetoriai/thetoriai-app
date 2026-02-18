@@ -176,7 +176,62 @@ export const VOICE_EXPRESSIONS = [
   "Angry",
   "Sad"
 ];
-export const ACCENT_OPTIONS = ["Global (Neutral)", "Nigerian English"];
+
+export const ACCENT_OPTIONS = ["Global (Neutral)", "Nigerian English", "French", "American English", "British English"];
+
+// LANGUAGE MAP: controls dialogue and speech language per country
+export const COUNTRY_LANGUAGE_MAP: Record<
+  string,
+  {
+    dialogueLanguage: string;
+    speechLanguage: string;
+  }
+> = {
+  Nigeria: {
+    dialogueLanguage: "Nigerian Pidgin English",
+    speechLanguage: "Nigerian Pidgin English accent"
+  },
+
+  USA: {
+    dialogueLanguage: "American English",
+    speechLanguage: "American English accent"
+  },
+
+  UK: {
+    dialogueLanguage: "British English",
+    speechLanguage: "British English accent"
+  },
+
+  France: {
+    dialogueLanguage: "French",
+    speechLanguage: "French accent speaking French"
+  },
+
+  Senegal: {
+    dialogueLanguage: "French",
+    speechLanguage: "French accent speaking French"
+  },
+
+  Cameroon: {
+    dialogueLanguage: "French",
+    speechLanguage: "French accent speaking French"
+  },
+
+  "Ivory Coast": {
+    dialogueLanguage: "French",
+    speechLanguage: "French accent speaking French"
+  },
+
+  Morocco: {
+    dialogueLanguage: "French",
+    speechLanguage: "French accent speaking French"
+  },
+
+  Default: {
+    dialogueLanguage: "English",
+    speechLanguage: "Neutral English accent"
+  }
+};
 
 export const CAMERA_ANGLE_OPTIONS = [
   {
@@ -248,7 +303,9 @@ export const CAMERA_MOVEMENT_PROMPTS: { [key: string]: string } = {
   "Zoom In (Focus In)":
     "The camera lens smoothly zooms in, gradually tightening the focus on the main subject or a specific detail.",
   "Zoom Out (Reveal)":
-    "The camera lens smoothly zooms out, gradually widening the view to reveal more of the setting or context."
+    "The camera lens smoothly zooms out, gradually widening the view to reveal more of the setting or context.",
+  "Handheld (Organic Shake)":
+    "The camera has a natural, handheld aesthetic with subtle organic shakes, adding a realistic and immersive documentary-style feel to the footage."
 };
 
 const getAiClient = () => {
@@ -917,6 +974,8 @@ export async function generateStructuredStory(
   const castNotes = characters
     .map((c) => `${c.name}: ${c.description}`)
     .join("; ");
+  const langConfig =
+    COUNTRY_LANGUAGE_MAP[country] || COUNTRY_LANGUAGE_MAP["Default"];
 
   // DO add comment: Music Video Intelligence Protocol. Updated prompt system to treat lyrics as the primary structural anchor, focusing on rhythmic visualizer cues and emotional synchronization.
   const musicVideoMandate = isMusicVideo
@@ -1044,6 +1103,36 @@ VISUAL RULE:
   ${musicVideoMandate}
   ${bibleMandate}
   ${canonicalBiblicalProtection}
+
+CRITICAL LANGUAGE SEPARATION PROTOCOL:
+
+VISUAL DESCRIPTION RULE:
+- imageDescription MUST always be written in clean professional English.
+- Never use dialect or foreign language in imageDescription.
+
+STORY NARRATIVE RULE:
+- storyNarrative MUST always be written in clean professional English.
+
+DIALOGUE LANGUAGE RULE:
+- Dialogue MUST be written strictly in ${langConfig.dialogueLanguage}.
+- Never translate dialogue into English.
+- Always preserve native dialect authenticity.
+
+EXAMPLES:
+
+Nigeria:
+Michael: Wetin dey happen?
+
+France:
+Michel: Je suis prêt maintenant.
+
+USA:
+Michael: I am ready now.
+
+CRITICAL:
+- Visual prompts remain English.
+- Narrative remains English.
+- Dialogue uses ONLY ${langConfig.dialogueLanguage}.
     TARGET MEDIUM: [${movieStyle}]. 
     DIALOGUE MANDATE:
 ${
@@ -1107,7 +1196,9 @@ export async function generateScenesFromNarrative(
   const castNotes = characters
     .map((c) => `${c.name}: ${c.description}`)
     .join("; ");
-
+  
+const langConfig =
+  COUNTRY_LANGUAGE_MAP[country] || COUNTRY_LANGUAGE_MAP["Default"];
   // DO add comment: Bible narration enforcement for scene breakdown.
   const bibleMandate =
     genre === "Religion"
@@ -1182,6 +1273,7 @@ export async function regenerateSceneVisual(
   const castNotes = characters
     .map((c) => `${c.name}: ${c.description}`)
     .join("; ");
+  
   const prompt = `Based on this script: "${script}" and CAST: ${castNotes}, generate a detailed imageDescription (Visual DNA) for an AI image generator. Focus on framing, lighting, and performance.`;
 
   const response: GenerateContentResponse = await ai.models.generateContent({
@@ -1217,7 +1309,22 @@ export async function generateSpeech(
   expression: string
 ): Promise<string> {
   const ai = getAiClient();
-  const prompt = `Say in a ${expression} expression with ${country} linguistic flavor: ${text}`;
+
+  const langConfig =
+    COUNTRY_LANGUAGE_MAP[country] || COUNTRY_LANGUAGE_MAP["Default"];
+
+  const prompt = `
+Speak the following dialogue using authentic ${langConfig.speechLanguage}.
+
+Do NOT translate the dialogue.
+
+Preserve the original dialect and pronunciation.
+
+Expression style: ${expression}
+
+Dialogue:
+${text}
+`;
 
   const response: GenerateContentResponse = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
