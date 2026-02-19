@@ -67,7 +67,7 @@ export const SceneProgressOverlay: React.FC<SceneProgressOverlayProps> = ({
 };
 
 export interface SceneCardProps {
-  consumeCredits: (action: "IMAGE_EDIT" | "IMAGE_REGEN") => Promise<boolean>
+  consumeCredits: (action: string) => Promise<boolean>;
 
   scene: any;
   index: number;
@@ -113,11 +113,13 @@ export interface SceneCardProps {
   isHistory: boolean;
   isEnhanced?: boolean;
   videoError?: string;
+  isConfirmingVideo?: boolean;
  creditBalance: number;
   activeI2ISlot: { genId: number; sceneId: string } | null;
   setActiveI2ISlot: (slot: { genId: number; sceneId: string } | null) => void;
   onGenerateAudioOnly?: (genId: number, sceneId: string) => void;
   onAddAudioToTimeline?: (url: string, duration: number) => void;
+  characters: Character[];
 }
 
 const formatImageSrc = (src: string) => {
@@ -128,11 +130,13 @@ const formatImageSrc = (src: string) => {
 };
 
 export const SceneCard: React.FC<SceneCardProps> = (props) => {
-  
-  const { scene, index, isActive, videoState, status } = props;
+  const { scene, index, isActive, videoState, status, isConfirmingVideo } =
+    props;
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [displayMode, setDisplayMode] = useState<"image" | number>("image");
-  const [isAddedToTimeline, setIsAddedToTimeline] = useState(false);
+  const [isAddedToTimeline, setIsAddedToTimeline] = useState(
+    scene?.isAlreadyInTimeline === true
+  );
   const [isPortrait, setIsPortrait] = useState(props.aspectRatio === "9:16");
   const [isEnriching, setIsEnriching] = useState(false);
     const [isConfirming, setIsConfirming] = useState(false);
@@ -223,12 +227,10 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
   const handleAddMediaToTimeline = () => {
     if (status !== "complete") return;
-    setIsAddedToTimeline(true);
-    setTimeout(() => setIsAddedToTimeline(false), 2000);
+    if (isAddedToTimeline) return;
 
     if (displayMode === "image") {
       const src = formatImageSrc(scene.src);
-      // REINFORCED: Explicitly routing through TrackManager (Layer 0)
       props.onAddToTimeline(src, "image", 5);
     } else if (
       typeof displayMode === "number" &&
@@ -242,28 +244,45 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
         clip.videoObject
       );
     }
+
+    setIsAddedToTimeline(true);
+    scene.isAlreadyInTimeline = true;
   };
 
-  const toggleTier = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    props.setVideoModel(
-      props.videoModel === "veo-3.1-fast-generate-preview"
-        ? "veo-3.1-generate-preview"
-        : "veo-3.1-fast-generate-preview"
-    );
-  };
+ const toggleTier = (e: React.MouseEvent) => {
+   e.stopPropagation();
 
-  const handleEnrich = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!props.draftScript.trim() || isEnriching) return;
-    setIsEnriching(true);
-    try {
-      const enriched = await enrichScript(props.draftScript, [], "Cinematic");
-      props.onUpdateDraft({ draftScript: enriched });
-    } finally {
-      setIsEnriching(false);
-    }
-  };
+   const nextModel =
+     props.videoModel === "veo-3.1-fast-generate-preview"
+       ? "veo-3.1-generate-preview"
+       : "veo-3.1-fast-generate-preview";
+
+   props.setVideoModel(nextModel);
+
+   setIsConfirming(false);
+ };
+
+ const handleEnrich = async (e: React.MouseEvent) => {
+   e.stopPropagation();
+
+   if (!props.draftScript.trim()) return;
+   if (isEnriching) return;
+   if (props.creditBalance < 1) return;
+
+   setIsEnriching(true);
+
+   try {
+     const enriched = await enrichScript(
+       props.draftScript,
+       props.characters,
+       "Cinematic"
+     );
+
+     props.onUpdateDraft({ draftScript: enriched });
+   } finally {
+     setIsEnriching(false);
+   }
+ };
 
   const isMinorBlock = scene.error === "BLOCK_MINOR";
   const isExplicitBlock = scene.error === "BLOCK_SAFETY_GENERAL";
@@ -279,6 +298,20 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
       <div
         className={`relative ${isPortrait ? "aspect-[9/16]" : "aspect-video"} bg-black rounded-t-[1rem] flex items-center justify-center group overflow-hidden shrink-0`}
       >
+        {/* BACKGROUND IMAGE LAYER (STAYS DURING VIDEO PRODUCTION) */}
+        {scene.src && (
+          <div
+            className={`absolute inset-0 z-0 transition-all duration-1000 ${isVideoLoading ? "blur-xl scale-110 opacity-50" : "opacity-100"}`}
+          >
+            <img
+              src={formatImageSrc(scene.src)}
+              className="w-full h-full object-cover"
+              draggable={false}
+              onLoad={handleImageLoad}
+            />
+          </div>
+        )}
+
         {status === "generating" ? (
           <SceneProgressOverlay
             onStop={props.onStopScene}
@@ -301,7 +334,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
             </div>
           </div>
         ) : (
-          <>
+          <div className="absolute inset-0 z-10 w-full h-full flex items-center justify-center">
             {showVideoPlayer && currentVideo ? (
               <div className="w-full h-full relative group/video">
                 <video
@@ -413,7 +446,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                 Signal Lost
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
 
@@ -453,11 +486,12 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                 </button>
                 <button
                   onClick={async () => {
-  const ok = await props.consumeCredits("IMAGE_EDIT")
-  if (!ok) return
+                    // DO add comment: Fixed Credit Key. Changed "IMAGE_EDIT" to "IMAGE_EDIT_PRO" to correctly deduct credits and enable the button functionality.
+                    const ok = await props.consumeCredits("IMAGE_EDIT_PRO");
+                    if (!ok) return;
 
-  props.onEdit()
-}}
+                    props.onEdit();
+                  }}
                   className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                   title="Edit Canvas"
                 >
@@ -469,12 +503,13 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
               !isUploaded &&
               !isAnySafetyBlock && (
                 <button
-                 onClick={async () => {
-  const ok = await props.consumeCredits("IMAGE_REGEN")
-                 if (!ok) return
+                  onClick={async () => {
+                    // DO add comment: Fixed Credit Key. Changed "IMAGE_REGEN" to "IMAGE_NORMAL" to enable the regeneration functionality.
+                    const ok = await props.consumeCredits("IMAGE_NORMAL");
+                    if (!ok) return;
 
-                   props.onRegenerate(props.genId, scene.sceneId)
-                   }}
+                    props.onRegenerate(props.genId, scene.sceneId);
+                  }}
                   className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                   title="Regenerate Image"
                 >
@@ -493,22 +528,17 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
         <div className={`flex gap-2 ${isPortrait ? "flex-col" : "mt-0"}`}>
           <button
-            disabled={status !== "complete"}
+            disabled={status !== "complete" || isAddedToTimeline}
             onClick={handleAddMediaToTimeline}
             className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all shadow-inner rounded-xl disabled:opacity-30 ${isAddedToTimeline ? "bg-green-600 text-white" : "bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/20"}`}
           >
             {isAddedToTimeline ? (
               <CheckIcon className="w-4 h-4" />
-            ) : displayMode === "image" ? (
-              <PhotoIcon className="w-4 h-4" />
             ) : (
-              <FilmIcon className="w-4 h-4" />
+              <PlusIcon className="w-4 h-4" />
             )}
-            {isAddedToTimeline
-              ? "Added"
-              : displayMode === "image"
-                ? "Add Frame"
-                : "Add Clip"}
+            
+            {isAddedToTimeline ? "Added to Timeline" : "Add to Timeline"}
           </button>
           <button
             onClick={props.onToggleVideoCreator}
@@ -653,6 +683,8 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                     props.draftMovement,
                     withAudio
                   );
+
+                  setIsConfirming(false);
                 }}
                 disabled={props.isDisabled || isVideoLoading}
                 className={`flex-1 flex items-center justify-center gap-0 py-4 text-xs font-black tracking-widest transition-all text-white shadow-xl rounded-xl border overflow-hidden active:scale-[0.98] ${
@@ -688,7 +720,28 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
                     {isConfirming && (
                       <>
-                        <div className="h-6 w-px bg-white/20 mx-1" ></div> <div className="flex flex-col items-center leading-none px-3 py-1 hover:bg-black/20 transition-colors group/tier shrink-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleTier(e); }} > <div className="flex items-center gap-0.5"> <span className="text-[10px] font-black"> {totalCompoundCost} </span> <ArrowsRightLeftIcon className="w-2 h-2 opacity-40 group-hover/tier:opacity-100" /> </div> <span className="text-[6px] font-black opacity-30 tracking-tighter uppercase"> {tierShortLabel} </span> </div>
+                        <div className="h-6 w-px bg-white/20 mx-1"></div>{" "}
+                        <div
+                          className="flex flex-col items-center leading-none px-3 py-1 hover:bg-black/20 transition-colors group/tier shrink-0 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTier(e);
+                          }}
+                        >
+                          {" "}
+                          <div className="flex items-center gap-0.5">
+                            {" "}
+                            <span className="text-[10px] font-black">
+                              {" "}
+                              {totalCompoundCost}{" "}
+                            </span>{" "}
+                            <ArrowsRightLeftIcon className="w-2 h-2 opacity-40 group-hover/tier:opacity-100" />{" "}
+                          </div>{" "}
+                          <span className="text-[6px] font-black opacity-30 tracking-tighter uppercase">
+                            {" "}
+                            {tierShortLabel}{" "}
+                          </span>{" "}
+                        </div>
                       </>
                     )}
                   </>
