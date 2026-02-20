@@ -18,7 +18,8 @@ import {
   CircleIcon,
   SquareIcon,
   ArrowPointerIcon,
-  SparklesIcon,
+   SparklesIcon,
+  GhostIcon,
   LoaderIcon,
   RepeatIcon,
   VolumeXIcon
@@ -60,6 +61,9 @@ export interface Asset {
   height: number;
   transform: Transform;
   drawings: DrawingItem[];
+
+  opacity?: number;
+  targetOpacity?: number;
 }
 
 
@@ -115,6 +119,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+
+const [fadeMode, setFadeMode] = useState(false);
 
   // New: Confirmation state for Magic button
   const [isConfirmingMagic, setIsConfirmingMagic] = useState(false);
@@ -284,36 +290,61 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
   const toggleAssetVisibility = (id: string) => {
     if (isFinalizing || isReviewing) return;
+
     const asset = assets.find((a) => a.id === id);
     if (!asset) return;
+
+    // Ghost mode ON → smooth fade system
+    if (fadeMode) {
+      setAssets((prev) =>
+        prev.map((a) => {
+          if (a.id !== id) return a;
+
+          const current = a.targetOpacity ?? 1;
+
+          return {
+            ...a,
+            targetOpacity: current === 1 ? 0 : 1,
+            opacity: a.opacity ?? current
+          };
+        })
+      );
+
+      setSelectedAssetId(id);
+
+      setVisibleAssetIds((prev) => {
+        if (prev.includes(id)) return prev;
+        return [...prev, id];
+      });
+
+      return;
+    }
+
+    // Ghost mode OFF → original instant behavior
     setVisibleAssetIds((prev) => {
       const isVisible = prev.includes(id);
-      let next = [...prev];
+
       if (isVisible) {
-        if (selectedAssetId === id) {
-          next = next.filter((vId) => vId !== id);
-          setSelectedAssetId(null);
-        } else {
-          setSelectedAssetId(id);
-        }
+        setSelectedAssetId(null);
+        return prev.filter((vId) => vId !== id);
       } else {
-        if (asset.type === "video") {
-          const visibleVideos = next.filter(
-            (vId) => assets.find((a) => a.id === vId)?.type === "video"
-          );
-          next = next.filter((vId) => !visibleVideos.includes(vId));
-        } else {
-          const visibleImages = next.filter(
-            (vId) => assets.find((a) => a.id === vId)?.type === "image"
-          );
-          if (visibleImages.length >= 2)
-            next = next.filter((vId) => vId !== visibleImages[0]);
-        }
-        next.push(id);
         setSelectedAssetId(id);
+        return [...prev, id];
       }
-      return next;
     });
+
+    // instant opacity update
+    setAssets((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              opacity: 1,
+              targetOpacity: 1
+            }
+          : a
+      )
+    );
   };
 
   const toggleAssetPlayback = useCallback(
@@ -597,6 +628,56 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   };;
 
   useEffect(() => {
+    if (!fadeMode) return;
+
+    const interval = setInterval(() => {
+      setAssets((prev) =>
+        prev.map((asset) => {
+          let opacity = asset.opacity ?? 0;
+          let target = asset.targetOpacity ?? 0;
+
+          if (opacity === target) return asset;
+
+          const speed = 0.003;
+
+          opacity =
+            target > opacity
+              ? Math.min(target, opacity + speed)
+              : Math.max(target, opacity - speed);
+
+          return {
+            ...asset,
+            opacity,
+            targetOpacity: target
+          };
+        })
+      );
+    }, 16);
+
+    return () => clearInterval(interval);
+  }, [fadeMode]);
+
+  useEffect(() => {
+    if (!fadeMode) return;
+
+    setVisibleAssetIds((prev) => {
+      const newOrder = [...prev];
+
+      assets.forEach((asset) => {
+        if ((asset.opacity ?? 0) > 0.2) {
+          const index = newOrder.indexOf(asset.id);
+          if (index !== -1) {
+            newOrder.splice(index, 1);
+            newOrder.push(asset.id);
+          }
+        }
+      });
+
+      return newOrder;
+    });
+  }, [assets, fadeMode]);
+
+  useEffect(() => {
     const stopTracks = () => {
       if (activeStreamRef.current)
         activeStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -656,6 +737,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         sy = (v.videoHeight - sh) / 2;
       }
       ctx.save();
+      
       if (webcamFlipped) {
         ctx.translate(w, 0);
         ctx.scale(-1, 1);
@@ -663,9 +745,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       ctx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h);
       ctx.restore();
     }
-    const renderOrder = [...visibleAssetIds].sort((a, b) =>
-      a === selectedAssetId ? 1 : b === selectedAssetId ? -1 : 0
-    );
+    const renderOrder = [...visibleAssetIds];
     renderOrder.forEach((id) => {
       const asset = assets.find((a) => a.id === id);
       if (!asset) return;
@@ -705,6 +785,9 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           drawY = h * (trans.y / 100) - drawH / 2;
         }
         ctx.save();
+
+        ctx.globalAlpha = fadeMode ? (asset.opacity ?? 1) : 1;
+
         ctx.beginPath();
         ctx.rect(drawX, drawY, finalW, finalH);
         ctx.clip();
@@ -812,6 +895,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         }
 
         ctx.restore();
+        ctx.globalAlpha = 1;
         // CLEAN FEED LOGIC: Only draw border/handles if NOT recording
         if (
           id === selectedAssetId &&
@@ -1427,15 +1511,17 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           const next: Asset[] = [
             ...p,
             {
-          id,
-          name: file.name,
-          type,
-          url,
+              id,
+              name: file.name,
+              type,
+              url,
               thumbnail,
-          width: v.videoWidth,
-          height: v.videoHeight,
-          transform: { ...DEFAULT_TRANSFORM },
-          drawings: []
+              width: v.videoWidth,
+              height: v.videoHeight,
+              transform: { ...DEFAULT_TRANSFORM },
+              drawings: [],
+              opacity: 1,
+              targetOpacity: 1
             }
           ];
           selectAndShowAsset(id, "video", next);
@@ -1480,14 +1566,16 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           const next: Asset[] = [
             ...p,
             {
-          id,
-          name: file.name,
-          type,
-          url,
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-          transform: { ...DEFAULT_TRANSFORM },
-          drawings: []
+              id,
+              name: file.name,
+              type,
+              url,
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              transform: { ...DEFAULT_TRANSFORM },
+              drawings: [],
+              opacity: 1,
+              targetOpacity: 1
             }
           ];
           selectAndShowAsset(id, "image", next);
@@ -1603,6 +1691,19 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
             <CameraIcon />
             <span className="text-[7px] font-black mt-1 uppercase">Sight</span>
           </button>
+          {/* PASTE GHOST BUTTON HERE */}
+          <button
+            onClick={() => setFadeMode((prev) => !prev)}
+            disabled={isFinalizing || isReviewing}
+            className={`w-12 h-12 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${
+              fadeMode
+                ? "bg-purple-600 shadow-[0_0_20px_rgba(168,85,247,0.6)]"
+                : "bg-white/10 text-white/40"
+            }`}
+          >
+            <GhostIcon />
+            <span className="text-[7px] font-black mt-1 uppercase">Ghost</span>
+          </button>
           {selectedAsset?.type === "image" && (
             <button
               onClick={() =>
@@ -1631,23 +1732,29 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
             </button>
           )}
           {selectedAssetId && (
-            <button
-              onClick={() =>
-                !isFinalizing && !isReviewing && setIsFullFrame(!isFullFrame)
-              }
-              disabled={isFinalizing || isReviewing}
-              className={`w-12 h-12 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${isFullFrame ? "bg-emerald-600" : "bg-white/10"} disabled:opacity-20`}
-            >
-              {isFullFrame ? <CompressIcon /> : <ExpandIcon />}
-              <span className="text-[7px] font-black mt-1 uppercase">View</span>
-            </button>
+            <>
+              <button
+                onClick={() =>
+                  !isFinalizing && !isReviewing && setIsFullFrame(!isFullFrame)
+                }
+                disabled={isFinalizing || isReviewing}
+                className={`w-12 h-12 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${
+                  isFullFrame ? "bg-emerald-600" : "bg-white/10"
+                }`}
+              >
+                {isFullFrame ? <CompressIcon /> : <ExpandIcon />}
+                <span className="text-[7px] font-black mt-1 uppercase">
+                  View
+                </span>
+              </button>
+            </>
           )}
         </div>
 
         {selectedAssetId && !isFinalizing && !isReviewing && (
           <button
             onClick={() => deleteAsset(selectedAssetId)}
-            className="absolute bottom-6 right-6 z-50 w-14 h-14 bg-black/60 backdrop-blur-xl border-2 border-red-500/40 rounded-2xl flex flex-col items-center justify-center text-red-500"
+            className="absolute bottom-1 right-3 z-50 w-10 h-10 bg-black/60 backdrop-blur-xl border-2 border-red-500/40 rounded-2xl flex flex-col items-center justify-center text-red-500"
           >
             <TrashIcon className="text-xs" />
             <span className="text-[5px] font-black mt-0.5 uppercase">
@@ -1729,8 +1836,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         </div>
       </section>
 
-      <footer className="relative flex-none bg-black flex flex-col items-center justify-between pb-safe pt-2 px-4 z-40 min-h-[140px] border-t border-white/5">
-        <div className="w-full flex items-center justify-center space-x-2 mt-2 overflow-x-auto no-scrollbar">
+      <footer className="relative flex-none bg-black flex flex-col items-center justify-between pb-safe pt-2 px-4 z-40 min-h-[10px] border-t border-white/5">
+        <div className="w-full flex items-center space-x-2 mt-2 overflow-x-auto overflow-y-hidden no-scrollbar h-[64px]">
           {assets.map((asset) => {
             const isVisible = visibleAssetIds.includes(asset.id),
               isSelected = selectedAssetId === asset.id;
@@ -1743,7 +1850,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
               >
                 <img
                   src={asset.type === "video" ? asset.thumbnail : asset.url}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover rounded-xl"
                 />
                 <div className="absolute top-1 right-1">
                   {asset.type === "video" ? (

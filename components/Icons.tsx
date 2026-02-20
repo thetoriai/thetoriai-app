@@ -865,6 +865,17 @@ export const PenIcon: React.FC<IconProps> = ({ className }) => (
   </svg>
 );
 
+export const GhostIcon = ({ className = "w-6 h-6" }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    className={className}
+  >
+    <path d="M12 2C7.03 2 3 6.03 3 11v9l2.5-2 2.5 2 2.5-2 2.5 2 2.5-2 2.5 2V11c0-4.97-4.03-9-9-9zm-3 9a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+  </svg>
+);
+
 // Specific Nib Icon as seen in image for DRAW
 export const DrawNibIcon: React.FC<IconProps> = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
