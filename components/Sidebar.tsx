@@ -35,6 +35,8 @@ interface SidebarProps {
   creditBalance: number;
   session?: any;
   onClose?: () => void;
+  videoLength: number;
+  setVideoLength: (val: number) => void;
 }
 
 export const VIEW_COLORS: Record<string, string> = {
@@ -63,7 +65,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   creditBalance,
   session,
-  onClose
+  onClose,
+  videoLength,
+  setVideoLength
 }) => {
   const windowWidth = window.innerWidth;
   // UPDATED BREAKPOINTS: 500px and below is Phone. 501px-1023px is Standing Tablet. 1024px+ is Desktop/Rotating.
@@ -180,6 +184,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <ChevronDownIcon className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <label className="text-[8px] font-black text-gray-500 tracking-widest block ml-1">
+                Length
+              </label>
+              <div className="relative">
+                <select
+                  value={videoLength}
+                  onChange={(e) => setVideoLength(Number(e.target.value))}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[10px] font-bold text-gray-200 outline-none appearance-none"
+                >
+                  <option value={6}>6s</option>
+                  <option value={8}>8s</option>
+                </select>
+                <ChevronDownIcon className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -242,11 +262,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: "Storyboard"
     },
     {
-      id: "footage",
-      icon: <FilmIcon className="w-5 h-5" />,
-      label: "Quick Footage "
-    },
-    {
       id: "timeline",
       icon: <TimelineIcon className="w-5 h-5" />,
       label: "Timeline"
@@ -294,11 +309,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <CreditCardIcon
                 className={`w-4 h-4 ${showAccountDropdown ? "text-white" : "text-indigo-400"}`}
               />
-              <span
-                className={`text-[10px] font-black ${showAccountDropdown ? "text-white" : "text-indigo-300"}`}
-              >
-                {creditBalance}
-              </span>
+              <div className="flex flex-col leading-tight items-center">
+                <span
+                  className={`text-[10px] font-black ${showAccountDropdown ? "text-white" : "text-indigo-300"}`}
+                >
+                  {creditBalance}
+                </span>
+
+                <span
+                  className={`text-[7px] font-black tracking-[0.15em] uppercase ${showAccountDropdown ? "text-white/70" : "text-indigo-400/70"}`}
+                >
+                  Credits
+                </span>
+              </div>
             </button>
 
             {/* ACCOUNT DROP-DOWN - "FOLDER DROPOUT" REPLACEMENT FOR FOOTER */}
@@ -332,37 +355,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Navigation area fits content naturally, scrolls only if viewport is too short */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-2 pb-32 scrollbar-none">
           <div className="flex flex-col gap-3 max-w-sm mx-auto">
-            {navItems.map((item) => (
-              <div key={item.id} className="relative">
-                <button
-                  onClick={() => handleNavClick(item.id)}
-                  className={`w-full flex items-center gap-6 p-5 rounded-2xl border transition-all ${activeView === item.id ? "bg-indigo-600 border-indigo-500 text-white shadow-xl" : "bg-white/5 border-white/5 text-gray-400 active:bg-indigo-600 active:text-white"}`}
-                >
-                  <span
-                    style={{
-                      color:
-                        activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
-                    }}
+            {/* Production tools */}
+            {navItems
+              .filter((item) => item.id !== "buy-credits")
+              .map((item) => (
+                <div key={item.id} className="relative">
+                  <button
+                    onClick={() => handleNavClick(item.id)}
+                    className={`w-full flex items-center gap-6 p-5 rounded-2xl border transition-all ${
+                      activeView === item.id
+                        ? "bg-indigo-600 border-indigo-500 text-white shadow-xl"
+                        : "bg-white/5 border-white/5 text-gray-400 active:bg-indigo-600 active:text-white"
+                    }`}
                   >
-                    {item.icon}
-                  </span>
+                    <span
+                      style={{
+                        color:
+                          activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
+                      }}
+                    >
+                      {item.icon}
+                    </span>
+
+                    <span className="text-[15px] font-black tracking-[0.15em]">
+                      {item.label}
+                    </span>
+                  </button>
+
+                  {item.id === "timeline" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNavClick("directors-cut");
+                      }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-transform z-20 border border-red-500"
+                    >
+                      <ClapperboardIcon className="w-5 h-5 text-white" />
+                    </button>
+                  )}
+                </div>
+              ))}
+
+            {/* Divider */}
+            <div className="my-2 h-px bg-white/10"></div>
+
+            {/* Credits */}
+            {navItems
+              .filter((item) => item.id === "buy-credits")
+              .map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavClick(item.id)}
+                  className={`w-full flex items-center gap-6 p-5 rounded-2xl border transition-all ${
+                    activeView === item.id
+                      ? "bg-yellow-500 border-yellow-400 text-black shadow-xl"
+                      : "bg-yellow-500/10 border-yellow-500/30 text-yellow-400"
+                  }`}
+                >
+                  {item.icon}
                   <span className="text-[15px] font-black tracking-[0.15em]">
                     {item.label}
                   </span>
                 </button>
-                {item.id === "timeline" && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleNavClick("directors-cut");
-                    }}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-transform z-20 border border-red-500"
-                  >
-                    <ClapperboardIcon className="w-5 h-5 text-white" />
-                  </button>
-                )}
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       </div>
@@ -386,26 +441,65 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <nav className="flex flex-col gap-4">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${activeView === item.id ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:bg-white/5 hover:text-gray-300"}`}
-            >
-              <span
-                style={{
-                  color: activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
-                }}
+          {/* Production tools */}
+          {navItems
+            .filter((item) => item.id !== "buy-credits")
+            .map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                  activeView === item.id
+                    ? "bg-indigo-600 text-white shadow-lg"
+                    : "text-gray-500 hover:bg-white/5 hover:text-gray-300"
+                }`}
+              >
+                <span
+                  style={{
+                    color:
+                      activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
+                  }}
+                >
+                  {item.icon}
+                </span>
+              </button>
+            ))}
+
+          {/* Divider */}
+          <div className="my-2 h-px bg-white/10 w-8 mx-auto"></div>
+
+          {/* Credits */}
+          {navItems
+            .filter((item) => item.id === "buy-credits")
+            .map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                  activeView === item.id
+                    ? "bg-indigo-600 text-white shadow-lg"
+                    : "text-yellow-500 hover:bg-white/5 hover:text-yellow-400"
+                }`}
               >
                 {item.icon}
-              </span>
-            </button>
-          ))}
+              </button>
+            ))}
         </nav>
         <div className="mt-auto pb-4 flex flex-col gap-4 items-center">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex flex-col items-center justify-center text-[8px] font-black text-indigo-400 ">
-            {creditBalance}
-          </div>
+          <button
+            onClick={() => handleNavClick("buy-credits")}
+            className="w-12 h-12 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex flex-col items-center justify-center hover:bg-indigo-600/20 transition-all active:scale-95"
+            title="View Credits"
+          >
+            <span className="text-[9px] font-black text-indigo-300 leading-tight">
+              {creditBalance}
+            </span>
+
+            <span className="text-[6px] font-black text-indigo-400/70 tracking-[0.15em] uppercase leading-tight">
+              Credits
+            </span>
+          </button>
+
           <button
             onClick={onLogout}
             className="p-3 text-gray-500 hover:text-red-400 transition-colors"
@@ -443,41 +537,88 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
           {/* ENLARGED DESKTOP CREDIT PILL */}
-          <div className="bg-indigo-600/20 px-5 py-2.5 rounded-2xl border border-indigo-500/30 flex items-center gap-3 h-max shadow-lg">
+          <button
+            onClick={() => handleNavClick("buy-credits")}
+            className="bg-indigo-600/20 px-5 py-2.5 rounded-2xl border border-indigo-500/30 flex items-center gap-3 h-max shadow-lg hover:bg-indigo-600/30 transition-all active:scale-95"
+            title="View and manage credits"
+          >
             <CreditCardIcon className="w-4.5 h-4.5 text-indigo-400" />
-            <span className="text-[12px] font-black text-indigo-300 tracking-widest">
-              {creditBalance.toLocaleString()}
-            </span>
-          </div>
+
+            <div className="flex flex-col leading-tight">
+              <span className="text-[9px] font-black text-indigo-400 tracking-[0.25em] uppercase">
+                Credits
+              </span>
+
+              <span className="text-[13px] font-black text-indigo-300 tracking-widest">
+                {creditBalance.toLocaleString()}
+              </span>
+            </div>
+          </button>
         </div>
       </div>
 
       <div className="flex flex-col flex-1 px-8 pb-8 overflow-hidden">
         <nav className="flex-1 flex flex-col gap-2 min-h-0 overflow-y-auto pr-1 scrollbar-none">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleNavClick(item.id)}
-              style={
-                {
-                  "--glow-color": VIEW_COLORS[item.id] || "#6366f1"
-                } as React.CSSProperties
-              }
-              className={`sidebar-glow-btn w-full flex items-center gap-5 px-5 py-4 transition-all border-2 border-transparent rounded-[1.25rem] ${activeView === item.id ? "active" : "text-gray-400 hover:bg-white/[0.03] hover:text-gray-200"}`}
-            >
-              <span
-                className={`transition-colors duration-300 ${activeView === item.id ? "text-white" : ""}`}
-                style={{
-                  color: activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
-                }}
+          {/* Production tools */}
+          {navItems
+            .filter((item) => item.id !== "buy-credits")
+            .map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                style={
+                  {
+                    "--glow-color": VIEW_COLORS[item.id] || "#6366f1"
+                  } as React.CSSProperties
+                }
+                className={`sidebar-glow-btn w-full flex items-center gap-5 px-5 py-4 transition-all border-2 border-transparent rounded-[1.25rem] ${activeView === item.id ? "active" : "text-gray-400 hover:bg-white/[0.03] hover:text-gray-200"}`}
               >
-                {item.icon}
-              </span>
-              <span className="text-[15px] font-black tracking-[0.15em] truncate">
-                {item.label}
-              </span>
-            </button>
-          ))}
+                <span
+                  className={`transition-colors duration-300 ${activeView === item.id ? "text-white" : ""}`}
+                  style={{
+                    color:
+                      activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
+                  }}
+                >
+                  {item.icon}
+                </span>
+                <span className="text-[15px] font-black tracking-[0.15em] truncate">
+                  {item.label}
+                </span>
+              </button>
+            ))}
+
+          {/* Divider */}
+          <div className="my-3 h-px bg-white/5"></div>
+
+          {/* Credits */}
+          {navItems
+            .filter((item) => item.id === "buy-credits")
+            .map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                style={
+                  {
+                    "--glow-color": VIEW_COLORS[item.id] || "#6366f1"
+                  } as React.CSSProperties
+                }
+                className={`sidebar-glow-btn w-full flex items-center gap-5 px-5 py-4 transition-all border-2 border-transparent rounded-[1.25rem] ${activeView === item.id ? "active" : "text-gray-400 hover:bg-white/[0.03] hover:text-gray-200"}`}
+              >
+                <span
+                  className={`transition-colors duration-300 ${activeView === item.id ? "text-white" : ""}`}
+                  style={{
+                    color:
+                      activeView === item.id ? "#fff" : VIEW_COLORS[item.id]
+                  }}
+                >
+                  {item.icon}
+                </span>
+                <span className="text-[15px] font-black tracking-[0.15em] truncate">
+                  {item.label}
+                </span>
+              </button>
+            ))}
         </nav>
 
         <div className="mt-auto pt-6 border-t border-white/5 flex flex-col items-center gap-3 shrink-0">

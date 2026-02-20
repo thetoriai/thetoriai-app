@@ -77,6 +77,13 @@ const CREDIT_ACTIONS = {
 
   VIDEO_FAST: "VIDEO_FAST",
   VIDEO_HQ: "VIDEO_HQ",
+
+  VIDEO_FAST_6S: "VIDEO_FAST_6S",
+  VIDEO_FAST_8S: "VIDEO_FAST_8S",
+
+  VIDEO_HQ_6S: "VIDEO_HQ_6S",
+  VIDEO_HQ_8S: "VIDEO_HQ_8S",
+
   VIDEO_ADD_AUDIO: "VIDEO_ADD_AUDIO",
 
   AUDIO_GENERIC: "AUDIO_GENERIC"
@@ -118,6 +125,8 @@ const App: React.FC = () => {
 
   // --- BROWSER NAVIGATION LOGIC ---
   const isInternalNavRef = useRef(false);
+  const [isConfirmingCameraAngle, setIsConfirmingCameraAngle] = useState(false);
+  const [cameraAngleCreditError, setCameraAngleCreditError] = useState(false);
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
@@ -188,6 +197,9 @@ const App: React.FC = () => {
   const [imageModel] = useState("gemini-2.5-flash-image");
   const [videoModel, setVideoModel] = useState("veo-3.1-fast-generate-preview");
   const [videoResolution, setVideoResolution] = useState("720p");
+  const [videoLength, setVideoLength] = useState(
+    () => Number(localStorage.getItem("videoLength")) || 6
+  );
 
   const [characters, setCharacters] = useState<Character[]>([]);
   const [history, setHistory] = useState<any[]>([]);
@@ -419,10 +431,6 @@ const App: React.FC = () => {
     [footageVideoTier]
   );
   useEffect(
-    () => localStorage.setItem("footageMode", footageMode),
-    [footageMode]
-  );
-  useEffect(
     () =>
       localStorage.setItem(
         "footageRefImages",
@@ -451,6 +459,10 @@ const App: React.FC = () => {
     () => localStorage.setItem("characterStyle", characterStyle),
     [characterStyle]
   );
+  useEffect(
+    () => localStorage.setItem("videoLength", videoLength.toString()),
+    [videoLength]
+  );
 
   // MASTER CREDIT DEDUCTION: Must run and succeed BEFORE any API generation occurs.
   const consumeCredits = async (actionType: keyof typeof CREDIT_ACTIONS) => {
@@ -470,13 +482,9 @@ const App: React.FC = () => {
         throw error;
       }
 
-      if (data !== true) {
-        setCreditWarning(
-          "Insufficient credits. Please purchase more credits to continue."
-        );
-        setActiveModal("credit-warning");
-        throw new Error("INSUFFICIENT_CREDITS");
-      }
+     if (data !== true) {
+       throw new Error("INSUFFICIENT_CREDITS");
+     }
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -493,15 +501,9 @@ const App: React.FC = () => {
 
     return true;
     } catch (err: any) {
-      if (err.message === "INSUFFICIENT_CREDITS") {
-        setCreditWarning(
-          "Insufficient credits. Please purchase more credits to continue."
-        );
-        setActiveModal("credit-warning");
-      } else {
+      if (err.message !== "INSUFFICIENT_CREDITS") {
         console.error("Credit error:", err);
       }
-
       throw err;
     }
   };
@@ -539,13 +541,29 @@ const App: React.FC = () => {
     }
 
     try {
-      let sessionId = Date.now();
+      // DO add comment: SESSION GROUPING. If generating from Storybook, find the last open Storywriter section to append scenes to it instead of creating a new one.
+      const existingSess =
+        source === "storybook"
+          ? history.find((h) => h.type === "storybook" && !h.isClosed)
+          : null;
+
+      let sessionId: number;
+      if (existingSess) {
+        sessionId = existingSess.id;
+      } else {
+        sessionId = Date.now();
+      }
+
       const sessionTitle =
         source === "storybook"
           ? "Storywriter"
           : source === "footage"
-            ? "Footage Desk"
+            ? "Quick Footage"
             : "Production";
+
+      const startIdx = existingSess ? existingSess.imageSet.length : 0;
+
+      if (!existingSess && source !== "footage") {
       const newItem = {
         id: sessionId,
         type: source,
@@ -558,17 +576,19 @@ const App: React.FC = () => {
         isClosed: false
       };
 
-      if (source !== "footage") {
         setHistory((prev) => {
           const next = [...prev, newItem];
           // ALWAYS FOCUS: Automatically select the newest production session in the storyboard.
           setActiveHistoryIndex(next.length - 1);
           return next;
         });
+      } else if (existingSess && source !== "footage") {
+        const idx = history.findIndex((h) => h.id === sessionId);
+        setActiveHistoryIndex(idx);
       }
 
       const placeholders = prompts.map((p, i) => ({
-        sceneId: `scene-${sessionId}-${i}`,
+        sceneId: `scene-${sessionId}-${startIdx + i}`,
         prompt: p,
         src: null,
         error: null,
@@ -583,13 +603,16 @@ const App: React.FC = () => {
             h.id === sessionId
               ? {
                   ...h,
-                  imageSet: placeholders,
-                  videoStates: placeholders.map(() => ({
+                  imageSet: [...h.imageSet, ...placeholders],
+                  videoStates: [
+                    ...h.videoStates,
+                    ...placeholders.map(() => ({
                     status: "idle",
                     clips: [],
                     draftScript: "",
                     draftCameraMovement: "Zoom In (Focus In)"
                   }))
+                  ]
                 }
               : h
           )
@@ -629,7 +652,7 @@ const App: React.FC = () => {
         if (src) currentSequentialRef = src;
 
         const updatedScene = {
-          sceneId: `scene-${sessionId}-${i}`,
+          sceneId: `scene-${sessionId}-${startIdx + i}`,
           src,
           error,
           status: error ? "error" : "complete",
@@ -639,11 +662,7 @@ const App: React.FC = () => {
           selectedVariantIndex: 0,
           originSessionId: sessionId,
           originSection:
-            source === "storybook"
-              ? "StorybookSection"
-              : source === "footage"
-                ? "FootageFrontSection"
-                : "FootageFrontSection"
+            source === "storybook" ? "StorybookSection" : "FootageFrontSection"
         };
 
         if (source !== "footage") {
@@ -652,8 +671,8 @@ const App: React.FC = () => {
               h.id === sessionId
                 ? {
                     ...h,
-                    imageSet: h.imageSet.map((s: any, idx: number) =>
-                      idx === i ? updatedScene : s
+                    imageSet: h.imageSet.map((s: any) =>
+                      s.sceneId === updatedScene.sceneId ? updatedScene : s
                     )
                   }
                 : h
@@ -686,6 +705,7 @@ const App: React.FC = () => {
       setIsGenerating(false);
     }
   };
+  
   // === Directors Cut Image Generator ===
   const handleGenerateImage = async (prompt: string): Promise<string> => {
     const base64 = await handleGenerate(
@@ -766,7 +786,34 @@ const App: React.FC = () => {
       setActiveHistoryIndex(next.length - 1);
       return next;
     });
+    setFootageHistory((prev) => {
+      const item = newItem as any;
 
+      return [
+        ...prev,
+        {
+          sceneId:
+            item.sceneId || item.id?.toString() || `footage-${Date.now()}`,
+
+          timestamp: Date.now(),
+
+          status: "complete",
+
+          src: item.src || item.image || item.base64 || "",
+
+          image: item.image || item.src || item.base64 || "",
+
+          originSection: "FootageFrontSection",
+
+          genId: item.id || Date.now(),
+
+          videoState: null,
+
+          aspectRatio: "16:9"
+        }
+      ];
+    });
+    
     try {
       await consumeCredits(action as any);
 
@@ -775,6 +822,7 @@ const App: React.FC = () => {
         aspectRatio,
         finalPrompt,
         startFrame,
+        null,
         visualStyle,
         selectedCountry,
         tier === "veo31-quality"
@@ -833,22 +881,24 @@ const App: React.FC = () => {
 
   const handleRegenerateScene = async (genId: number, sceneId: string) => {
     const sessionId = genId;
-    const session = history.find((h) => h.id === sessionId);
-    if (!session) return;
+    // DO add comment: SEARCH ACROSS HISTORIES. Ensure regeneration can find the scene data even if it originated from Quick Footage (footageHistory).
+    let session = history.find((h) => h.id === sessionId);
+    let sceneIndex = -1;
+    let currentScene;
 
-    const sceneIndex = session.imageSet.findIndex(
+    if (session) {
+      sceneIndex = session.imageSet.findIndex(
       (s: any) => s.sceneId === sceneId
     );
-    if (sceneIndex === -1) return;
-
-    const currentScene = session.imageSet[sceneIndex];
-    const prompt = currentScene.prompt;
-
-    let refImage = null;
-    if (sceneIndex > 0) {
-      refImage = session.imageSet[sceneIndex - 1].src;
+      currentScene = session.imageSet[sceneIndex];
+    } else {
+      currentScene = footageHistory.find((f) => f.sceneId === sceneId);
     }
 
+    if (!currentScene) return;
+
+    const prompt = currentScene.prompt;
+    let refImage = sceneIndex > 0 ? session.imageSet[sceneIndex - 1].src : null;
     if (creditSettings.creditBalance < 1) return;
 
     // DO add comment: Fixed status update. Removed illegal references to src/error before API call.
@@ -862,6 +912,11 @@ const App: React.FC = () => {
               )
             }
           : h
+      )
+    );
+    setFootageHistory((prev) =>
+      prev.map((f) =>
+        f.sceneId === sceneId ? { ...f, status: "generating" } : f
       )
     );
 
@@ -880,12 +935,7 @@ const App: React.FC = () => {
         refImage
       );
 
-      setHistory((prev) =>
-        prev.map((h) =>
-          h.id === genId
-            ? {
-                ...h,
-                imageSet: h.imageSet.map((s: any) => {
+      const updateFn = (s: any) => {
                   if (s.sceneId === sceneId) {
                     return {
                       ...s,
@@ -904,26 +954,25 @@ const App: React.FC = () => {
                     };
                   }
                   return s;
-                })
-              }
-            : h
-        )
-      );
-    } catch (e) {
+      };
+
       setHistory((prev) =>
         prev.map((h) =>
-          h.id === genId
-            ? {
-                ...h,
-                imageSet: h.imageSet.map((s: any) =>
-                  s.sceneId === sceneId
-                    ? { ...s, status: "error", error: "Regeneration failed" }
-                    : s
-                )
-              }
-            : h
+          h.id === genId ? { ...h, imageSet: h.imageSet.map(updateFn) } : h
         )
       );
+      setFootageHistory((prev) => prev.map(updateFn));
+    } catch (e) {
+      const errFn = (s: any) =>
+        s.sceneId === sceneId
+          ? { ...s, status: "error", error: "Regeneration failed" }
+          : s;
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === genId ? { ...h, imageSet: h.imageSet.map(errFn) } : h
+        )
+      );
+      setFootageHistory((prev) => prev.map(errFn));
     }
   };
 
@@ -932,28 +981,33 @@ const App: React.FC = () => {
     mode: "image" | "video" | "i2i",
     refImage?: string,
     videoTier?: string,
-    imageTier?: string
+    imageTier?: string,
+    endImage?: string
   ) => {
     const tempId = `footage-${Date.now()}`;
     // START AND END FRAME FROM FOOTAGE DESK
     const startFrame = footageRefImages?.[0] || refImage || null;
-    const endFrame = footageRefImages?.[1] || null;
+    const endFrame = endImage || footageRefImages?.[1] || null;
 
-    const placeholder = {
-      sceneId: tempId,
-      prompt: prompt,
-      status: "generating",
-      type: mode === "image" ? "image" : "video",
-      src: refImage || null,
-      originSection: "FootageFrontSection",
-      timestamp: Date.now()
-    };
+    // Check if this is a manual upload identified by the prompt "Manual upload"
+    const isManualUpload =
+      prompt === "Manual upload" && mode === "image" && !!refImage;
 
-    // DO add comment: Immediately create a placeholder card in the grid to show progress feedback.
-    setFootageHistory((prev) => [placeholder, ...prev]);
+    
 
-    // IMAGE WORKFLOW
     if (mode === "image") {
+      if (refImage) {
+        setFootageHistory((prev) =>
+          prev.map((item) =>
+            item.sceneId === tempId
+              ? { ...item, src: refImage, image: refImage, status: "complete" }
+              : item
+          )
+        );
+
+        return;
+      }
+
       const modelToUse =
         imageTier === "pro"
           ? "gemini-3-pro-image-preview"
@@ -963,16 +1017,54 @@ const App: React.FC = () => {
         characterStyle === "Afro-toon"
           ? "Subject: African/Black person."
           : `Subject: Person from ${selectedCountry}.`;
+
       const styleContext = `Visual Medium: [${visualStyle}].`;
+
       const finalPrompt = `${styleContext} ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
 
-      await handleGenerate(
+      // CREATE PLACEHOLDER
+      const placeholder = {
+        sceneId: tempId,
+        prompt,
+        src: null,
+        image: null,
+        status: "deducting",
+        type: "image",
+        originSection: "FootageFrontSection",
+        timestamp: Date.now()
+      };
+
+      setFootageHistory((prev) => [placeholder, ...prev]);
+
+      // Brief delay to "call for credit"
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Update to generating
+      setFootageHistory((prev) =>
+        prev.map((item) =>
+          item.sceneId === tempId ? { ...item, status: "generating" } : item
+        )
+      );
+
+      // generation continues here
+      const src = await handleGenerate(
         [finalPrompt],
         "footage",
-        refImage,
+        undefined,
         modelToUse,
         true
       );
+
+      if (src) {
+        setFootageHistory((prev) =>
+          prev.map((item) =>
+            item.sceneId === tempId
+              ? { ...item, src, status: "complete", type: "image" }
+              : item
+          )
+        );
+      }
+
       return;
     }
 
@@ -980,79 +1072,116 @@ const App: React.FC = () => {
     await ensureApiKey();
     setIsGenerating(true);
 
-    const action = videoTier === "veo31-quality" ? "VIDEO_HQ" : "VIDEO_FAST";
+    // CREATE PLACEHOLDER FOR VIDEO
+    const videoPlaceholder = {
+      sceneId: tempId,
+      prompt,
+      src: startFrame || null,
+      image: startFrame || null,
+      status: "deducting",
+      type: "video",
+      videoDuration: videoLength,
+      originSection: "FootageFrontSection",
+      timestamp: Date.now()
+    };
+    setFootageHistory((prev) => [videoPlaceholder, ...prev]);
+
+    // Brief delay to "call for credit"
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Update to generating
+       setFootageHistory((prev) =>
+         prev.map((item) =>
+        item.sceneId === tempId ? { ...item, status: "generating" } : item
+         )
+       );
+
+    let action;
+
+    if (videoTier === "veo31-quality") {
+      action = videoLength === 8 ? "VIDEO_HQ_8S" : "VIDEO_HQ_6S";
+    } else {
+      action = videoLength === 8 ? "VIDEO_FAST_8S" : "VIDEO_FAST_6S";
+    }
 
     try {
-      // DEDUCTION FIRST
-      await consumeCredits(action as any);
+     // 1. If I2I but NO input image, generate one first
+     let activeInputImage = startFrame;
 
-      // 1. If I2I but NO input image, generate one first
-      let activeInputImage = startFrame;
+     if (mode === "i2i" && !activeInputImage) {
+       const modelToUse = "gemini-2.5-flash-image";
+       const ethnicityContext =
+         characterStyle === "Afro-toon"
+           ? "Subject: African/Black person."
+           : `Subject: Person from ${selectedCountry}.`;
+       const finalImgPrompt = `Visual Medium: [${visualStyle}]. ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
 
-      if (mode === "i2i" && !activeInputImage) {
-        const modelToUse = "gemini-2.5-flash-image";
-        const ethnicityContext =
-          characterStyle === "Afro-toon"
-            ? "Subject: African/Black person."
-            : `Subject: Person from ${selectedCountry}.`;
-        const finalImgPrompt = `Visual Medium: [${visualStyle}]. ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
+       activeInputImage = (await handleGenerate(
+         [finalImgPrompt],
+         "footage",
+         undefined,
+         modelToUse,
+         true
+       )) as string;
+     }
 
-        activeInputImage = (await handleGenerate(
-          [finalImgPrompt],
-          "footage",
-          undefined,
-          modelToUse,
-          true
-        )) as string;
-      }
+     // 2. Generate Video
+     const ethnicityContext =
+       characterStyle === "Afro-toon"
+         ? "Subject: African person."
+         : `Subject: Person from ${selectedCountry}.`;
+     const styleContext = `Visual Style: ${visualStyle}.`;
+     const finalVidPrompt = `${styleContext} ${ethnicityContext} Action: ${prompt}`;
 
-      // 2. Generate Video
-      const ethnicityContext =
-        characterStyle === "Afro-toon"
-          ? "Subject: African person."
-          : `Subject: Person from ${selectedCountry}.`;
-      const styleContext = `Visual Style: ${visualStyle}.`;
-      const finalVidPrompt = `${styleContext} ${ethnicityContext} Action: ${prompt}`;
+     const { videoUrl, videoObject } = await generateVideoFromScene(
+       { src: activeInputImage, prompt: prompt },
+       aspectRatio,
+       finalVidPrompt,
 
-      const { videoUrl, videoObject } = await generateVideoFromScene(
-        { src: activeInputImage, prompt: prompt },
-        aspectRatio,
-        finalVidPrompt,
-        endFrame,
+       activeInputImage,
+       endFrame,
 
-        visualStyle,
-        selectedCountry,
-        videoTier === "veo31-quality"
-          ? "veo-3.1-generate-preview"
-          : "veo-3.1-fast-generate-preview",
-        videoResolution as any,
-        "Zoom In (Focus In)",
-        () => {},
-        characters
-      );
+       visualStyle,
+       selectedCountry,
+       videoTier === "veo31-quality"
+         ? "veo-3.1-generate-preview"
+         : "veo-3.1-fast-generate-preview",
 
-      if (videoUrl) {
-        // DO add comment: Update history item with video data once generation completes.
-        setFootageHistory((prev) =>
-          prev.map((item) =>
-            item.sceneId === tempId
-              ? { ...item, videoUrl, status: "complete", videoObject }
-              : item
-          )
-        );
-      }
-    } catch (e: any) {
-      console.error(e);
-      setFootageHistory((prev) =>
-        prev.map((item) =>
-          item.sceneId === tempId
-            ? { ...item, status: "error", error: parseErrorMessage(e) }
-            : item
-        )
-      );
-    } finally {
-      setIsGenerating(false);
-    }
+       videoResolution as "720p" | "1080p",
+
+       "Zoom In (Focus In)",
+       () => {},
+       characters
+     );
+
+     if (videoUrl) {
+       // DO add comment: Update history item with video data once generation completes.
+       setFootageHistory((prev) =>
+         prev.map((item) =>
+           item.sceneId === tempId
+             ? {
+                 ...item,
+                 videoUrl,
+                 status: "complete",
+                 videoObject,
+                 type: "video"
+               }
+             : item
+         )
+       );
+     }
+   } catch (e: any) {
+     console.error(e);
+     setFootageHistory((prev) =>
+       prev.map((item) =>
+         item.sceneId === tempId
+           ? { ...item, status: "error", error: parseErrorMessage(e) }
+           : item
+       )
+     );
+   } finally {
+     setIsGenerating(false);
+   }
   };
 
   const handleAnimateFootage = async (item: any) => {
@@ -1072,6 +1201,7 @@ const App: React.FC = () => {
         { src: item.src, prompt: item.prompt },
         aspectRatio,
         item.prompt,
+        null,
         null,
         visualStyle,
         selectedCountry,
@@ -1109,18 +1239,49 @@ const App: React.FC = () => {
   const handleApplyCameraAngle = async (angle: string, subject?: string) => {
     if (!modalData.genId || !modalData.sceneId) return;
     const sess = history.find((h) => h.id === modalData.genId);
-    const scene = sess?.imageSet.find(
+    let scene = sess?.imageSet.find(
       (s: any) => s.sceneId === modalData.sceneId
     );
-    if (!scene || !sess) return;
+    if (!scene)
+      scene = footageHistory.find((f) => f.sceneId === modalData.sceneId);
+
+    if (!scene) return;
+
+    // STEP 1 Confirm first click
+    if (!isConfirmingCameraAngle) {
+      setCameraAngleCreditError(false);
+      setIsConfirmingCameraAngle(true);
+      return;
+    }
+
+    // STEP 2 Reset confirm state
+    setIsConfirmingCameraAngle(false);
+
+    // STEP 3 Consume credits safely
+    let ok = false;
+
+    try {
+      ok = await consumeCredits("IMAGE_CAMERA_ANGLE_PRO");
+    } catch {
+      ok = false;
+    }
+
+    if (!ok) {
+      setCameraAngleCreditError(true);
+
+      setTimeout(() => {
+        setCameraAngleCreditError(false);
+      }, 3000);
+
+      return;
+    }
+
+    setCameraAngleCreditError(false);
 
     setIsGenerating(true);
     setActiveModal(null);
 
     try {
-      // DEDUCTION FIRST: Everything label (Camera angle specific).
-      await consumeCredits("IMAGE_CAMERA_ANGLE_PRO");
-
       const focusDirective = subject
         ? ` focusing specifically on ${subject}`
         : "";
@@ -1128,9 +1289,9 @@ const App: React.FC = () => {
 
       const { src, error } = await generateSingleImage(
         prompt,
-        sess.aspectRatio,
+        sess?.aspectRatio || aspectRatio,
         selectedCountry,
-        sess.visualStyle,
+        sess?.visualStyle || visualStyle,
         "General",
         characters,
         imageModel,
@@ -1152,7 +1313,7 @@ const App: React.FC = () => {
     } finally {
       setIsGenerating(false);
     }
-  };
+  };;
 
   const handleGenerateSingleStorybookScene = async (
     index: number,
@@ -1181,15 +1342,7 @@ const App: React.FC = () => {
         originSessionId: h.id,
         timestamp: h.id,
         originSection:
-          h.type === "storybook"
-            ? "StorybookSection"
-            : h.type === "upload"
-              ? "UploadedSection"
-              : h.type === "timeline"
-                ? "TimelineSection"
-                : h.type === "footage"
-                  ? "FootageFrontSection"
-                  : "FootageFrontSection"
+          h.type === "storybook" ? "StorybookSection" : "UploadedSection"
       }))
     );
   }, [history]);
@@ -1371,6 +1524,10 @@ const App: React.FC = () => {
       }
       return newHistory;
     });
+    // DO add comment: DELETE LOGIC EXTENSION. Also hides the scene in Quick Footage history to ensure the button is fully functional.
+    setFootageHistory((prev) =>
+      prev.map((f) => (f.sceneId === sceneId ? { ...f, isHidden: true } : f))
+    );
   };
 
   const handleLoadHistory = (
@@ -1386,7 +1543,7 @@ const App: React.FC = () => {
           ...h,
           isClosed: false,
           imageSet: h.imageSet.map((s: any) =>
-            s.sceneId === sceneId || !sceneId ? { ...s, hidden: false } : s
+            s.sceneId === sceneId || !sceneId ? { ...s, isHidden: false } : s
           )
         };
       })
@@ -1477,28 +1634,22 @@ const App: React.FC = () => {
     prompt: string,
     angleName: string
   ) => {
-    setHistory((prev) =>
-      prev.map((h) =>
-        h.id === genId
-          ? {
-              ...h,
-              imageSet: h.imageSet.map((s: any) =>
+    const updateFn = (s: any) =>
                 s.sceneId === sceneId
                   ? {
                       ...s,
                       src: src,
-                      variants: [
-                        ...(s.variants || []),
-                        { src, prompt, angleName }
-                      ],
+            variants: [...(s.variants || []), { src, prompt, angleName }],
                       selectedVariantIndex: s.variants?.length || 0
                     }
-                  : s
-              )
-            }
-          : h
+        : s;
+
+    setHistory((prev) =>
+      prev.map((h) =>
+        h.id === genId ? { ...h, imageSet: h.imageSet.map(updateFn) } : h
       )
     );
+    setFootageHistory((prev) => prev.map(updateFn));
   };
 
   // DO add comment: Fix handleSelectSceneVariant signature: added genId parameter and corrected session lookup logic.
@@ -1507,24 +1658,21 @@ const App: React.FC = () => {
     sceneId: string,
     variantIndex: number
   ) => {
-    setHistory((prev) =>
-      prev.map((h) =>
-        h.id === genId
-          ? {
-              ...h,
-              imageSet: h.imageSet.map((s: any) =>
+    const updateFn = (s: any) =>
                 s.sceneId === sceneId
                   ? {
                       ...s,
                       src: s.variants[variantIndex].src,
                       selectedVariantIndex: variantIndex
                     }
-                  : s
-              )
-            }
-          : h
+        : s;
+
+    setHistory((prev) =>
+      prev.map((h) =>
+        h.id === genId ? { ...h, imageSet: h.imageSet.map(updateFn) } : h
       )
     );
+    setFootageHistory((prev) => prev.map(updateFn));
   };
 
   const handleUpdateSceneImage = (
@@ -1532,25 +1680,21 @@ const App: React.FC = () => {
     sceneId: string,
     base64: string
   ) => {
-    setHistory((prev) =>
-      prev.map((h) =>
-        h.id === genId
-          ? {
-              ...h,
-              imageSet: h.imageSet.map((s: any) => {
+    const updateFn = (s: any) => {
                 if (s.sceneId !== sceneId) return s;
-                const vIdx = s.variants?.findIndex(
-                  (v: any) => v.src === base64
-                );
+      const vIdx = s.variants?.findIndex((v: any) => v.src === base64);
                 if (vIdx !== -1 && vIdx !== undefined) {
                   return { ...s, src: base64, selectedVariantIndex: vIdx };
                 }
                 return { ...s, src: base64 };
-              })
-            }
-          : h
+    };
+
+    setHistory((prev) =>
+      prev.map((h) =>
+        h.id === genId ? { ...h, imageSet: h.imageSet.map(updateFn) } : h
       )
     );
+    setFootageHistory((prev) => prev.map(updateFn));
   };
 
   // SEQUENTIAL LINE ORDER LOGIC: New assets start where the previous track content ends.
@@ -1686,31 +1830,74 @@ const App: React.FC = () => {
     withAudio?: boolean
   ) => {
     await ensureApiKey();
-    const action = videoModel.includes("fast") ? "VIDEO_FAST" : "VIDEO_HQ";
 
     const item = history.find((h) => h.id === genId);
-    const sceneIdx = item.imageSet.findIndex((s: any) => s.sceneId === sceneId);
+
+    const scene = item?.imageSet.find((s: any) => s.sceneId === sceneId);
+
+    const selectedLength =
+      scene?.videoLength !== undefined
+        ? Number(scene.videoLength)
+        : Number(videoLength);
+
+    let action;
+
+    if (videoModel.includes("fast")) {
+      action = selectedLength === 6 ? "VIDEO_FAST_6S" : "VIDEO_FAST_8S";
+    } else {
+      action = selectedLength === 6 ? "VIDEO_HQ_6S" : "VIDEO_HQ_8S";
+    }
+
+    const sceneIdx = item
+      ? item.imageSet.findIndex((s: any) => s.sceneId === sceneId)
+      : -1;
+
+    const loadingUpdate = (vs: any, idx: number) =>
+      idx === sceneIdx || vs.sceneId === sceneId
+        ? { ...vs, status: "loading", loadingMessage: "Deducting Credits..." }
+        : vs;
+
     setHistory((prev) =>
       prev.map((h) =>
         h.id === genId
-          ? {
-              ...h,
-              videoStates: h.videoStates.map((vs: any, idx: number) =>
-                idx === sceneIdx ? { ...vs, status: "loading" } : vs
-              )
-            }
+          ? { ...h, videoStates: h.videoStates.map(loadingUpdate) }
           : h
       )
     );
+
+    setFootageHistory((prev) => prev.map(loadingUpdate));
     try {
       // DEDUCTION FIRST: Video production label.
       await consumeCredits(action as any);
       if (withAudio) await consumeCredits("VIDEO_ADD_AUDIO");
 
+      // Brief delay to "call for credit"
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Update to rendering
+      const renderingUpdate = (vs: any, idx: number) =>
+        idx === sceneIdx || vs.sceneId === sceneId
+          ? { ...vs, loadingMessage: "Rendering clip..." }
+          : vs;
+
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === genId
+            ? { ...h, videoStates: h.videoStates.map(renderingUpdate) }
+            : h
+        )
+      );
+      setFootageHistory((prev) => prev.map(renderingUpdate));
+
+      const sourceScene = item
+        ? item.imageSet[sceneIdx]
+        : footageHistory.find((f) => f.sceneId === sceneId);
+
       const { videoUrl, videoObject } = await generateVideoFromScene(
-        item.imageSet[sceneIdx],
+        sourceScene,
         aspectRatio,
-        item.imageSet[sceneIdx].prompt,
+        sourceScene.prompt,
+        null,
         null,
         visualStyle,
         selectedCountry,
@@ -1721,46 +1908,43 @@ const App: React.FC = () => {
         characters
       );
       if (videoUrl) {
-        setHistory((prev) =>
-          prev.map((h) =>
-            h.id === genId
-              ? {
-                  ...h,
-                  videoStates: h.videoStates.map((vs: any, idx: number) =>
-                    idx === sceneIdx
+        const completeUpdate = (vs: any, idx: number) =>
+          idx === sceneIdx || vs.sceneId === sceneId
                       ? {
                           ...vs,
                           status: "complete",
-                          clips: [
-                            ...(vs.clips || []),
-                            { videoUrl, videoObject }
-                          ]
+                clips: [...(vs.clips || []), { videoUrl, videoObject }]
                         }
-                      : vs
-                  )
-                }
+            : vs;
+
+        setHistory((prev) =>
+          prev.map((h) =>
+            h.id === genId
+              ? { ...h, videoStates: h.videoStates.map(completeUpdate) }
               : h
           )
         );
+        setFootageHistory((prev) => prev.map(completeUpdate));
         onAddTimelineClip(videoUrl, "video", 8, undefined, 0, videoObject);
       }
     } catch (e: any) {
       console.error(e);
       if (e.message?.includes("Requested entity was not found")) {
-        await window.aistudio.openSelectKey();
+        // DO add comment above each fix. Fix property name typo: Corrected 'aistStudio' to 'aistudio' and added optional chaining for safety.
+        await window.aistudio?.openSelectKey();
       }
+      const idleUpdate = (vs: any, idx: number) =>
+        idx === sceneIdx || vs.sceneId === sceneId
+          ? { ...vs, status: "idle" }
+          : vs;
       setHistory((prev) =>
         prev.map((h) =>
           h.id === genId
-            ? {
-                ...h,
-                videoStates: h.videoStates.map((vs: any, idx: number) =>
-                  idx === sceneIdx ? { ...vs, status: "idle" } : vs
-                )
-              }
+            ? { ...h, videoStates: h.videoStates.map(idleUpdate) }
             : h
         )
       );
+      setFootageHistory((prev) => prev.map(idleUpdate));
     }
   };
 
@@ -2022,34 +2206,58 @@ const App: React.FC = () => {
 
   const renderStoryboard = () => (
     <Storyboard
+      footageHistory={footageHistory}
       generationItem={
         activeHistoryIndex !== -1 ? history[activeHistoryIndex] : null
       }
+      consumeCredits={consumeCredits}
+      videoLength={videoLength}
+      videoModel={videoModel}
+      videoResolution={videoResolution}
       savedItems={savedScenes}
       history={history}
       historyIndex={activeHistoryIndex}
       onSaveScene={(gid, sid) => {
+        let img;
         const sess = history.find((h) => h.id === gid);
-        const img = sess?.imageSet.find((s: any) => s.sceneId === sid);
+        if (sess) {
+          img = sess.imageSet.find((s: any) => s.sceneId === sid);
+        } else {
+          img = footageHistory.find((f) => f.sceneId === sid);
+        }
         if (img) handleToggleSave(img);
       }}
       onEditScene={(gid, sid) => {
+        let img;
         const sess = history.find((h) => h.id === gid);
-        const img = sess?.imageSet.find((s: any) => s.sceneId === sid);
-        setModalData({
-          genId: gid,
-          sceneId: sid,
-          src: img.src,
-          variants: img.variants || []
-        });
-        setActiveModal("edit-image");
+        if (sess) {
+          img = sess.imageSet.find((s: any) => s.sceneId === sid);
+        } else {
+          img = footageHistory.find((f) => f.sceneId === sid);
+        }
+        if (img) {
+          setModalData({
+            genId: gid,
+            sceneId: sid,
+            src: img.src,
+            variants: img.variants || []
+          });
+          setActiveModal("edit-image");
+        }
       }}
       onRegenerateScene={handleRegenerateScene}
       onAngleSelect={(gid, sid) => {
+        let img;
         const sess = history.find((h) => h.id === gid);
-        const img = sess?.imageSet.find((s: any) => s.sceneId === sid);
-        setModalData({ genId: gid, sceneId: sid, src: img.src });
-        setActiveModal("camera-angles");
+        if (sess) {
+          img = sess.imageSet.find((s: any) => s.sceneId === sid);
+        } else {
+          img = footageHistory.find((f) => f.sceneId === sid);
+        }
+        if (img) {
+          setModalData({ genId: gid, sceneId: sid, src: img.src });
+          setActiveModal("camera-angles");
+        }
       }}
       onOpenVideoCreator={(idx) =>
         setActiveVideoIndices((prev) =>
@@ -2070,7 +2278,6 @@ const App: React.FC = () => {
       isGenerating={isGenerating}
       isDisabled={false}
       activeVideoIndices={activeVideoIndices}
-      videoModel={videoModel}
       setVideoModel={setVideoModel}
       setVideoResolution={setVideoResolution}
       onPreviewImage={(src) => {
@@ -2118,6 +2325,7 @@ const App: React.FC = () => {
         handleSelectSceneVariant(gid, sid, nextIdx);
       }}
       characters={characters}
+      onProduceQuickFootage={handleFootageProduce}
     />
   );
 
@@ -2168,6 +2376,7 @@ const App: React.FC = () => {
       onProduce={handleFootageProduce}
       isGenerating={isGenerating}
       creditBalance={creditSettings.creditBalance}
+      videoLength={videoLength}
       onUpdateCountry={setSelectedCountry}
       footagePrompt={footagePrompt}
       setFootagePrompt={setFootagePrompt}
@@ -2294,7 +2503,7 @@ const App: React.FC = () => {
               target="_blank"
               className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-sky-600 text-white hover:bg-sky-500"}`}
             >
-              {isGiftMode ? "Gift 100 Credits" : "Purchase Now"}
+              {isGiftMode ? "Gift 80 Credits" : "Purchase Now"}
             </a>
             <div className="w-full space-y-2 text-left border-t border-white/5 pt-4">
               <div
@@ -2302,7 +2511,7 @@ const App: React.FC = () => {
               >
                 <CheckIcon className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-black  tracking-wider">
-                  100 Credits
+                  80 Credits
                 </span>
               </div>
             </div>
@@ -2342,7 +2551,7 @@ const App: React.FC = () => {
                 target="_blank"
                 className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-all ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-white text-black hover:bg-gray-200"}`}
               >
-                {isGiftMode ? "Gift 300 Credits" : "Fuel Vision"}
+                {isGiftMode ? "Gift 230 Credits" : "Fuel Vision"}
               </a>
               <div className="w-full space-y-2 text-left border-t border-white/10 pt-4">
                 <div
@@ -2352,7 +2561,7 @@ const App: React.FC = () => {
                     className={`w-4 h-4 shrink-0 ${isGiftMode ? "text-amber-400" : "text-white"}`}
                   />
                   <span className="text-[10px] font-black  tracking-wider">
-                    300 Credits
+                    230 Credits
                   </span>
                 </div>
               </div>
@@ -2383,13 +2592,13 @@ const App: React.FC = () => {
               target="_blank"
               className={`w-full py-4 font-black text-[10px]  tracking-widest rounded-xl shadow-lg mb-6 transition-colors ${isGiftMode ? "bg-amber-600 text-black hover:bg-amber-500" : "bg-amber-600 text-white hover:bg-amber-500"}`}
             >
-              {isGiftMode ? "Gift 600 Credits" : "Purchase Now"}
+              {isGiftMode ? "Gift 420 Credits" : "Purchase Now"}
             </a>
             <div className="w-full space-y-2 text-left border-t border-white/5 pt-4">
               <div className="flex items-center gap-2 text-amber-400">
                 <CheckIcon className="w-4 h-4 shrink-0" />
                 <span className="text-[10px] font-black  tracking-wider">
-                  700 Credits
+                  420 Credits
                 </span>
               </div>
             </div>
@@ -2468,6 +2677,8 @@ const App: React.FC = () => {
           }}
           creditBalance={creditSettings.creditBalance}
           session={session}
+          videoLength={videoLength}
+          setVideoLength={setVideoLength}
         />
       )}
 
@@ -2511,6 +2722,8 @@ const App: React.FC = () => {
                     }}
                     creditBalance={creditSettings.creditBalance}
                     session={session}
+                    videoLength={videoLength}
+                    setVideoLength={setVideoLength}
                   />
                 )}
                 {activeView === "roster" && (
@@ -2881,10 +3094,17 @@ const App: React.FC = () => {
         onUpdateSceneImage={handleUpdateSceneImage}
         onRegenerateScene={handleRegenerateScene}
         onAngleSelect={(gid, sid) => {
+          let img;
           const sess = history.find((h) => h.id === gid);
-          const img = sess?.imageSet.find((s: any) => s.sceneId === sid);
-          setModalData({ genId: gid, sceneId: sid, src: img.src });
-          setActiveModal("camera-angles");
+          if (sess) {
+            img = sess.imageSet.find((s: any) => s.sceneId === sid);
+          } else {
+            img = footageHistory.find((f) => f.sceneId === sid);
+          }
+          if (img) {
+            setModalData({ genId: gid, sceneId: sid, src: img.src });
+            setActiveModal("camera-angles");
+          }
         }}
         visualStyle={visualStyle}
         onUpdateAudioClip={(id, updates) =>
@@ -2894,7 +3114,9 @@ const App: React.FC = () => {
         }
         onUndo={handleTimelineUndo}
         timelinePlaybackTime={timelinePlaybackTime}
-        onUpdateTimelinePlaybackTime={setTimelinePlaybackTime}
+        onProduceQuickFootage={handleFootageProduce}
+        footageHistory={footageHistory}
+        consumeCredits={consumeCredits}
       />
     </div>
   );

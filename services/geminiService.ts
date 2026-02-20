@@ -841,6 +841,7 @@ export async function generateVideoFromScene(
   aspectRatio: string,
   prompt: string,
   image: string | null,
+  endImage: string | null, // NEW: end frame support
   style: string,
   characterStyle: string,
   model: string,
@@ -868,6 +869,22 @@ export async function generateVideoFromScene(
     }
   }
 
+ 
+
+  const startImagePart = scene.src
+    ? {
+        imageBytes: stripBase64Prefix(scene.src),
+        mimeType: "image/png"
+      }
+    : undefined;
+
+  const endImagePart = endImage
+    ? {
+        imageBytes: stripBase64Prefix(endImage),
+        mimeType: "image/png"
+      }
+    : undefined;
+  
   const fullPrompt = `
 STRICT CINEMATIC VIDEO GENERATION PROTOCOL
 
@@ -912,48 +929,55 @@ ${style}
 VISUAL CONSISTENCY RULE:
 The same character from the source image MUST perform the scene.
 
+${
+  endImagePart
+    ? `
+TRANSITION LOCK PROTOCOL:
+The video MUST begin exactly matching the FIRST image.
+The video MUST end exactly matching the SECOND image.
+Maintain identity and cinematic continuity.
+`
+    : ""
+}
+
 FORBIDDEN:
 Do not create new characters.
 Do not transfer dialogue to another character.
 Do not ignore dialogue if present.
 `;
 
-  const imagePart = scene.src
-    ? {
-        imageBytes: stripBase64Prefix(scene.src),
-        mimeType: "image/png"
-      }
-    : undefined;
+ try {
+   let operation = await ai.models.generateVideos({
+     model: model || "veo-3.1-fast-generate-preview",
+     prompt: fullPrompt,
+     image: startImagePart,
 
-  try {
-    let operation = await ai.models.generateVideos({
-      model: model || "veo-3.1-fast-generate-preview",
-      prompt: fullPrompt,
-      image: imagePart,
-      config: {
-        numberOfVideos: 1,
-        resolution,
-        aspectRatio: aspectRatio === "16:9" ? "16:9" : "9:16"
-      }
-    });
+     config: {
+       numberOfVideos: 1,
+       resolution,
+       aspectRatio: aspectRatio === "16:9" ? "16:9" : "9:16",
 
-    while (!operation.done) {
-      await delay(5000);
-      operation = await ai.operations.getVideosOperation({ operation });
-    }
+       duration: scene.videoLength === 6 ? 6 : 8
+     } as any
+   });
 
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (downloadLink) {
-      const fetchUrl = `${downloadLink}&key=${process.env.API_KEY}`;
-      return {
-        videoUrl: fetchUrl,
-        videoObject: operation.response?.generatedVideos?.[0]?.video
-      };
-    }
-    return { videoUrl: null, videoObject: null };
-  } catch (e) {
-    throw e;
-  }
+   while (!operation.done) {
+     await delay(5000);
+     operation = await ai.operations.getVideosOperation({ operation });
+   }
+
+   const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+   if (downloadLink) {
+     const fetchUrl = `${downloadLink}&key=${process.env.API_KEY}`;
+     return {
+       videoUrl: fetchUrl,
+       videoObject: operation.response?.generatedVideos?.[0]?.video
+     };
+   }
+   return { videoUrl: null, videoObject: null };
+ } catch (e) {
+   throw e;
+ }
 }
 
 export async function generateStructuredStory(

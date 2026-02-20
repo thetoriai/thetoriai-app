@@ -114,8 +114,26 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const [includeDialogue, setIncludeDialogue] = useState(
     storybookContent.includeDialogue ?? true
   );
+  // Controls how many scenes the AI generates
+  // Dynamic scene count based on story size with min 3 and max 6
+  const calculateSceneCount = () => {
+    const text = (storySeed || sharedStoryText || "").trim();
+
+    if (!text) return 3;
+
+    const wordCount = text.split(/\s+/).length;
+
+    // Scale logic
+    if (wordCount < 40) return 3;
+    if (wordCount < 80) return 4;
+    if (wordCount < 140) return 5;
+
+    return 6; // maximum limit
+  };
+
   const [isGeneratingStory, setIsGeneratingStory] = useState(false);
   const [storyError, setStoryError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
   const [confirmingBatch, setConfirmingBatch] = useState(false);
@@ -201,7 +219,16 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   };
 
   const handleCreateStory = async (forceContinuation: boolean = false) => {
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setTitleError(true);
+
+      setTimeout(() => {
+        setTitleError(false);
+      }, 2500);
+
+      return;
+    }
+
     setIsGeneratingStory(true);
     try {
       const selectedChars = characters.filter((c) =>
@@ -220,7 +247,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
         characterStyle,
         selectedStoryGenre,
         selectedMovieStyle,
-        "3",
+        calculateSceneCount().toString(),
         historyText,
         isMusicVideoMode,
         songLyrics,
@@ -265,15 +292,15 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       const selectedChars = characters.filter((c) =>
         storybookContent.characters.includes(c.name)
       );
-     const scenes = await generateScenesFromNarrative(
-       sharedStoryText,
-       selectedChars,
-       includeDialogue,
-       characterStyle,
-       selectedMovieStyle,
-       selectedCountry,
-       selectedStoryGenre
-     );
+      const scenes = await generateScenesFromNarrative(
+        sharedStoryText,
+        selectedChars,
+        includeDialogue,
+        characterStyle,
+        selectedMovieStyle,
+        selectedCountry,
+        selectedStoryGenre
+      );
       const lockedScenes = scenes.map((s: any) => ({
         ...s,
         isDescriptionLocked: true,
@@ -409,10 +436,10 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       if (isMusicVideoMode) {
         setSongLyrics((prev) => (prev ? prev + "\n" : "") + transcription);
       } else {
-      setSharedStoryText(
-        (sharedStoryText ? sharedStoryText + "\n" : "") + transcription
-      );
-      setStorySeed((storySeed ? storySeed + "\n" : "") + transcription);
+        setSharedStoryText(
+          (sharedStoryText ? sharedStoryText + "\n" : "") + transcription
+        );
+        setStorySeed((storySeed ? storySeed + "\n" : "") + transcription);
       }
     } catch {
       setStoryError("Failed to transcribe audio.");
@@ -657,17 +684,17 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
 
               {/* DO add comment: Conditional Render. Voice Context only appears here when NOT in Music Video mode. */}
               {!isMusicVideoMode && (
-              <button
-                onClick={() => audioInputRef.current?.click()}
-                className="flex items-center gap-2 px-2.5 py-1 bg-indigo-900/20 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-300 hover:text-white rounded-lg text-[8px] font-black transition-all shadow-sm"
-              >
-                {isProcessingAudio ? (
-                  <LoaderIcon className="w-2.5 h-2.5 animate-spin" />
-                ) : (
-                  <MusicalNoteIcon className="w-2.5 h-2.5" />
-                )}{" "}
-                {isProcessingAudio ? "Analysing..." : "Voice Context"}
-              </button>
+                <button
+                  onClick={() => audioInputRef.current?.click()}
+                  className="flex items-center gap-2 px-2.5 py-1 bg-indigo-900/20 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-300 hover:text-white rounded-lg text-[8px] font-black transition-all shadow-sm"
+                >
+                  {isProcessingAudio ? (
+                    <LoaderIcon className="w-2.5 h-2.5 animate-spin" />
+                  ) : (
+                    <MusicalNoteIcon className="w-2.5 h-2.5" />
+                  )}{" "}
+                  {isProcessingAudio ? "Analysing..." : "Voice Context"}
+                </button>
               )}
               <input
                 type="file"
@@ -744,7 +771,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                     ))}
                   </select>
                   {!isMusicVideoMode && (
-                  <ChevronDownIcon className="w-2.5 h-2.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-900 pointer-events-none" />
+                    <ChevronDownIcon className="w-2.5 h-2.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-900 pointer-events-none" />
                   )}
                 </div>
                 {/* DO add comment: Speak Grayed Out. Speaker button is disabled and visually muted in Music Video mode. */}
@@ -865,7 +892,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                     {isMusicVideoMode ? (
                       <MusicalNoteIcon className="w-5 h-5 text-indigo-500" />
                     ) : (
-                    <FilmIcon className="w-5 h-5 text-indigo-500" />
+                      <FilmIcon className="w-5 h-5 text-indigo-500" />
                     )}
                   </div>
                   <div>
@@ -1128,4 +1155,4 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       )}
     </div>
   );
-};
+};;;

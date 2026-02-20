@@ -18,6 +18,7 @@ import {
 import { CAMERA_ANGLE_OPTIONS } from "../services/geminiService";
 import type { Character, Storybook, Outfit } from "../services/geminiService";
 import { ImageEditor } from "./ImageEditor";
+import { CameraAngleEditor } from "./CameraAngleEditor";
 import { HistoryPanel } from "./History";
 import { StorybookCreator } from "./Storybook";
 import { Timeline } from "./Timeline";
@@ -159,6 +160,16 @@ interface ModalsProps {
     direction: "next" | "prev"
   ) => void;
   onUpdateSceneImage?: (genId: number, sceneId: string, base64: string) => void;
+  footageHistory: any[];
+  consumeCredits: (action: string) => Promise<boolean>;
+  onProduceQuickFootage?: (
+    prompt: string,
+    mode: "image" | "video" | "i2i",
+    refImage?: string,
+    videoTier?: string,
+    imageTier?: string,
+    endImage?: string
+  ) => void;
   onGenerateAudioOnly?: (genId: number, sceneId: string) => void;
   setCharacters?: React.Dispatch<React.SetStateAction<Character[]>>;
   handleBuildCharacterVisual?: (id: number) => void;
@@ -224,6 +235,8 @@ const VideoExporter: React.FC<{
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportBlob, setExportBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  
 
   const hexToRgba = (hex: string, alpha: number) => {
     let r = 0,
@@ -666,7 +679,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group transition-all hover:scale-[1.02]`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-tighter  tracking-widest">
-              €12 (100C)
+              €12 (80C)
             </h3>
             <a
               href={getPurchaseLink(PAYPAL_STARTER_LINK)}
@@ -680,7 +693,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             className={`border-2 rounded-2xl flex flex-col items-center text-center shadow-xl p-6 transition-all hover:scale-[1.02] ${isGiftMode ? "bg-[#221c0e] border-amber-500/30" : "bg-[#111827] border-white/20"}`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
-              €25 (300C)
+              €25 (230C)
             </h3>
             <a
               href={getPurchaseLink(PAYPAL_PRO_LINK)}
@@ -694,7 +707,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             className={`${isGiftMode ? "bg-[#1e1a0f] border-amber-500/20" : "bg-[#0f172a] border-sky-500/20"} border rounded-2xl p-6 flex flex-col items-center text-center shadow-xl group transition-all hover:scale-[1.02]`}
           >
             <h3 className="text-xl font-black text-white mb-1 italic tracking-widest">
-              €45 (700C)
+              €45 (420C)
             </h3>
             <a
               href={getPurchaseLink(PAYPAL_STUDIO_LINK)}
@@ -713,6 +726,7 @@ const BuyCreditsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 export const Modals: React.FC<ModalsProps> = ({
   activeModal,
   setActiveModal,
+  creditWarning,
   modalData,
   onClose,
   storybookContent,
@@ -798,13 +812,17 @@ export const Modals: React.FC<ModalsProps> = ({
   onAddSceneVariant,
   onSelectSceneVariant,
   onSceneVariantChange,
-  onUpdateSceneImage
+  onUpdateSceneImage,
+  footageHistory,
+  consumeCredits,
+  onProduceQuickFootage
 }) => {
   const [selectedAngle, setSelectedAngle] = useState("");
   const [focusSubject, setFocusSubject] = useState("");
   const [isConfirmingAngle, setIsConfirmingAngle] = useState(false);
   const angleContentRef = useRef<HTMLDivElement>(null);
-
+  // FIX: define videoLength so Storyboard can use it
+  const videoLength = generationItem?.videoLength || 6;
   useEffect(() => setIsConfirmingAngle(false), [activeModal, selectedAngle]);
 
   useEffect(() => {
@@ -874,6 +892,7 @@ export const Modals: React.FC<ModalsProps> = ({
         genre={currentSession?.genre || "General"}
         characters={characters}
         imageModel={imageModel || "gemini-3-pro-image-preview"}
+        consumeCredits={consumeCredits}
         onClose={onClose}
         onSave={(newImageSrc, newPrompt) => {
           // EDIT SAVE FIDELITY: Ensure the selected thumbnail from the editor is saved as the active visual on the card.
@@ -974,6 +993,10 @@ export const Modals: React.FC<ModalsProps> = ({
           savedItems={savedItems}
           history={history}
           historyIndex={historyIndex ?? -1}
+          footageHistory={footageHistory}
+          videoLength={videoLength}
+          consumeCredits={consumeCredits}
+          onProduceQuickFootage={onProduceQuickFootage}
           onSaveScene={(gid, sid) => {
             const sess = history.find((h) => h.id === gid);
             const img = sess?.imageSet.find((s: any) => s.sceneId === sid);
@@ -1059,120 +1082,20 @@ export const Modals: React.FC<ModalsProps> = ({
       </ModalWrapper>
     );
   }
-
+  
   if (activeModal === "camera-angles") {
     return (
-      <div
-        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm"
-        onClick={onClose}
-      >
-        <div
-          ref={angleContentRef}
-          className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-            <h2 className="font-bold text-white flex items-center gap-2">
-              <CameraIcon className="w-5 h-5" /> Camera Angles
-            </h2>
-            <button onClick={onClose} className="p-2">
-              <XIcon className="w-5 h-5 text-gray-500 hover:text-white" />
-            </button>
-          </div>
-          <div className="p-4 max-h-[70vh] overflow-y-auto space-y-6">
-            <div>
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] block mb-3">
-                Sync Character (Focus Actor)
-              </label>
-              <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none">
-                {characters.map((char) => (
-                  <button
-                    key={char.id}
-                    onClick={() => setFocusSubject(char.name)}
-                    className={`shrink-0 w-12 h-12 rounded-full border-2 transition-all relative group ${focusSubject === char.name ? "border-indigo-500 scale-110 ring-4 ring-indigo-500/20" : "border-gray-800 opacity-40 grayscale hover:opacity-100 hover:grayscale-0"}`}
-                    title={char.name}
-                  >
-                    {char.imagePreview ? (
-                      <img
-                        src={char.imagePreview}
-                        className="w-full h-full object-cover rounded-full"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gray-900 rounded-full">
-                        <UserPlusIcon className="w-4 h-4 text-gray-600" />
-                      </div>
-                    )}
-                    {focusSubject === char.name && (
-                      <div className="absolute -top-1 -right-1 bg-indigo-500 text-white rounded-full p-0.5 shadow-lg animate-in zoom-in">
-                        <CheckIcon className="w-2 h-2" />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[8px] text-gray-600 font-bold  mt-2 tracking-widest italic">
-                Locks visual identity to specific actor
-              </p>
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black text-gray-500  tracking-[0.2em] block mb-3">
-                Select Shot
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {CAMERA_ANGLE_OPTIONS.map((angle) => (
-                  <button
-                    key={angle.key}
-                    onClick={() => setSelectedAngle(angle.name)}
-                    className={`p-2 text-left rounded-lg border transition-all ${selectedAngle === angle.name ? "bg-indigo-900/50 border-indigo-500 text-white shadow-lg" : "bg-gray-950 border-gray-800 text-gray-400 hover:border-gray-600 hover:bg-gray-900"}`}
-                  >
-                    <div className="text-[11px] font-black  tracking-tight">
-                      {angle.name}
-                    </div>
-                    <div className="text-[8px] opacity-60 leading-tight mt-0.5 font-bold">
-                      {angle.description}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="p-4 border-t border-gray-800 flex justify-end items-center gap-3 bg-[#0a0f1d]">
-            {isConfirmingAngle && (
-              <span className="text-[10px] font-black text-gray-500  tracking-widest">
-                Cost: 2 Credits
-              </span>
-            )}
-            {isConfirmingAngle && (
-              <button
-                onClick={() => setIsConfirmingAngle(false)}
-                className="text-[10px] font-black text-gray-500 hover:text-gray-300  tracking-widest mr-2"
-              >
-                Cancel
-              </button>
-            )}
-            <button
-              onClick={() =>
-                isConfirmingAngle
-                  ? onApplyCameraAngle(selectedAngle, focusSubject)
-                  : setIsConfirmingAngle(true)
-              }
-              disabled={!selectedAngle}
-              className={`px-6 py-2.5 text-white text-[10px] font-black  tracking-widest rounded-xl shadow-2xl transition-all flex items-center gap-2 active:scale-95 ${isConfirmingAngle ? "bg-green-600 hover:bg-green-700" : "bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-800 disabled:text-gray-500"}`}
-            >
-              {isConfirmingAngle ? (
-                "Confirm Shot"
-              ) : (
-                <>
-                  <CameraIcon className="w-4 h-4" /> Initiate Shot
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
+      <CameraAngleEditor
+        isOpen={true}
+        characters={characters}
+        consumeCredits={consumeCredits}
+        onApply={onApplyCameraAngle}
+        onClose={onClose}
+      />
     );
   }
 
+ 
+
   return null;
-};
+};;

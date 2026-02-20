@@ -46,22 +46,51 @@ export const SceneProgressOverlay: React.FC<SceneProgressOverlayProps> = ({
   useEffect(() => {
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 95) return prev;
-        const step = prev < 60 ? 5 : prev < 85 ? 2 : 0.5;
+        if (prev >= 99) return 99;
+        const step = prev < 60 ? 4 : prev < 85 ? 1.5 : 0.4;
         return prev + step;
       });
-    }, 400);
+    }, 300);
     return () => clearInterval(interval);
   }, []);
+
+  const isDeducting = label.toLowerCase().includes("deducting");
+
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="w-16 h-16 mb-3 relative flex items-center justify-center">
-        <CircularProgressIcon progress={progress} className="w-full h-full" />
+      {/* GRADUAL REVEAL PLACEHOLDER */}
+      {!isDeducting && (
+        <div
+          className="absolute inset-0 z-0 opacity-20 transition-all duration-500"
+          style={{
+            filter: `blur(${20 - progress / 5}px) brightness(${0.5 + progress / 200})`,
+            opacity: 0.1 + progress / 200
+          }}
+        >
+          <img
+            src="https://picsum.photos/seed/studio-card/800/450?blur=10"
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
       </div>
-      <p className="text-xs font-bold text-indigo-300 mb-3 animate-pulse">
+      )}
+
+      <div className="relative z-10 flex flex-col items-center">
+        <div className="w-16 h-16 mb-4 relative flex items-center justify-center">
+          <CircularProgressIcon
+            progress={isDeducting ? 0 : progress}
+            className="w-full h-full text-indigo-500"
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-[10px] font-black text-white">
+              {isDeducting ? "..." : `${Math.round(progress)}%`}
+            </span>
+          </div>
+        </div>
+        <p className="text-[10px] font-black text-indigo-300 tracking-[0.2em] uppercase animate-pulse">
         {label}
       </p>
-      {/* CANCEL BUTTON REMOVED FOR FOCUS */}
+      </div>
     </div>
   );
 };
@@ -73,6 +102,7 @@ export interface SceneCardProps {
   index: number;
   genId: number;
   videoState: any;
+  videoLength: number;
   isSaved: boolean;
   isActive: boolean;
   status: string;
@@ -114,7 +144,7 @@ export interface SceneCardProps {
   isEnhanced?: boolean;
   videoError?: string;
   isConfirmingVideo?: boolean;
- creditBalance: number;
+  creditBalance: number;
   activeI2ISlot: { genId: number; sceneId: string } | null;
   setActiveI2ISlot: (slot: { genId: number; sceneId: string } | null) => void;
   onGenerateAudioOnly?: (genId: number, sceneId: string) => void;
@@ -133,19 +163,26 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
   const { scene, index, isActive, videoState, status, isConfirmingVideo } =
     props;
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [displayMode, setDisplayMode] = useState<"image" | number>("image");
   const [isAddedToTimeline, setIsAddedToTimeline] = useState(
     scene?.isAlreadyInTimeline === true
   );
   const [isPortrait, setIsPortrait] = useState(props.aspectRatio === "9:16");
   const [isEnriching, setIsEnriching] = useState(false);
-    const [isConfirming, setIsConfirming] = useState(false);
-
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [creditError, setCreditError] = useState(false);
+  const [isConfirmingAngle, setIsConfirmingAngle] = useState(false);
+  const [angleCreditError, setAngleCreditError] = useState(false);
+  const [isAngleLocked, setIsAngleLocked] = useState(false);
   const isVideoLoading = videoState?.status === "loading";
 
   const [withAudio, setWithAudio] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  // Detect if this card already contains a generated video clip
+  const isViewingVideo =
+    typeof displayMode === "number" && videoState?.clips?.[displayMode];
 
   // AUTOMATIC ASPECT DETECTION: Card morphs based on content, not just session settings.
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -172,17 +209,26 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
     if (!isConfirming) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
-        setIsConfirming(false);
+      const target = e.target as Node;
+
+      if (
+        cardRef.current &&
+        !cardRef.current.contains(target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(target)
+      ) {
+        setTimeout(() => {
+          setIsConfirming(false);
+        }, 150);
       }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isConfirming]);
-
 
   useEffect(() => {
     if (!isActive) setDisplayMode("image");
@@ -212,17 +258,38 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
   const hasScriptText = props.draftScript.trim().length > 0;
   const voiceCostModifier = withAudio && hasScriptText ? 1 : 0;
-  const baseVideoCost =
-    props.videoModel === "veo-3.1-fast-generate-preview" ? 6 : 10;
-  const totalCompoundCost = baseVideoCost + voiceCostModifier;
-  const tierShortLabel =
-    props.videoModel === "veo-3.1-fast-generate-preview" ? "FAST" : "HD";
+  // FIX: Dynamic video credit cost matching Quick Footage logic
 
+  let baseVideoCost = 6;
+  let tierShortLabel = "FAST";
+
+  // use videoLength prop if available
+  const duration = props.videoLength === 8 ? 8 : 6;
+
+  if (props.videoModel === "veo-3.1-fast-generate-preview") {
+    baseVideoCost = duration === 8 ? 8 : 6;
+    tierShortLabel = "FAST";
+  } else {
+    baseVideoCost = duration === 8 ? 16 : 12;
+    tierShortLabel = "HD";
+  }
+
+  const totalCompoundCost = baseVideoCost + voiceCostModifier;
   const handleDragStart = (e: React.DragEvent) => {
-    if (scene.src) {
-      e.dataTransfer.setData("text/plain", scene.src);
-      e.dataTransfer.dropEffect = "copy";
-    }
+    if (!scene.src) return;
+
+    const formattedSrc = formatImageSrc(scene.src);
+
+    const payload = {
+      src: formattedSrc,
+      sceneId: scene.sceneId,
+      genId: props.genId,
+      type: "image"
+    };
+
+    e.dataTransfer.setData("application/json", JSON.stringify(payload));
+
+    e.dataTransfer.effectAllowed = "copy";
   };
 
   const handleAddMediaToTimeline = () => {
@@ -249,40 +316,40 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
     scene.isAlreadyInTimeline = true;
   };
 
- const toggleTier = (e: React.MouseEvent) => {
-   e.stopPropagation();
+  const toggleTier = (e: React.MouseEvent) => {
+    e.stopPropagation();
 
-   const nextModel =
-     props.videoModel === "veo-3.1-fast-generate-preview"
-       ? "veo-3.1-generate-preview"
-       : "veo-3.1-fast-generate-preview";
+    const nextModel =
+      props.videoModel === "veo-3.1-fast-generate-preview"
+        ? "veo-3.1-generate-preview"
+        : "veo-3.1-fast-generate-preview";
 
-   props.setVideoModel(nextModel);
+    props.setVideoModel(nextModel);
 
-   setIsConfirming(false);
- };
+    setIsConfirming(false);
+  };
 
- const handleEnrich = async (e: React.MouseEvent) => {
-   e.stopPropagation();
+  const handleEnrich = async (e: React.MouseEvent) => {
+    e.stopPropagation();
 
-   if (!props.draftScript.trim()) return;
-   if (isEnriching) return;
-   if (props.creditBalance < 1) return;
+    if (!props.draftScript.trim()) return;
+    if (isEnriching) return;
+    if (props.creditBalance < 1) return;
 
-   setIsEnriching(true);
+    setIsEnriching(true);
 
-   try {
-     const enriched = await enrichScript(
-       props.draftScript,
-       props.characters,
-       "Cinematic"
-     );
+    try {
+      const enriched = await enrichScript(
+        props.draftScript,
+        props.characters,
+        "Cinematic"
+      );
 
-     props.onUpdateDraft({ draftScript: enriched });
-   } finally {
-     setIsEnriching(false);
-   }
- };
+      props.onUpdateDraft({ draftScript: enriched });
+    } finally {
+      setIsEnriching(false);
+    }
+  };
 
   const isMinorBlock = scene.error === "BLOCK_MINOR";
   const isExplicitBlock = scene.error === "BLOCK_SAFETY_GENERAL";
@@ -291,8 +358,6 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
   return (
     <div
       ref={cardRef}
-      draggable={!!scene.src && status === "complete"}
-      onDragStart={handleDragStart}
       className={`bg-[#1e293b] rounded-[1.5rem] shadow-2xl overflow-hidden flex flex-col cursor-grab active:cursor-grabbing themed-artline transition-all duration-500 h-fit ${isPortrait ? "min-h-[580px]" : ""} ${scene.isCameraAngleFor !== undefined ? "ring-2 ring-indigo-500" : ""} ${isAnySafetyBlock ? "border-2 border-amber-500/50 animate-pulse-amber" : ""}`}
     >
       <div
@@ -305,9 +370,29 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
           >
             <img
               src={formatImageSrc(scene.src)}
-              className="w-full h-full object-cover"
-              draggable={false}
+              className="w-full h-full object-cover cursor-grab active:cursor-grabbing"
+              draggable={true}
               onLoad={handleImageLoad}
+              onDragStart={(e) => {
+                const src = scene.src.startsWith("data")
+                  ? scene.src
+                  : `data:image/png;base64,${scene.src}`;
+
+                const payload = {
+                  src,
+                  type: "image",
+                  sceneId: scene.sceneId
+                };
+
+                e.dataTransfer.setData(
+                  "application/json",
+                  JSON.stringify(payload)
+                );
+
+                e.dataTransfer.effectAllowed = "copy";
+
+                console.log("Dragging from SceneCard:", payload);
+              }}
             />
           </div>
         )}
@@ -485,11 +570,7 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                   <CameraIcon className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={async () => {
-                    // DO add comment: Fixed Credit Key. Changed "IMAGE_EDIT" to "IMAGE_EDIT_PRO" to correctly deduct credits and enable the button functionality.
-                    const ok = await props.consumeCredits("IMAGE_EDIT_PRO");
-                    if (!ok) return;
-
+                  onClick={() => {
                     props.onEdit();
                   }}
                   className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
@@ -537,21 +618,24 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
             ) : (
               <PlusIcon className="w-4 h-4" />
             )}
-            
+
             {isAddedToTimeline ? "Added to Timeline" : "Add to Timeline"}
           </button>
-          <button
-            onClick={props.onToggleVideoCreator}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border border-white/5 shadow-inner rounded-xl group"
-          >
-            <VideoIcon className="w-4 h-4" /> Motion
-          </button>
+          {!isViewingVideo && (
+            <button
+              onClick={props.onToggleVideoCreator}
+              className="flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border border-white/5 shadow-inner rounded-xl group"
+            >
+              <VideoIcon className="w-4 h-4" /> Motion
+            </button>
+          )}
         </div>
       </div>
 
       {(status === "complete" || (status === "error" && scene.src)) &&
         !isAnySafetyBlock &&
-        isActive && (
+        isActive &&
+        !isViewingVideo && (
           <div className="p-4 bg-gray-900/50 space-y-4 animate-in slide-in-from-top-4 relative z-50 border-t border-white/5 rounded-b-[1rem] flex-1 flex flex-col justify-start overflow-y-auto scrollbar-none">
             {props.videoError && (
               <div className="p-2 bg-red-900/30 border border-red-800 rounded flex items-start gap-2 animate-in shake duration-300">
@@ -611,6 +695,21 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                       className={`w-3.5 h-3.5 ${props.draftScript.trim() ? "text-indigo-400" : "text-gray-600"}`}
                     />
                   </button>
+                  <label className="text-[10px] font-black text-gray-200 tracking-[0.2em]">
+                    The Narrative
+                  </label>
+
+                  {props.hasScriptToImport && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        props.onImportScript();
+                      }}
+                      className="px-2 py-1 text-[8px] font-black bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow transition-all"
+                    >
+                      Import Narrative
+                    </button>
+                  )}
                 </div>
                 <button
                   onClick={() => setWithAudio(!withAudio)}
@@ -669,14 +768,38 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
             <div className="flex gap-2 mt-4 shrink-0">
               <button
-                onClick={(e) => {
+                ref={buttonRef}
+                onClick={async (e) => {
                   e.stopPropagation();
                   e.preventDefault();
 
+                  if (isVideoLoading) return;
+
                   if (!isConfirming) {
+                    setCreditError(false);
                     setIsConfirming(true);
                     return;
                   }
+
+                  const action =
+                    props.videoModel === "veo-3.1-fast-generate-preview"
+                      ? "VIDEO_FAST_6S"
+                      : "VIDEO_HQ_6S";
+
+                  let success = false;
+
+                  try {
+                    success = await props.consumeCredits(action);
+                  } catch {
+                    success = false;
+                  }
+
+                  if (!success) {
+                    setCreditError(true);
+                    return;
+                  }
+
+                  setCreditError(false);
 
                   props.onGenerateVideo(
                     props.draftScript,
@@ -687,29 +810,28 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                   setIsConfirming(false);
                 }}
                 disabled={props.isDisabled || isVideoLoading}
-                className={`flex-1 flex items-center justify-center gap-0 py-4 text-xs font-black tracking-widest transition-all text-white shadow-xl rounded-xl border overflow-hidden active:scale-[0.98] ${
-                  isConfirming
-                    ? "bg-green-600 hover:bg-green-700 border-green-500/50 ring-2 ring-green-500/20 animate-pulse"
-                    : "bg-indigo-600 hover:bg-indigo-700 border-indigo-400/20"
-                }`}
+                className={`flex-1 h-12 font-black tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center border shadow-xl overflow-hidden
+  ${
+    creditError
+      ? "bg-red-600 text-white border-red-500 animate-pulse"
+      : isConfirming
+        ? "bg-green-600 text-white border-green-500"
+        : "bg-indigo-600 text-white hover:bg-indigo-500 border-indigo-400"
+  }`}
               >
                 {isVideoLoading ? (
-                  <div className="flex items-center gap-2">
-                    <LoaderIcon className="w-4 h-4 animate-spin" />
-                    <span>Producing...</span>
-                  </div>
+                  <LoaderIcon className="w-5 h-5 animate-spin" />
+                ) : creditError ? (
+                  <span className="text-[11px] font-black uppercase">
+                    Insufficient credit
+                  </span>
                 ) : (
                   <>
                     <div className="flex-1 flex items-center justify-center gap-2 pl-4">
                       {isConfirming ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[12px] font-black uppercase tracking-[0.1em]">
-                            Confirm
-                          </span>
-                          <span className="text-sky-400 text-[13px] font-black">
-                            {totalCompoundCost}C
-                          </span>
-                        </div>
+                        <span className="text-[12px] font-black uppercase">
+                          Confirm
+                        </span>
                       ) : (
                         <>
                           <ClapperboardIcon className="w-4 h-4" />
@@ -718,32 +840,23 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                       )}
                     </div>
 
-                    {isConfirming && (
-                      <>
-                        <div className="h-6 w-px bg-white/20 mx-1"></div>{" "}
-                        <div
-                          className="flex flex-col items-center leading-none px-3 py-1 hover:bg-black/20 transition-colors group/tier shrink-0 cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleTier(e);
-                          }}
-                        >
-                          {" "}
-                          <div className="flex items-center gap-0.5">
-                            {" "}
-                            <span className="text-[10px] font-black">
-                              {" "}
-                              {totalCompoundCost}{" "}
-                            </span>{" "}
-                            <ArrowsRightLeftIcon className="w-2 h-2 opacity-40 group-hover/tier:opacity-100" />{" "}
-                          </div>{" "}
-                          <span className="text-[6px] font-black opacity-30 tracking-tighter uppercase">
-                            {" "}
-                            {tierShortLabel}{" "}
-                          </span>{" "}
-                        </div>
-                      </>
-                    )}
+                    <div
+                      onClick={(e) => toggleTier(e)}
+                      className={`h-full flex items-center transition-all cursor-pointer border-l border-white/10 px-4
+        ${isConfirming ? "bg-black/40" : "bg-black/20 hover:bg-black/40"}`}
+                    >
+                      <div className="flex flex-col items-center justify-center leading-none">
+                        <span className="text-[10px] font-black">
+                          {tierShortLabel}
+                        </span>
+
+                        <span className="text-[11px] font-black text-sky-400">
+                          {totalCompoundCost}C
+                        </span>
+                      </div>
+
+                      <ArrowsRightLeftIcon className="w-3 h-3 opacity-40 ml-2" />
+                    </div>
                   </>
                 )}
               </button>
@@ -758,4 +871,4 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
         )}
     </div>
   );
-};
+};;;

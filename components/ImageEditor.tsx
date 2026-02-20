@@ -23,6 +23,7 @@ import { fileToBase64 } from "../utils/fileUtils";
 interface ImageEditorProps {
   isOpen: boolean;
   imageSrc: string; // Base64 string
+  consumeCredits: (action: string) => Promise<boolean>;
   initialVersions?: string[];
   initialPrompt?: string;
   aspectRatio: string;
@@ -40,6 +41,7 @@ type SelectionTool = "brush" | "lasso" | "rect";
 export const ImageEditor: React.FC<ImageEditorProps> = ({
   isOpen,
   imageSrc,
+  consumeCredits,
   initialVersions = [],
   initialPrompt = "",
   aspectRatio,
@@ -62,6 +64,10 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [referenceImg, setReferenceImg] = useState<string | null>(null);
 
+  const [isConfirmingApply, setIsConfirmingApply] = useState(false);
+  const [creditError, setCreditError] = useState(false);
+  const [isCreditLocked, setIsCreditLocked] = useState(false);
+
   // Canvas / Drawing State
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -79,6 +85,7 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
   const startPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const applyButtonRef = useRef<HTMLButtonElement>(null);
 
   // Dynamic color for editing (matching Storyboard/Production color)
   const activeColor = "#f59e0b"; // Amber
@@ -98,6 +105,26 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
     setReferenceImg(null);
   }, [isOpen]);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+
+      if (
+        isConfirmingApply &&
+        !creditError &&
+        applyButtonRef.current &&
+        target instanceof Element &&
+        !applyButtonRef.current.contains(target)
+      ) {
+        setTimeout(() => {
+          setIsConfirmingApply(false);
+        }, 150);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isConfirmingApply, creditError]);
 
   useEffect(() => {
     if (currentSrc && canvasRef.current) {
@@ -250,12 +277,46 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
   };
 
   const handleApply = async () => {
+    if (isCreditLocked) return;
+    if (isProcessing) return;
+
+    if (!isConfirmingApply) {
+      setCreditError(false);
+      setIsConfirmingApply(true);
+      return;
+    }
+
+    let success = false;
+
+    try {
+      success = await consumeCredits("IMAGE_EDIT_PRO");
+    } catch {
+      success = false;
+    }
+
+  if (!success) {
+    setCreditError(true);
+    setIsConfirmingApply(false);
+    setIsCreditLocked(true);
+
+    setTimeout(() => {
+      setCreditError(false);
+      setIsCreditLocked(false);
+    }, 5000);
+
+    return;
+  }
+
+    setCreditError(false);
+    setIsConfirmingApply(false);
+
     const isRemove = drawingMode === "remove";
 
-    if (!editPrompt.trim() && !hasDrawn && !isRemove) return;
-
-    setIsProcessing(true);
-    setError(null);
+    // STOP here if nothing to edit
+    if (!editPrompt.trim() && !hasDrawn && !isRemove) {
+      setIsProcessing(false);
+      return;
+    }
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -275,7 +336,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
         finalPrompt;
     }
 
-
     let maskBase64: string | undefined;
 
     try {
@@ -294,53 +354,49 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
 
         mCtx.drawImage(canvasRef.current, 0, 0);
 
-       const imgData = mCtx.getImageData(
-         0,
-         0,
-         maskCanvas.width,
-         maskCanvas.height
-       );
+        const imgData = mCtx.getImageData(
+          0,
+          0,
+          maskCanvas.width,
+          maskCanvas.height
+        );
 
-       const data = imgData.data;
+        const data = imgData.data;
 
-       for (let i = 0; i < data.length; i += 4) {
-         const alpha = data[i + 3];
+        for (let i = 0; i < data.length; i += 4) {
+          const alpha = data[i + 3];
 
-         if (alpha > 10) {
-           // SELECTED AREA -> PURE WHITE
-           data[i] = 255;
-           data[i + 1] = 255;
-           data[i + 2] = 255;
-           data[i + 3] = 255;
-         } else {
-           // NON SELECTED -> PURE BLACK
-           data[i] = 0;
-           data[i + 1] = 0;
-           data[i + 2] = 0;
-           data[i + 3] = 255;
-         }
-       }
+          if (alpha > 10) {
+            // SELECTED AREA -> PURE WHITE
+            data[i] = 255;
+            data[i + 1] = 255;
+            data[i + 2] = 255;
+            data[i + 3] = 255;
+          } else {
+            // NON SELECTED -> PURE BLACK
+            data[i] = 0;
+            data[i + 1] = 0;
+            data[i + 2] = 0;
+            data[i + 3] = 255;
+          }
+        }
 
-       mCtx.putImageData(imgData, 0, 0);
-
+        mCtx.putImageData(imgData, 0, 0);
 
         maskBase64 = maskCanvas.toDataURL("image/png").split(",")[1];
       }
 
-     if (hasDrawn) {
-       finalPrompt =
-         "MANDATORY CONTENT RULE. " +
-         "The white masked region MUST contain visible, meaningful content after editing. " +
-         "You are FORBIDDEN from leaving the masked area empty, blank, white, transparent, or erased. " +
-         "If a reference image is provided, you MUST insert or adapt it inside the masked region. " +
-         "If no reference image is provided, you MUST generate content that matches the text instruction. " +
-         "All changes must occur ONLY inside the mask. " +
-         "Everything outside the mask must remain exactly identical to the original image. " +
-         finalPrompt;
-     }
-
-
-
+      if (hasDrawn) {
+        finalPrompt =
+          "MANDATORY CONTENT RULE. " +
+          "The white masked region MUST contain visible, meaningful content after editing. " +
+          "You are FORBIDDEN from leaving the masked area empty, blank, white, transparent, or erased. " +
+          "If a reference image is provided, you MUST insert or adapt it inside the masked region. " +
+          "If no reference image is provided, you MUST generate content that matches the text instruction. " +
+          "All changes must occur ONLY inside the mask. " +
+          "Everything outside the mask must remain exactly identical to the original image. " +
+          finalPrompt;
+      }
 
       const { src, error: apiError } = await editImage({
         imageBase64: currentSrc,
@@ -359,7 +415,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
           ? imageModel
           : "gemini-3-pro-image-preview"
       });
-
 
       if (src) {
         setVersions((prev) => [...prev, src]);
@@ -380,8 +435,6 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
     onSave(currentSrc, editPrompt);
     onClose();
   };
-
-
 
   if (!isOpen) return null;
 
@@ -616,24 +669,38 @@ export const ImageEditor: React.FC<ImageEditorProps> = ({
             {/* Footer Action (Shrunk for mobile) */}
             <div className="p-3 md:p-4 border-t border-white/5 bg-gray-900/50">
               <button
+                ref={applyButtonRef}
                 onClick={handleApply}
-                disabled={
-                  isProcessing ||
-                  (!editPrompt.trim() && !hasDrawn && drawingMode !== "remove")
-                }
-                className="w-full py-2.5 md:py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-800 disabled:text-gray-600 text-white font-black  tracking-widest rounded-xl text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 shadow-2xl transition-all active:scale-95"
+                disabled={isProcessing}
+                className={`w-full py-2.5 md:py-3 text-white font-black tracking-widest rounded-xl text-[9px] md:text-[10px] flex items-center justify-center gap-1.5 shadow-2xl transition-all active:scale-95 border ${
+                  creditError
+                    ? "bg-red-600 border-red-500 animate-pulse"
+                    : isConfirmingApply
+                      ? "bg-green-600 border-green-400"
+                      : "bg-amber-600 border-amber-500 hover:bg-amber-500"
+                }`}
               >
                 {isProcessing ? (
                   <>
-                    <LoaderIcon className="w-3.5 h-3.5 animate-spin" />{" "}
+                    <LoaderIcon className="w-3.5 h-3.5 animate-spin" />
                     Processing...
+                  </>
+                ) : creditError ? (
+                  "INSUFFICIENT CREDIT"
+                ) : isConfirmingApply ? (
+                  <>
+                    <CheckIcon className="w-3.5 h-3.5" />
+                    Confirm Apply
                   </>
                 ) : (
                   <>
-                    <SparklesIcon className="w-3.5 h-3.5" /> Apply Changes
+                    <SparklesIcon className="w-3.5 h-3.5" />
+                    Apply Changes
+                    <span className="ml-1 text-sky-400">2C</span>
                   </>
                 )}
               </button>
+
               <p className="text-[7px] md:text-[8px] text-gray-600 text-center mt-2 font-black  tracking-[0.2em]">
                 Cost: 2 Credits
               </p>

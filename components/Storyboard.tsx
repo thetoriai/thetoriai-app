@@ -1,17 +1,42 @@
-
-import React, { useRef, useState, useEffect } from 'react';
-import { SparklesIcon, PlusIcon, UploadIcon, XIcon, ClapperboardIcon, BookOpenIcon, Logo, MusicalNoteIcon, LoaderIcon, HistoryIcon, FilmIcon } from './Icons';
-import { SceneCard } from './Card';
+import React, { useRef, useState, useEffect, useMemo } from "react";
+import {
+  SparklesIcon,
+  PlusIcon,
+  
+  XIcon,
+  ClapperboardIcon,
+  BookOpenIcon,
+  Logo,
+  MusicalNoteIcon,
+  LoaderIcon,
+  HistoryIcon,
+  FilmIcon,
+  PhotoIcon,
+  VideoIcon,
+  ArrowsRightLeftIcon,
+  ChevronDownIcon
+} from "./Icons";
+import { SceneCard } from "./Card";
+import { fileToBase64 } from "../utils/fileUtils";
 
 interface StoryboardProps {
-    generationItem: any;
-    savedItems: any[];
-    onSaveScene: (genId: number, sceneId: string) => void;
-    onEditScene: (genId: number, sceneId: string) => void;
-    onRegenerateScene: (genId: number, sceneId: string) => void;
-    onAngleSelect: (genId: number, sceneId: string) => void;
-    onDeleteScene?: (genId: number, sceneId: string) => void; 
-    onOpenVideoCreator: (idx: number) => void;
+  videoLength: number;
+  
+  generationItem: any;
+  savedItems: any[];
+  history: any[];
+  historyIndex: number;
+
+  footageHistory: any[];
+
+  // REQUIRED: credit handler used by SceneCard
+  consumeCredits: (actionType: string) => Promise<boolean>;
+  onSaveScene: (genId: number, sceneId: string) => void;
+  onEditScene: (genId: number, sceneId: string) => void;
+  onRegenerateScene: (genId: number, sceneId: string) => void;
+  onAngleSelect: (genId: number, sceneId: string) => void;
+  onDeleteScene?: (genId: number, sceneId: string) => void;
+  onOpenVideoCreator: (idx: number) => void;
   onGenerateVideo: (
     genId: number,
     sceneId: string,
@@ -26,381 +51,706 @@ interface StoryboardProps {
     duration?: number,
     obj?: any
   ) => void;
-    onStop: () => void;
-    isGenerating: boolean;
-    isDisabled: boolean;
-    activeVideoIndices: number[];
-    videoModel: string;
-    videoResolution?: string;
-    setVideoModel: (val: string) => void;
-    setVideoResolution: (val: string) => void;
-    onPreviewImage: (src: string | null) => void;
-    onUploadStartImage?: (file: File) => void;
-    onUploadToSession?: (file: File, sessionId?: number) => void;
-    onUploadAudioStory?: (file: File) => void;
-    isProcessingAudio?: boolean;
-    storybook?: any; 
-    historyIndex: number;
+  onStop: () => void;
+  isGenerating: boolean;
+  isDisabled: boolean;
+  activeVideoIndices: number[];
+  videoModel: string;
+  videoResolution?: string;
+  setVideoModel: (val: string) => void;
+  setVideoResolution: (val: string) => void;
+  onPreviewImage: (src: string | null) => void;
+  onUploadStartImage?: (file: File) => void;
+  onUploadToSession?: (file: File, sessionId?: number) => void;
+  onUploadAudioStory?: (file: File) => void;
+  isProcessingAudio?: boolean;
+  storybook?: any;
+
   // DO add comment above each fix. Fix currency type: Added 'EUR' to the allowed currency union to resolve type mismatch in App and Modals.
   currency: "EUR";
-    onCloseSession?: () => void;
-    history: any[];
-    onSwitchSession: (index: number, sceneId?: string, restore?: boolean) => void;
-    onNewSession: () => void;
-    onUpdateVideoDraft: (genId: number, sceneId: string, updates: any) => void;
-    creditBalance: number;
-    onStopScene?: (genId: number, sceneId: string) => void;
-    onUndoEdit?: (genId: number, sceneId: string) => void;
-    onSceneVariantChange?: (genId: number, sceneId: string, direction: 'next' | 'prev') => void;
-    isBlurred?: boolean;
-    activeI2ISlot: { genId: number, sceneId: string } | null;
-    setActiveI2ISlot: (slot: { genId: number, sceneId: string } | null) => void;
-    onGenerateAudioOnly?: (genId: number, sceneId: string) => void;
-    onAddAudioToTimeline?: (url: string, duration: number) => void;
-    characters: any[];
+  onCloseSession?: () => void;
+
+  onSwitchSession: (index: number, sceneId?: string, restore?: boolean) => void;
+  onNewSession: () => void;
+  onNewSessionFromAsset?: (src: string) => void;
+  onUpdateVideoDraft: (genId: number, sceneId: string, updates: any) => void;
+  creditBalance: number;
+ 
+  onStopScene?: (genId: number, sceneId: string) => void;
+  onUndoEdit?: (genId: number, sceneId: string) => void;
+  onSceneVariantChange?: (
+    genId: number,
+    sceneId: string,
+    direction: "next" | "prev"
+  ) => void;
+  isBlurred?: boolean;
+  activeI2ISlot: { genId: number; sceneId: string } | null;
+  setActiveI2ISlot: (slot: { genId: number; sceneId: string } | null) => void;
+  onGenerateAudioOnly?: (genId: number, sceneId: string) => void;
+  onAddAudioToTimeline?: (url: string, duration: number) => void;
+  characters: any[];
+  // Quick Footage Integration Props
+  onProduceQuickFootage?: (
+    prompt: string,
+    mode: "image" | "video" | "i2i",
+    refImage?: string,
+    videoTier?: string,
+    imageTier?: string,
+    endImage?: string
+  ) => void;
 }
 
-export const Storyboard = React.memo((props: StoryboardProps) => {
-    const { generationItem, savedItems, history } = props;
-    const uploadInputRef = useRef<HTMLInputElement>(null);
-    const sectionUploadRef = useRef<HTMLInputElement>(null);
+export const Storyboard = React.memo(
+  (props: StoryboardProps) => {
+    const { history, savedItems, storybook, videoLength } = props;
+
+    const qfFileInputRef = useRef<HTMLInputElement>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
-    const [videoErrors, setVideoErrors] = useState<{ [key: string]: string }>(
-      {}
+
+    const [activeStudioTab, setActiveStudioTab] = useState<
+      "quickFootage" | "storybook"
+    >("quickFootage");
+    const [qfPrompt, setQfPrompt] = useState("");
+    const [qfMode, setQfMode] = useState<"image" | "video">("image");
+    const [qfImageTier, setQfImageTier] = useState<"fast" | "pro">("fast");
+    const [qfVideoTier, setQfVideoTier] = useState<
+      "veo31-fast" | "veo31-quality"
+    >("veo31-fast");
+    const [qfRefImages, setQfRefImages] = useState<(string | null)[]>([
+      null,
+      null
+    ]);
+    const [qfActiveSlotIdx, setQfActiveSlotIdx] = useState<number | null>(null);
+    const [isConfirmingQF, setIsConfirmingQF] = useState(false);
+    const [qfCreditError, setQfCreditError] = useState(false);
+
+    const isPhone = window.innerWidth <= 500;
+
+    // Unified helper for extracting metadata and content from different history sources
+    const allFootageAssets = useMemo(() => {
+      const footageLabels = [
+        "FootageFrontSection",
+        "UploadedSection",
+        "TimelineSection"
+      ];
+
+      const fromFootage = props.footageHistory.filter((f) =>
+        footageLabels.includes(f.originSection || "FootageFrontSection")
+      );
+
+      const fromHistory = history
+        .filter((h) => h.type !== "storybook")
+        .flatMap((h) =>
+          (h.imageSet || []).map((s: any, idx: number) => ({
+            ...s,
+            genId: h.id,
+            videoState: h.videoStates ? h.videoStates[idx] : null,
+            aspectRatio: h.aspectRatio,
+            originSection:
+              s.originSection ||
+              (h.type === "upload"
+                ? "UploadedSection"
+                : h.type === "timeline"
+                  ? "TimelineSection"
+                  : "FootageFrontSection")
+          }))
+        );
+
+      return [...fromFootage, ...fromHistory]
+        .filter((s) => footageLabels.includes(s.originSection) && !s.isHidden)
+        .sort(
+          (a, b) =>
+            (b.timestamp || b.genId || 0) - (a.timestamp || a.genId || 0)
+        );
+    }, [history, props.footageHistory]);
+
+    // SPLIT ASSETS FOR UI GRID AS REQUESTED
+    const producedFootage = useMemo(
+      () =>
+        allFootageAssets.filter(
+          (a) => a.originSection === "FootageFrontSection"
+        ),
+      [allFootageAssets]
     );
+
+    const uploadedFootage = useMemo(
+      () =>
+        allFootageAssets.filter((a) => a.originSection === "UploadedSection"),
+      [allFootageAssets]
+    );
+
+    const capturedFootage = useMemo(
+      () =>
+        allFootageAssets.filter((a) => a.originSection === "TimelineSection"),
+      [allFootageAssets]
+    );
+
+    const storybookAssets = useMemo(() => {
+      // Items generated from the storybook tool
+      const fromHistory = history
+        .filter((h) => h.type === "storybook")
+        .flatMap((h) =>
+          (h.imageSet || []).map((s: any, idx: number) => ({
+            ...s,
+            genId: h.id,
+            videoState: h.videoStates ? h.videoStates[idx] : null,
+            aspectRatio: h.aspectRatio,
+            originSection: "StorybookSection"
+          }))
+        );
+
+      const fromFootage = props.footageHistory.filter(
+        (f) => f.originSection === "StorybookSection"
+      );
+
+      return [...fromHistory, ...fromFootage]
+        .filter((s) => !s.isHidden)
+        .sort(
+          (a, b) =>
+            (b.timestamp || b.genId || 0) - (a.timestamp || a.genId || 0)
+        );
+    }, [history, props.footageHistory]);
+
+  const handleQFProduce = async () => {
+    if (!qfPrompt.trim() || props.isGenerating) return;
+
+    if (!isConfirmingQF) {
+      if (qfCreditError) return;
+      setQfCreditError(false);
+      setIsConfirmingQF(true);
+      return;
+    }
+
+    const hasRefs = qfRefImages.some((img) => img !== null);
+    const isVideoMode = !hasRefs && qfMode === "video";
+
+    let action = "IMAGE_FAST";
+
+    if (hasRefs) {
+      action = "IMAGE_PRO";
+    } else if (qfMode === "image") {
+      action = qfImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
+    } else {
+      action = qfVideoTier === "veo31-quality" ? "VIDEO_HQ" : "VIDEO_FAST";
+    }
+
+    try {
+      const ok = await props.consumeCredits(action);
+
+      if (!ok) {
+        setQfCreditError(true);
+        setIsConfirmingQF(false);
+        setTimeout(() => setQfCreditError(false), 3000);
+        return;
+      }
+    } catch {
+      setQfCreditError(true);
+      setIsConfirmingQF(false);
+      setTimeout(() => setQfCreditError(false), 3000);
+      return;
+    }
+
+    setQfCreditError(false);
+
+    if (isVideoMode) {
+      props.onProduceQuickFootage?.(
+        qfPrompt,
+        "video",
+        undefined,
+        qfVideoTier,
+        qfImageTier,
+        undefined
+      );
+    } else {
+      const mode = hasRefs ? "i2i" : "image";
+
+      props.onProduceQuickFootage?.(
+        qfPrompt,
+        mode,
+        qfRefImages[0] || undefined,
+        qfVideoTier,
+        qfImageTier,
+        qfRefImages[1] || undefined
+      );
+    }
+
+    setQfPrompt("");
+    setQfRefImages([null, null]);
+    setIsConfirmingQF(false);
+  };
     
-
-    const windowWidth = window.innerWidth;
-    // SYNCED BREAKPOINT: 500px matches the App.tsx 'phone' layout mode exactly.
-    const isPhone = windowWidth <= 500;
-    const isTable = windowWidth > 500 && windowWidth <= 1024;
-
-    
-
-    const handleImportScript = (idx: number, sceneId: string) => { if (props.storybook?.scenes && props.storybook.scenes[idx]) props.onUpdateVideoDraft(generationItem.id, sceneId, { draftScript: props.storybook.scenes[idx].script || '' }); };
-
-    const handleVideoGenerateClick = (genId: number, sceneId: string, script: string, movement: string, withAudio?: boolean) => {
-        const baseCost = props.videoModel === 'veo-3.1-fast-generate-preview' ? 6 : 10;
-        const currentCost = baseCost + (withAudio ? 1 : 0);
-        
-        if (props.creditBalance < currentCost) {
-            setVideoErrors(prev => ({ ...prev, [sceneId]: `Insufficient credits. Required: ${currentCost} Credits.` }));
-            return;
-        }
-       const handleVideoGenerateClick = (
-         genId: number,
-         sceneId: string,
-         script: string,
-         movement: string,
-         withAudio?: boolean
-       ) => {
-         const baseCost =
-           props.videoModel === "veo-3.1-fast-generate-preview" ? 6 : 10;
-         const currentCost = baseCost + (withAudio ? 1 : 0);
-
-         if (props.creditBalance < currentCost) {
-           setVideoErrors((prev) => ({
-             ...prev,
-             [sceneId]: `Insufficient credits. Required: ${currentCost} Credits.`
-           }));
-           return;
-         }
-
-         props.onGenerateVideo(genId, sceneId, script, movement, withAudio);
-       };
-
-        props.onGenerateVideo(genId, sceneId, script, movement, withAudio);
+    const handleQFFileUpload = async (
+      e: React.ChangeEvent<HTMLInputElement>
+    ) => {
+      if (e.target.files?.[0] && qfActiveSlotIdx !== null) {
+        const base64 = await fileToBase64(e.target.files[0]);
+        const next = [...qfRefImages];
+        next[qfActiveSlotIdx] = base64;
+        setQfRefImages(next);
+        setQfActiveSlotIdx(null);
+      }
     };
 
-    const openSessions = history ? history.map((h, i) => ({ ...h, originalIndex: i })).filter(h => !h.isClosed) : [];
-    const activeSession = props.historyIndex !== -1 ? history[props.historyIndex] : null;
-
-    const renderTabBar = () => (
-      <div className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-none overscroll-none relative z-20">
-            {openSessions.map((session) => (
-          <div
-            key={session.id}
-            onClick={() => props.onSwitchSession(session.originalIndex)}
-            className={`group flex items-center gap-2 px-4 py-2.5 rounded-t-xl cursor-pointer border-t border-l border-r border-transparent min-w-[140px] transition-all ${props.historyIndex === session.originalIndex ? "bg-gray-800 border-white/10 text-white" : "bg-gray-900/40 hover:bg-gray-800/80 text-gray-500"}`}
-          >
-            <span className="text-[9px] font-black truncate flex-1 
-             tracking-widest">
-              {session.prompt || "Session"}
-            </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (
-                  props.historyIndex === session.originalIndex &&
-                  props.onCloseSession
-                )
-                  props.onCloseSession();
-                else props.onSwitchSession(session.originalIndex);
-              }}
-              className={`p-1 rounded-full hover:bg-red-900/50 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ${props.historyIndex === session.originalIndex ? "opacity-100" : ""}`}
-            >
-              <XIcon className="w-3 h-3" />
-            </button>
-                </div>
-            ))}
-        {props.historyIndex !== -1 &&
-          !openSessions.some((s) => s.type === "upload") && (
-            <button
-              onClick={props.onNewSession}
-              className={`flex items-center justify-center w-9 h-9 rounded-xl hover:bg-gray-800 transition-colors ml-2 border border-white/5 ${props.historyIndex === -1 ? "bg-indigo-600 text-white" : "text-gray-600"}`}
-              title="New Session"
-            >
-              <PlusIcon className="w-4 h-4" />
-            </button>
-            )}
-        </div>
-    );
-
-    const renderActivePage = () => {
-        if (!activeSession || activeSession.isClosed) return null;
-        let title = "Sidebar productions";
-        let icon = <SparklesIcon className="w-4 h-4 text-indigo-400" />;
-        if (activeSession.type === 'storybook') { title = "Storybook scenes"; icon = <BookOpenIcon className="w-4 h-4 text-amber-400" />; }
-        else if (activeSession.type === 'upload') { title = "Asset imports"; icon = <UploadIcon className="w-4 h-4 text-emerald-400" />; }
-        else if (activeSession.type === 'timeline') { title = "Timeline productions"; icon = <FilmIcon className="w-4 h-4 text-rose-400" />; }
-
-        return (
-        <div className="animate-in fade-in slide-in-from-left-4 duration-500 relative z-10 px-2 md:px-0">
+    const renderAssetGrid = (
+      assets: any[],
+      title: string,
+      icon: React.ReactNode
+    ) => {
+      if (assets.length === 0) return null; // Ensure section doesn't appear if empty
+      return (
+        <div className="animate-in fade-in duration-700 mb-12">
           <div className="flex items-center gap-4 mb-8">
-                    <div className="flex items-center gap-2">
-                        {icon}
-              <h3 className="text-[10px] font-black text-gray-300 
-               tracking-[0.3em]">
+            <div className="flex items-center gap-2">
+              {icon}
+              <h3 className="text-[10px] font-black text-gray-400 tracking-[0.4em] uppercase">
                 {title}
               </h3>
-                    </div>
-            <div className="h-px bg-white/5 flex-1"></div>
-                </div>
-
-          <div
-            className={`grid gap-6 items-start ${isPhone ? "grid-cols-1" : isTable ? "grid-cols-2" : "grid-cols-2 lg:grid-cols-3 xl:grid-cols-3"}`}
-          >
-                    {(activeSession.imageSet || []).map((scene: any, index: number) => {
-                        if (scene.isHidden) return null;
-              const sceneId =
-                scene.sceneId || `scene-${activeSession.id}-${index}`;
-              const isSaved = savedItems.some(
-                (i) =>
-                  i.id === `${activeSession.id}-${sceneId}` ||
-                  (scene.originalSavedId && i.id === scene.originalSavedId)
-              );
-              const status =
-                scene.status ||
-                (scene.isGenerating || scene.isRegenerating
-                  ? "generating"
-                  : scene.src
-                    ? "complete"
-                    : scene.error
-                      ? "error"
-                      : "pending");
-              const videoState = activeSession.videoStates
-                ? activeSession.videoStates[index]
-                : null;
-                        return (
-                            <SceneCard 
-                  key={sceneId}
-                  scene={scene}
-                  index={index}
-                  genId={activeSession.id}
-                  videoState={videoState}
-                  isSaved={isSaved}
-                  isActive={props.activeVideoIndices.includes(index)}
-                  status={status}
-                  draftScript={videoState?.draftScript || ""}
-                  draftMovement={
-                    videoState?.draftCameraMovement || "Zoom In (Focus In)"
-                  }
-                  aspectRatio={activeSession.aspectRatio || "16:9"}
-                  onPreviewImage={props.onPreviewImage}
-                  onSave={() => props.onSaveScene(activeSession.id, sceneId)}
-                  onAngle={() => props.onAngleSelect(activeSession.id, sceneId)}
-                  onEdit={() => props.onEditScene(activeSession.id, sceneId)}
-                  onRegenerate={() =>
-                    props.onRegenerateScene(activeSession.id, sceneId)
-                  }
-                  onDelete={() =>
-                    props.onDeleteScene &&
-                    props.onDeleteScene(activeSession.id, sceneId)
-                  }
-                  onUndo={() =>
-                    props.onUndoEdit &&
-                    props.onUndoEdit(activeSession.id, sceneId)
-                  }
-                  onVariantChange={(dir) =>
-                    props.onSceneVariantChange &&
-                    props.onSceneVariantChange(activeSession.id, sceneId, dir)
-                  }
-                  onStopScene={() =>
-                    props.onStopScene &&
-                    props.onStopScene(activeSession.id, sceneId)
-                  }
-                                onToggleVideoCreator={() => props.onOpenVideoCreator(index)} 
-                  onUpdateDraft={(updates) =>
-                    props.onUpdateVideoDraft(activeSession.id, sceneId, updates)
-                  }
-                  onGenerateVideo={(script, movement, withAudio) =>
-                    handleVideoGenerateClick(
-                      activeSession.id,
-                      sceneId,
-                      script,
-                      movement,
-                      withAudio
-                    )
-                  }
-                  onAddToTimeline={props.onAddToTimeline}
-                  onImportScript={() => handleImportScript(index, sceneId)}
-                  hasScriptToImport={
-                    !!(props.storybook?.scenes && props.storybook.scenes[index])
-                  }
-                  videoModel={props.videoModel}
-                  videoResolution={props.videoResolution || "720p"}
-                  setVideoModel={props.setVideoModel}
-                  setVideoResolution={props.setVideoResolution}
-                  isDisabled={props.isDisabled}
-                  videoCostDisplay={
-                    props.videoModel === "veo-3.1-fast-generate-preview"
-                      ? "6 Credits"
-                      : "10 Credits"
-                  }
-                  isMusicVideo={activeSession.genre === "Music Video"}
-                  isHistory={activeSession.genre === "History"}
-                  videoError={videoErrors[sceneId]}
-                 
-                  creditBalance={props.creditBalance}
-                  activeI2ISlot={props.activeI2ISlot}
-                  setActiveI2ISlot={props.setActiveI2ISlot}
-                  onGenerateAudioOnly={props.onGenerateAudioOnly}
-                  onAddAudioToTimeline={props.onAddAudioToTimeline}
-                            />
-                        );
-                    })}
-            {activeSession.type === "upload" && props.onUploadToSession && (
-              <div
-                onClick={() => {
-                  setActiveSectionId(activeSession.id);
-                  sectionUploadRef.current?.click();
-                }}
-                className="bg-gray-900/30 border-2 border-dashed border-gray-800 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500/50 hover:bg-indigo-900/5 transition-all group aspect-video"
-              >
-                            <PlusIcon className="w-10 h-10 text-gray-700 group-hover:text-indigo-500 mb-2 transition-colors" />
-                <span className="text-[10px] font-black text-gray-600 
-                 tracking-widest group-hover:text-indigo-400">
-                  Add more
-                </span>
-                        </div>
-                    )}
-                </div>
             </div>
+            <div className="h-px bg-white/5 flex-1"></div>
+          </div>
+          {assets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-32 opacity-20">
+              <HistoryIcon className="w-20 h-20 mb-6" />
+              <p className="text-[11px] font-black tracking-[0.4em] uppercase text-gray-500">
+                Awaiting production
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+              {assets.map(
+                (scene, idx) => (
+                  console.log("SCENE DATA:", scene),
+                  (
+                    <div
+                      key={scene.sceneId || idx}
+                      draggable={true}
+                      onDragStart={(e) => {
+                        const payload = {
+                          src: scene.src || scene.image,
+                          sceneId: scene.sceneId,
+                          genId: scene.genId
+                        };
+
+                        e.dataTransfer.setData(
+                          "application/json",
+                          JSON.stringify(payload)
+                        );
+
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                    >
+                      <SceneCard
+                        scene={scene}
+                        index={idx}
+                        consumeCredits={props.consumeCredits}
+                        genId={
+                          scene.genId ||
+                          scene.originSessionId ||
+                          scene.timestamp ||
+                          0
+                        }
+                        videoState={scene.videoState}
+                        isSaved={savedItems.some(
+                          (i) => (i.sceneId || i.id) === scene.sceneId
+                        )}
+                        videoLength={props.videoLength}
+                        isActive={props.activeVideoIndices.includes(idx)}
+                        status={
+                          scene.status || (scene.src ? "complete" : "pending")
+                        }
+                        draftScript={scene.videoState?.draftScript || ""}
+                        draftMovement={
+                          scene.videoState?.draftCameraMovement ||
+                          "Zoom In (Focus In)"
+                        }
+                        aspectRatio={scene.aspectRatio || "16:9"}
+                        onPreviewImage={props.onPreviewImage}
+                        onSave={() =>
+                          props.onSaveScene(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId
+                          )
+                        }
+                        onAngle={() =>
+                          props.onAngleSelect(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId
+                          )
+                        }
+                        onEdit={() =>
+                          props.onEditScene(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId
+                          )
+                        }
+                        onRegenerate={() =>
+                          props.onRegenerateScene(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId
+                          )
+                        }
+                        onDelete={() =>
+                          props.onDeleteScene?.(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId
+                          )
+                        }
+                        onUndo={() =>
+                          props.onUndoEdit?.(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId
+                          )
+                        }
+                        onVariantChange={(dir) =>
+                          props.onSceneVariantChange?.(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId,
+                            dir
+                          )
+                        }
+                        onStopScene={() =>
+                          props.onStopScene?.(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId
+                          )
+                        }
+                        onToggleVideoCreator={() =>
+                          props.onOpenVideoCreator(idx)
+                        }
+                        onUpdateDraft={(updates) =>
+                          props.onUpdateVideoDraft(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId,
+                            updates
+                          )
+                        }
+                        onGenerateVideo={(script, mvmnt, withAudio) =>
+                          props.onGenerateVideo(
+                            scene.genId || scene.originSessionId,
+                            scene.sceneId,
+                            script,
+                            mvmnt,
+                            withAudio
+                          )
+                        }
+                        onAddToTimeline={props.onAddToTimeline}
+                        onImportScript={() => {
+                          if (scene.storyScript) {
+                            props.onUpdateVideoDraft(
+                              scene.genId || scene.originSessionId,
+                              scene.sceneId,
+                              { draftScript: scene.storyScript }
+                            );
+                          }
+                        }}
+                        hasScriptToImport={!!scene.storyScript}
+                        videoModel={props.videoModel}
+                        videoResolution={props.videoResolution || "720p"}
+                        setVideoModel={props.setVideoModel}
+                        setVideoResolution={props.setVideoResolution}
+                        isDisabled={props.isDisabled}
+                        videoCostDisplay={
+                          props.videoModel === "veo-3.1-fast-generate-preview"
+                            ? props.videoLength === 8
+                              ? "8 Credits"
+                              : "6 Credits"
+                            : props.videoLength === 8
+                              ? "16 Credits"
+                              : "12 Credits"
+                        }
+                        isMusicVideo={false}
+                        isHistory={false}
+                        creditBalance={props.creditBalance}
+                        activeI2ISlot={props.activeI2ISlot}
+                        setActiveI2ISlot={props.setActiveI2ISlot}
+                        characters={props.characters}
+                      />
+                    </div>
+                  )
+                )
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const qfCost =
+      qfMode === "image"
+        ? qfImageTier === "pro"
+          ? 2
+          : 1
+        : qfVideoTier === "veo31-quality"
+          ? videoLength === 8
+            ? 16
+            : 12
+          : videoLength === 8
+            ? 8
+            : 6;
+
+    const qfShortTier =
+      qfMode === "image"
+        ? qfImageTier === "pro"
+          ? "PRO"
+          : "FAST"
+        : qfVideoTier === "veo31-quality"
+          ? "HD"
+          : "FAST";
+
+    const toggleQfTier = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsConfirmingQF(false); // Reset confirmation if they change the tier
+      if (qfMode === "image") {
+        setQfImageTier(qfImageTier === "fast" ? "pro" : "fast");
+      } else {
+        setQfVideoTier(
+          qfVideoTier === "veo31-fast" ? "veo31-quality" : "veo31-fast"
         );
+      }
     };
 
     return (
       <div
         className={`flex-1 flex flex-col h-full overflow-hidden bg-gray-950 relative ${props.isBlurred ? "blur-sm pointer-events-none" : ""}`}
       >
-            <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-                <img 
-                    src="https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&q=80&w=2000" 
-            className="w-full h-full object-cover opacity-[0.15] scale-110 animate-ken-burns"
-            style={{ filter: "grayscale(30%) contrast(110%)" }}
-                    alt="Cinematic Background"
-                />
-                <div className="absolute inset-0 bg-gradient-to-b from-gray-950 via-transparent to-gray-950"></div>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(3,7,18,0.7)_100%)]"></div>
-            </div>
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+          <img
+            src="https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&q=80&w=2000"
+            className="w-full h-full object-cover opacity-[0.15]"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-gray-950 via-transparent to-gray-950"></div>
+        </div>
+
+        <div className="px-6 pt-6 shrink-0 z-20 border-b border-white/5 pb-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setActiveStudioTab("quickFootage")}
+              className={`px-5 py-2.5 rounded-xl text-[10px] font-black tracking-widest transition-all ${activeStudioTab === "quickFootage" ? "bg-indigo-600 text-white shadow-xl border border-indigo-400" : "bg-gray-900 text-gray-500 border border-white/5 hover:text-white"}`}
+            >
+              QUICK FOOTAGE
+            </button>
+            <button
+              onClick={() => setActiveStudioTab("storybook")}
+              className={`px-5 py-2.5 rounded-xl text-[10px] font-black tracking-widest transition-all ${activeStudioTab === "storybook" ? "bg-indigo-600 text-white shadow-xl border border-indigo-400" : "bg-gray-900 text-gray-500 border border-white/5 hover:text-white"}`}
+            >
+              STORYBOOK
+            </button>
+          </div>
+        </div>
 
         <div
-          className={`px-4 pt-2 shrink-0 border-b border-white/5 relative z-20 ${isPhone ? "pb-2" : ""}`}
-        >
-                {renderTabBar()}
-            </div>
-            
-        <div
           ref={scrollContainerRef}
-          className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800 relative z-10 p-6 md:p-8 ${isPhone ? "pb-32" : 'pb-40'}`}
+          className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-800 relative z-10 p-8 ${isPhone ? "pb-32" : "pb-40"}`}
         >
-          {openSessions.length === 0 ||
-          props.historyIndex === -1 ||
-          (activeSession && activeSession.isClosed && !props.isGenerating) ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center min-h-[60vh]">
-              <div className="w-20 h-20 bg-gray-900/80 backdrop-blur-md rounded-full flex items-center justify-center mb-8 border border-gray-800 shadow-2xl">
-                <ClapperboardIcon className="w-10 h-10 text-gray-800" />
-                        </div>
-              <h2 className="text-xl font-black text-gray-500 mb-10 
-               tracking-[0.4em]">
-                Ready for Production
-              </h2>
-                        <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => uploadInputRef.current?.click()}
-                  className="flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl shadow-2xl transition-all active:scale-95 text-[10px] 
-                   tracking-widest border border-indigo-400/20"
-                >
-                  <UploadIcon className="w-4 h-4" /> Import Image
-                </button>
-                <input
-                  type="file"
-                  ref={uploadInputRef}
-                  className="hidden"
-                  accept="image/*"
+          {activeStudioTab === "quickFootage" ? (
+            <div className="animate-in fade-in slide-in-from-left-4 duration-500">
+              <div className="flex items-center gap-3 mb-4">
+                <SparklesIcon className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-[11px] font-black text-gray-400 tracking-[0.4em] uppercase">
+                  QUICK FOOTAGE
+                </h3>
+                <div className="h-px bg-white/5 flex-1"></div>
+              </div>
+
+              <div className="bg-[#0f172a] rounded-3xl border border-white/10 shadow-2xl p-1 overflow-hidden themed-artline mb-12">
+                <textarea
+                  value={qfPrompt}
                   onChange={(e) => {
-                    if (e.target.files?.[0]) {
-                      props.onUploadStartImage!(e.target.files[0]);
-                      e.target.value = "";
-                    }
+                    setQfPrompt(e.target.value);
+                    setIsConfirmingQF(false);
                   }}
+                  placeholder="Describe your emotion vision or motion process... results appear below."
+                  className="w-full h-24 bg-transparent border-none p-5 text-[15px] font-bold text-white placeholder-gray-700 resize-none focus:outline-none leading-relaxed italic scrollbar-none"
                 />
+
+                <div className="px-5 pb-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    {qfRefImages.map((img, idx) => (
+                      <React.Fragment key={idx}>
+                        <div
+                          onClick={() => {
+                            setQfActiveSlotIdx(idx);
+                            qfFileInputRef.current?.click();
+                          }}
+                          className={`w-16 h-12 rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex items-center justify-center relative ${img ? "border-indigo-500 bg-black" : "border-white/10 hover:border-white/20 bg-black/40"}`}
+                        >
+                          {img ? (
+                            <>
+                              <img
+                                src={
+                                  img.startsWith("data")
+                                    ? img
+                                    : `data:image/png;base64,${img}`
+                                }
+                                className="w-full h-full object-cover"
+                              />
+                              <div
+                                className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const next = [...qfRefImages];
+                                  next[idx] = null;
+                                  setQfRefImages(next);
+                                }}
+                              >
+                                <XIcon className="w-4 h-4 text-white" />
+                              </div>
+                            </>
+                          ) : (
+                            <PlusIcon className="w-4 h-4 text-gray-700" />
+                          )}
                         </div>
-                    </div>
-                ) : (
-                    <>
-                        {renderActivePage()}
-                        {props.isGenerating && (
-                <div className="flex items-center gap-3 mt-8 px-2 opacity-80 relative z-10">
-                  <LoaderIcon className="w-4 h-4 animate-spin text-indigo-500" />
-                  <span className="text-[10px] font-black text-gray-500 
-                   tracking-[0.4em]">
-                    Rendering production...
-                  </span>
-                            </div>
+                        {idx === 0 && (
+                          <ArrowsRightLeftIcon className="w-4 h-4 text-indigo-900/50" />
                         )}
-                    </>
-                )}
+                      </React.Fragment>
+                    ))}
+                  </div>
+
+                  <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5 items-center gap-1 shadow-inner shrink-0">
+                    <button
+                      onClick={() => {
+                        setQfMode("image");
+                        setIsConfirmingQF(false);
+                      }}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[9px] font-black tracking-widest transition-all ${qfMode === "image" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                    >
+                      <PhotoIcon className="w-3.5 h-3.5" /> IMAGE
+                    </button>
+                    <button
+                      onClick={() => {
+                        setQfMode("video");
+                        setIsConfirmingQF(false);
+                      }}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[9px] font-black tracking-widest transition-all ${qfMode === "video" ? "bg-indigo-600 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"}`}
+                    >
+                      <VideoIcon className="w-3.5 h-3.5" /> VIDEO
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      onClick={handleQFProduce}
+                      disabled={props.isGenerating || !qfPrompt.trim()}
+                      className={`flex-1 sm:w-56 h-14 font-black tracking-[0.2em] rounded-2xl transition-all active:scale-95 flex items-center justify-center text-[11px] shadow-2xl border overflow-hidden disabled:opacity-40 disabled:bg-gray-800 disabled:text-gray-600 disabled:border-white/5 disabled:cursor-not-allowed ${
+                        qfCreditError
+                          ? "bg-red-600 border-red-500 text-white animate-pulse"
+                          : isConfirmingQF
+                            ? "bg-green-600 border-green-400 text-white"
+                            : "bg-[#4f46e5] border-indigo-400 text-white hover:bg-indigo-500"
+                      }`}
+                    >
+                      {props.isGenerating ? (
+                        <LoaderIcon className="w-4 h-4 animate-spin" />
+                      ) : qfCreditError ? (
+                        "INSUFFICIENT CREDIT"
+                      ) : (
+                        <>
+                          <div className="flex-1 flex items-center justify-center gap-2 pl-4">
+                            {isConfirmingQF ? (
+                              <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200">
+                                <span className="text-[11px] font-black uppercase tracking-[0.1em]">
+                                  Confirm
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                <ClapperboardIcon className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase">
+                                  Generate
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          <div
+                            onClick={(e) => toggleQfTier(e)}
+                            className={`h-full flex items-center transition-all cursor-pointer border-l border-white/10 px-4 group/qf-tier ${isConfirmingQF ? "bg-black/40" : "bg-black/20 hover:bg-black/40"}`}
+                          >
+                            <div className="flex flex-col items-center justify-center leading-none">
+                              <span className="text-[9px] font-black tracking-widest text-white group-hover/qf-tier:text-sky-400 transition-colors">
+                                {qfShortTier}
+                              </span>
+                              <span className="text-[10px] font-black text-sky-400 mt-0.5">
+                                {qfCost}C
+                              </span>
+                            </div>
+                            <ArrowsRightLeftIcon className="w-3 h-3 opacity-40 group-hover/qf-tier:opacity-100 ml-2 transition-all group-hover/qf-tier:rotate-180" />
+                          </div>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {renderAssetGrid(
+                producedFootage,
+                "QUICK FOOTAGE RESULTS",
+                <SparklesIcon className="w-4 h-4 text-indigo-400" />
+              )}
+
+              {renderAssetGrid(
+                uploadedFootage,
+                "UPLOADED IMAGE RESULTS",
+                <PhotoIcon className="w-4 h-4 text-emerald-400" />
+              )}
+
+              {renderAssetGrid(
+                capturedFootage,
+                "TIMELINE IMAGE RESULTS",
+                <FilmIcon className="w-4 h-4 text-rose-400" />
+              )}
+
+              {allFootageAssets.length === 0 && !props.isGenerating && (
+                <div className="flex flex-col items-center justify-center py-32 opacity-20">
+                  <HistoryIcon className="w-20 h-20 mb-6" />
+                  <p className="text-[11px] font-black tracking-[0.4em] uppercase text-gray-500">
+                    Awaiting production
+                  </p>
+                </div>
+              )}
             </div>
-            
+          ) : (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+              {renderAssetGrid(
+                storybookAssets,
+                "STORYBOOK RESULTS",
+                <BookOpenIcon className="w-4 h-4 text-amber-400" />
+              )}
+            </div>
+          )}
+
+          {props.isGenerating && (
+            <div className="flex items-center gap-3 mt-12 px-2 opacity-80">
+              <LoaderIcon className="w-4 h-4 animate-spin text-indigo-500" />
+              <span className="text-[10px] font-black text-gray-500 tracking-[0.4em] uppercase">
+                Rendering production results...
+              </span>
+            </div>
+          )}
+        </div>
+
         <input
           type="file"
-          ref={sectionUploadRef}
+          ref={qfFileInputRef}
           className="hidden"
           accept="image/*"
-          onChange={(e) => {
-            if (e.target.files?.[0] && activeSectionId !== null) {
-              props.onUploadToSession!(e.target.files[0], activeSectionId);
-              e.target.value = "";
-              setActiveSectionId(null);
-            }
-          }}
+          onChange={handleQFFileUpload}
         />
-        </div>
+      </div>
     );
   },
   (p, n) =>
-    p.generationItem === n.generationItem &&
-    p.activeVideoIndices === n.activeVideoIndices &&
-    p.isGenerating === n.isGenerating &&
-    p.savedItems === n.savedItems &&
-    p.historyIndex === n.historyIndex &&
     p.history === n.history &&
+    p.footageHistory === n.footageHistory &&
+    p.savedItems === n.savedItems &&
+    p.isGenerating === n.isGenerating &&
+    p.historyIndex === n.historyIndex &&
     p.videoResolution === n.videoResolution &&
     p.videoModel === n.videoModel &&
     p.creditBalance === n.creditBalance &&
-    p.isProcessingAudio === n.isProcessingAudio &&
-    p.isBlurred === n.isBlurred &&
-    p.activeI2ISlot === n.activeI2ISlot
+    p.activeVideoIndices === n.activeVideoIndices &&
+    p.storybook === n.storybook &&
+    p.videoLength === n.videoLength
 );

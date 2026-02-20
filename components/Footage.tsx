@@ -31,6 +31,7 @@ interface FootageProps {
   characters: Character[];
   visualStyle: string;
   aspectRatio: string;
+  videoLength: number;
   characterStyle: string;
   selectedCountry: string;
   consumeCredits: (action: string) => Promise<boolean>;
@@ -45,7 +46,9 @@ interface FootageProps {
 
   isGenerating?: boolean;
   creditBalance: number;
+
   onUpdateCountry: (val: string) => void;
+ 
   footagePrompt: string;
   setFootagePrompt: (v: string) => void;
   footageMode: "image" | "video";
@@ -82,10 +85,23 @@ const FootageResultCard: React.FC<{
 
   // Simulate progress for the internal loading circle
   useEffect(() => {
+    if (item.status === "deducting") {
+      setProgress(0);
+      return;
+    }
     if (item.status !== "generating") return;
+
+    // Start from 5 if we just finished deducting
+    setProgress(5);
+
     const interval = setInterval(() => {
-      setProgress((prev) => (prev >= 95 ? prev : prev + 2));
-    }, 500);
+      setProgress((prev) => {
+        if (prev >= 99) return 99;
+        // Slow down as we get closer to 100
+        const increment = prev > 80 ? 0.5 : 2;
+        return prev + increment;
+      });
+    }, 300);
     return () => clearInterval(interval);
   }, [item.status]);
 
@@ -96,12 +112,14 @@ const FootageResultCard: React.FC<{
         : item.src?.startsWith("data")
           ? item.src
           : `data:image/png;base64,${item.src}`;
+
     onAddToTimeline(
       url,
       item.type,
-      item.type === "video" ? 8 : 5,
+      item.type === "video" ? item.videoDuration || 6 : 5,
       item.videoObject
     );
+
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
   };
@@ -113,28 +131,94 @@ const FootageResultCard: React.FC<{
         : item.src?.startsWith("data")
           ? item.src
           : `data:image/png;base64,${item.src}`;
+
     const link = document.createElement("a");
     link.href = url;
-    link.download = `Footage_${Date.now()}.${item.type === "video" ? "mp4" : "png"}`;
+    link.download = `Footage_${Date.now()}.${
+      item.type === "video" ? "mp4" : "png"
+    }`;
     link.click();
   };
 
+  const currentSrc = item.src || item.image || "";
+
   return (
-    <div className="bg-[#0f172a] rounded-2xl border border-white/5 overflow-hidden flex flex-col shadow-xl group animate-in zoom-in-95 duration-500 relative">
+    <div
+      draggable
+      onDragStart={(e) => {
+        const src = item.src?.startsWith("data")
+          ? item.src
+          : `data:image/png;base64,${item.src}`;
+
+        e.dataTransfer.setData(
+          "application/json",
+          JSON.stringify({
+            src,
+            type: item.type
+          })
+        );
+      }}
+      className="bg-[#0f172a] rounded-2xl border border-white/5 overflow-hidden flex flex-col shadow-xl group animate-in zoom-in-95 duration-500 relative cursor-grab active:cursor-grabbing"
+    >
       <div className="aspect-video bg-black relative flex items-center justify-center overflow-hidden">
-        {item.status === "generating" ? (
+        {/* BACKGROUND IMAGE LAYER */}
+        {currentSrc && (
+          <div
+            className={`absolute inset-0 z-0 transition-all duration-1000 ${item.status === "generating" ? "blur-xl scale-110 opacity-40" : "opacity-100"}`}
+          >
+            <img
+              src={
+                currentSrc.startsWith("data")
+                  ? currentSrc
+                  : `data:image/png;base64,${currentSrc}`
+              }
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+
+        {/* GENERATING / DEDUCTING OVERLAY */}
+        {(item.status === "generating" || item.status === "deducting") && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-10">
-            <div className="w-12 h-12 relative flex items-center justify-center">
-              <CircularProgressIcon
-                progress={progress}
-                className="w-full h-full text-cyan-500"
+            {/* GRADUAL REVEAL PLACEHOLDER */}
+            <div
+              className="absolute inset-0 z-0 opacity-30 transition-all duration-500"
+              style={{
+                filter: `blur(${20 - progress / 5}px) brightness(${0.5 + progress / 200})`,
+                opacity: 0.1 + progress / 200
+              }}
+            >
+              <img
+                src="https://picsum.photos/seed/studio/800/450?blur=10"
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
               />
             </div>
-            <span className="text-[7px] font-black text-cyan-400 tracking-[0.3em] mt-3 uppercase animate-pulse">
-              Producing...
-            </span>
+
+            <div className="relative z-10 flex flex-col items-center">
+              <div className="w-16 h-16 relative flex items-center justify-center">
+                <CircularProgressIcon
+                  progress={item.status === "deducting" ? 0 : progress}
+                  className="w-full h-full text-cyan-500"
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-[10px] font-black text-white">
+                    {item.status === "deducting"
+                      ? "..."
+                      : `${Math.round(progress)}%`}
+                  </span>
+                </div>
+              </div>
+              <span className="text-[8px] font-black text-cyan-400 tracking-[0.3em] mt-4 uppercase animate-pulse">
+                {item.status === "deducting"
+                  ? "Deducting Credits..."
+                  : "Producing Footage..."}
+              </span>
+            </div>
           </div>
-        ) : item.status === "error" ? (
+        )}
+
+        {item.status === "error" ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-950/20 p-4 text-center">
             <ExclamationTriangleIcon className="w-6 h-6 text-red-500 mb-2" />
             <span className="text-[8px] font-black text-red-400 tracking-widest uppercase">
@@ -153,9 +237,9 @@ const FootageResultCard: React.FC<{
         ) : (
           <img
             src={
-              item.src?.startsWith("data")
-                ? item.src
-                : `data:image/png;base64,${item.src}`
+              currentSrc.startsWith("data")
+                ? currentSrc
+                : `data:image/png;base64,${currentSrc}`
             }
             className="w-full h-full object-cover"
           />
@@ -205,11 +289,14 @@ const FootageResultCard: React.FC<{
 export const Footage: React.FC<FootageProps> = ({
   visualStyle,
   aspectRatio,
+  videoLength,
   characterStyle,
   selectedCountry,
   consumeCredits,
   onProduce,
   isGenerating = false,
+  creditBalance,
+  
   onUpdateCountry,
   footagePrompt,
   setFootagePrompt,
@@ -229,6 +316,7 @@ export const Footage: React.FC<FootageProps> = ({
   const [showHistoryPicker, setShowHistoryPicker] = useState(false);
   const [showContextDropdown, setShowContextDropdown] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [creditError, setCreditError] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const contextDropdownRef = useRef<HTMLDivElement>(null);
@@ -246,78 +334,123 @@ export const Footage: React.FC<FootageProps> = ({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
+
       if (
         contextDropdownRef.current &&
         !contextDropdownRef.current.contains(target)
-      )
-        setShowContextDropdown(false);
-
-      // Reset confirmation if clicking outside the button area
-      if (
-        isConfirming &&
-        buttonRef.current &&
-        !buttonRef.current.contains(target)
       ) {
-        setIsConfirming(false);
+        setShowContextDropdown(false);
       }
+
+      // FIX: Do NOT cancel confirmation immediately.
+      // Only cancel if clicking completely outside and NOT the generate button
+     if (
+       isConfirming &&
+       !creditError &&
+       buttonRef.current &&
+       target instanceof Element &&
+       !buttonRef.current.contains(target)
+     ) {
+       setTimeout(() => {
+         setIsConfirming(false);
+       }, 150);
+     }
     };
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isConfirming]);
-  useEffect(() => {
-    // Safety: never allow history picker to stay open during actions
-    if (isGenerating || isConfirming) {
-      setShowHistoryPicker(false);
-      setActiveSlotIdx(null);
-    }
-  }, [isGenerating, isConfirming]);
+  }, [isConfirming, creditError]);
 
-  const handleProduceClick = async () => {
-    if (!footagePrompt.trim() || isGenerating) return;
+ useEffect(() => {
+   // Safety: never allow history picker to stay open during generation only
+   if (isGenerating) {
+     setShowHistoryPicker(false);
+     setActiveSlotIdx(null);
+   }
+ }, [isGenerating]);
+  
+const handleProduceClick = async () => {
+  if (!footagePrompt.trim() || isGenerating) return;
 
-    if (!isConfirming) {
-      setIsConfirming(true);
-      return;
-    }
+  // STEP 1: calculate action FIRST
+  let action = "IMAGE_FAST";
 
-    let action = "IMAGE_FAST";
+if (hasRefImages) {
+  action = footageImageTier === "pro"
+    ? "IMAGE_PRO"
+    : "IMAGE_FAST";
+}
 
-    if (hasRefImages) {
-      action = footageImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
-    } else if (footageMode === "image") {
-      action = footageImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
-    } else {
-      action = footageVideoTier === "veo31-quality" ? "VIDEO_HD" : "VIDEO_FAST";
-    }
+else if (footageMode === "image") {
+  action = footageImageTier === "pro"
+    ? "IMAGE_PRO"
+    : "IMAGE_FAST";
+}
 
+else if (footageMode === "video") {
+
+  const duration = videoLength === 8 ? "8S" : "6S";
+
+  if (footageVideoTier === "veo31-quality") {
+    action = duration === "8S"
+      ? "VIDEO_HQ_8S"
+      : "VIDEO_HQ_6S";
+  }
+
+  else {
+    action = duration === "8S"
+      ? "VIDEO_FAST_8S"
+      : "VIDEO_FAST_6S";
+  }
+
+}
+
+  // STEP 2: first click = confirmation only
+  if (!isConfirming) {
+      if (creditError) return;
+    setCreditError(false);
+    setIsConfirming(true);
+    return;
+  }
+
+  // STEP 3: second click = real credit check
+    let success = false;
     try {
-      const ok = await consumeCredits(action);
-
-      if (!ok) {
-        setIsConfirming(false);
-        return;
-      }
-    } catch {
-      setIsConfirming(false);
-      return;
+      success = await consumeCredits(action);
+    } catch (err) {
+      success = false;
     }
 
-    const activeMode = hasRefImages ? "i2i" : footageMode;
+  if (!success) {
+    // THIS is what makes the button red
+    setCreditError(true);
 
-    onProduce(
-      footagePrompt,
-      activeMode as any,
-      footageRefImages[0] || undefined,
-      footageVideoTier,
-      footageImageTier,
-      footageRefImages[1] || undefined
-    );
-
+    // IMPORTANT: keep confirming OFF so it does not stay green
     setIsConfirming(false);
-  };
 
+    // STOP here
+    return;
+  }
+
+  // STEP 4: success → reset error
+  setCreditError(false);
+
+  // STEP 5: produce
+  onProduce(
+    footagePrompt,
+    hasRefImages ? "i2i" : footageMode,
+    footageRefImages[0] || undefined,
+    footageVideoTier,
+    footageImageTier,
+    footageRefImages[1] || undefined
+  );
+
+  setIsConfirming(false);
+};
+  
   const toggleTier = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setIsConfirming(false); // Reset confirmation if they change the tier
     if (footageMode === "image") {
       setFootageImageTier(footageImageTier === "fast" ? "pro" : "fast");
     } else {
@@ -357,10 +490,22 @@ export const Footage: React.FC<FootageProps> = ({
   let shortTier = footageImageTier === "pro" ? "PRO" : "FAST";
 
   if (footageMode === "video") {
-    cost = footageVideoTier === "veo31-quality" ? 10 : 6;
-    shortTier = footageVideoTier === "veo31-quality" ? "HD" : "FAST";
+
+  if (footageVideoTier === "veo31-quality") {
+
+    cost = videoLength === 8 ? 16 : 12;
+    shortTier = "HD";
+
   }
 
+  else {
+
+    cost = videoLength === 8 ? 8 : 6;
+    shortTier = "FAST";
+
+  }
+
+}
   // Filter for items originating from this section or specifically marked as footage
   const recentResults = footageHistory.filter(
     (h) =>
@@ -433,6 +578,7 @@ export const Footage: React.FC<FootageProps> = ({
               onChange={(e) => {
                 setFootagePrompt(e.target.value);
                 setIsConfirming(false);
+                setCreditError(false);
               }}
               placeholder="Describe your footage vision... characters sync automatically."
               className="w-full h-32 bg-transparent border-none p-4 text-[15px] font-bold text-white placeholder-gray-700 resize-none focus:outline-none leading-relaxed italic scrollbar-none"
@@ -443,7 +589,43 @@ export const Footage: React.FC<FootageProps> = ({
                 <React.Fragment key={idx}>
                   <div className="relative">
                     {img ? (
-                      <div className="w-20 h-14 rounded-xl overflow-hidden border-2 border-indigo-500/50 relative group shadow-lg">
+                      <div
+                        className="w-20 h-14 rounded-xl border-2 border-dashed border-white/10 bg-black/40 flex items-center justify-center overflow-hidden relative"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+
+                          try {
+                            const raw =
+                              e.dataTransfer.getData("application/json");
+
+                            if (!raw) {
+                              console.log("DROP FAILED: no data");
+                              return;
+                            }
+
+                            const data = JSON.parse(raw);
+
+                            if (!data.src) {
+                              console.log("DROP FAILED: no src");
+                              return;
+                            }
+
+                            const next = [...footageRefImages];
+                            next[idx] = data.src;
+
+                            setFootageRefImages(next);
+
+                            console.log("DROP SUCCESS");
+                          } catch (err) {
+                            console.error("DROP ERROR:", err);
+                          }
+                        }}
+                      >
                         <img
                           src={
                             img.startsWith("data")
@@ -517,27 +699,36 @@ export const Footage: React.FC<FootageProps> = ({
               </div>
 
               <div className="relative flex-1 w-full flex justify-end">
+                {creditError && (
+                  <div className="absolute -top-8 right-0 text-red-500 text-xs font-bold">
+                    Insufficient credits
+                  </div>
+                )}
                 <button
                   ref={buttonRef}
                   onClick={handleProduceClick}
                   disabled={isGenerating || !footagePrompt.trim()}
-                  className={`w-full sm:w-52 h-12 font-black tracking-widest rounded-xl transition-all active:scale-95 disabled:bg-gray-800 disabled:text-gray-600 flex items-center justify-center border border-indigo-400/20 shadow-xl overflow-hidden ${isConfirming ? "bg-green-600 text-white border-green-500/50" : "bg-indigo-600 text-white hover:bg-indigo-500"}`}
+                  className={`w-full sm:w-52 h-12 font-black tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center border shadow-xl overflow-hidden disabled:opacity-40 disabled:bg-gray-800 disabled:text-gray-600 disabled:border-white/5 disabled:cursor-not-allowed ${
+                    creditError
+                      ? "bg-red-600 text-white border-red-500 animate-pulse"
+                      : isConfirming
+                        ? "bg-green-600 text-white border-green-500"
+                        : "bg-indigo-600 text-white hover:bg-indigo-500 border-indigo-400"
+                  }`}
                 >
                   {isGenerating ? (
                     <LoaderIcon className="w-5 h-5 animate-spin" />
+                  ) : creditError ? (
+                    <span className="text-[11px] font-black uppercase">
+                      Insufficient credit
+                    </span>
                   ) : (
                     <>
                       <div className="flex-1 flex items-center justify-center gap-2 pl-4">
                         {isConfirming ? (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200">
                             <span className="text-[12px] font-black uppercase tracking-[0.1em]">
-                              Confirm (
-                            </span>
-                            <span className="text-sky-400 text-[13px] font-black">
-                              {cost}C
-                            </span>
-                            <span className="text-[12px] font-black uppercase tracking-[0.1em]">
-                              )
+                              Confirm
                             </span>
                           </div>
                         ) : (
@@ -550,25 +741,20 @@ export const Footage: React.FC<FootageProps> = ({
                         )}
                       </div>
 
-                      {!isConfirming && (
-                        <>
-                          <div className="h-6 w-px bg-white/20 mx-1"></div>
-                          <div
-                            onClick={toggleTier}
-                            className="flex flex-col items-center leading-none px-3 py-1 hover:bg-black/20 transition-colors cursor-pointer group/tier shrink-0"
-                          >
-                            <div className="flex items-center gap-0.5">
-                              <span className="text-[10px] font-black tracking-tighter">
-                                {cost}
-                              </span>
-                              <ArrowsRightLeftIcon className="w-2 h-2 opacity-40 group-hover/tier:opacity-100" />
-                            </div>
-                            <span className="text-[6px] font-black opacity-30 tracking-tighter uppercase">
-                              {shortTier}
-                            </span>
-                          </div>
-                        </>
-                      )}
+                      <div
+                        onClick={(e) => toggleTier(e)}
+                        className={`h-full flex items-center transition-all cursor-pointer border-l border-white/10 px-4 group/tier ${isConfirming ? "bg-black/40" : "bg-black/20 hover:bg-black/40"}`}
+                      >
+                        <div className="flex flex-col items-center justify-center leading-none">
+                          <span className="text-[10px] font-black tracking-widest text-white group-hover/tier:text-sky-400 transition-colors">
+                            {shortTier}
+                          </span>
+                          <span className="text-[11px] font-black text-sky-400 mt-0.5">
+                            {cost}C
+                          </span>
+                        </div>
+                        <ArrowsRightLeftIcon className="w-3 h-3 opacity-40 group-hover/tier:opacity-100 ml-2 transition-all group-hover/tier:rotate-180" />
+                      </div>
                     </>
                   )}
                 </button>
@@ -601,8 +787,9 @@ export const Footage: React.FC<FootageProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recentResults.map((item) => (
+              {recentResults.map((item, idx) => (
                 <FootageResultCard
+                  key={item.sceneId || idx}
                   item={item}
                   onAddToTimeline={(...args) => {
                     setShowHistoryPicker(false);
