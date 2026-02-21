@@ -125,23 +125,7 @@ const App: React.FC = () => {
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [activeView, setActiveView] = useState("welcome");
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("desktop");
-  // DO add comment: Separate route for Director's Cut to bypass the main app layout and ensure a clean workspace for video editing.
-  useEffect(() => {
-    if (activeView === "directors-cut") {
-      const anonymousId =
-        localStorage.getItem("anonymous_id") || crypto.randomUUID();
-
-      localStorage.setItem("anonymous_id", anonymousId);
-
-      supabase.from("directors_cut_sessions").insert({
-        user_id: session?.user?.id ?? null,
-        anonymous_id: anonymousId,
-        device: layoutMode,
-        screen_width: window.innerWidth,
-        screen_height: window.innerHeight
-      });
-    }
-  }, [activeView, layoutMode, session]);
+  
 
   // --- BROWSER NAVIGATION LOGIC ---
   const isInternalNavRef = useRef(false);

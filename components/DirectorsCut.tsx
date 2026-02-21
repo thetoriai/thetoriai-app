@@ -26,6 +26,8 @@ import {
 } from "./Icons";
 
 
+import { supabase } from "../services/supabaseClient";
+
 // --- Types ---
 export interface Transform {
   x: number;
@@ -167,6 +169,66 @@ const [fadeMode, setFadeMode] = useState(false);
       return () => clearTimeout(timer);
     }
   }, [isConfirmingMagic]);
+// Session tracking effect
+  useEffect(() => {
+  const trackSession = async () => {
+    try {
+      const anonymousId =
+        localStorage.getItem("anonymous_id") ||
+        crypto.randomUUID();
+
+      localStorage.setItem("anonymous_id", anonymousId);
+
+      const { error } = await supabase
+        .from("directors_cut_sessions")
+        .insert({
+          user_id: null,
+          anonymous_id: anonymousId,
+          device:
+            window.innerWidth <= 500 ? "phone" : "desktop",
+          screen_width: window.innerWidth,
+          screen_height: window.innerHeight
+        });
+
+      if (error) {
+        console.error("Supabase insert error:", error);
+      } else {
+        console.log("DirectorsCut session tracked");
+      }
+    } catch (err) {
+      console.error("Tracking failed:", err);
+    }
+  };
+
+  trackSession();
+}, []);useEffect(() => {
+  const trackSession = async () => {
+    try {
+      const anonymousId =
+        localStorage.getItem("anonymous_id") || crypto.randomUUID();
+
+      localStorage.setItem("anonymous_id", anonymousId);
+
+      const { error } = await supabase.from("directors_cut_sessions").insert({
+        user_id: null,
+        anonymous_id: anonymousId,
+        device: window.innerWidth <= 500 ? "phone" : "desktop",
+        screen_width: window.innerWidth,
+        screen_height: window.innerHeight
+      });
+
+      if (error) {
+        console.error("Supabase insert error:", error);
+      } else {
+        console.log("DirectorsCut session tracked");
+      }
+    } catch (err) {
+      console.error("Tracking failed:", err);
+    }
+  };
+
+  trackSession();
+}, []);
 
   useEffect(() => {
     setIsConfirmingMagic(false);
