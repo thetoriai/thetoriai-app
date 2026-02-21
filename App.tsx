@@ -17,6 +17,7 @@ import { Timeline } from "./components/Timeline";
 import { HistoryPanel } from "./components/History";
 import { Footage } from "./components/Footage";
 import DirectorsCut from "./components/DirectorsCut";
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import {
   XIcon,
   SparklesIcon,
@@ -118,6 +119,8 @@ const ViewHeader: React.FC<{
 );
 
 const App: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [session, setSession] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [activeView, setActiveView] = useState("welcome");
@@ -148,17 +151,31 @@ const App: React.FC = () => {
 
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
-
+// --------------------------------
   useEffect(() => {
     // If the view changed because of an internal click (not browser back/forward)
     // we push the new state to history.
     if (!isInternalNavRef.current) {
       window.history.pushState({ view: activeView }, "");
+      const path = activeView === "welcome" ? "/" : `/${activeView}`;
+
+      navigate(path, { replace: false });
+
     }
     isInternalNavRef.current = false;
   }, [activeView]);
   // --------------------------------
+  // DO add comment: Separate route for Director's Cut to bypass the main app layout and ensure a clean workspace for video editing.
+useEffect(() => {
+  const path = location.pathname.replace("/", "");
 
+  if (path && path !== activeView) {
+    isInternalNavRef.current = true;
+
+    setActiveView(path);
+  }
+}, [location.pathname]);
+  // Responsive layout effect
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
@@ -2656,6 +2673,7 @@ const App: React.FC = () => {
     );
 
   return (
+    
     <div
       className={`flex h-[100dvh] bg-gray-950 text-white font-sans overflow-hidden layout-${layoutMode}`}
     >
@@ -2683,6 +2701,8 @@ const App: React.FC = () => {
       )}
 
       <main className="flex-1 h-full overflow-hidden relative flex flex-col bg-gray-950">
+      
+        
         {activeView === "welcome" && (
           <div className="absolute inset-0 z-0">
             <WelcomePage

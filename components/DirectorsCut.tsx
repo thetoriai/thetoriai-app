@@ -64,6 +64,8 @@ export interface Asset {
 
   opacity?: number;
   targetOpacity?: number;
+
+  fullFrame?: boolean;
 }
 
 
@@ -114,7 +116,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     "move" | "top" | "bottom" | "left" | "right" | null
   >(null);
   const [isPinching, setIsPinching] = useState(false);
-  const [isFullFrame, setIsFullFrame] = useState(false);
+ 
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
@@ -183,6 +185,15 @@ const [fadeMode, setFadeMode] = useState(false);
   }, []);
 
   // --- Boundary Constraint Logic ---
+
+  const toggleFullFrame = (id: string) => {
+    setAssets((prev) =>
+      prev.map((asset) =>
+        asset.id === id ? { ...asset, fullFrame: !asset.fullFrame } : asset
+      )
+    );
+  };
+
   const getConstrainedTransform = (
     asset: Asset,
     next: Partial<Transform>
@@ -223,31 +234,31 @@ const [fadeMode, setFadeMode] = useState(false);
     return t;
   };
 
-  const selectAndShowAsset = useCallback(
-    (id: string, type: "video" | "image", currentAssets: Asset[]) => {
-      setVisibleAssetIds((prev) => {
-        let next = [...prev];
-        if (!next.includes(id)) {
-          if (type === "video") {
-            const visibleVideos = next.filter(
-              (vId) => currentAssets.find((a) => a.id === vId)?.type === "video"
-            );
-            next = next.filter((vId) => !visibleVideos.includes(vId));
-          } else {
-            const visibleImages = next.filter(
-              (vId) => currentAssets.find((a) => a.id === vId)?.type === "image"
-            );
-            if (visibleImages.length >= 2)
-              next = next.filter((vId) => vId !== visibleImages[0]);
-          }
-          next.push(id);
-        }
-        return next;
-      });
-      setSelectedAssetId(id);
-    },
-    []
-  );
+ const selectAndShowAsset = useCallback(
+   (id: string, type: "video" | "image", currentAssets: Asset[]) => {
+     setVisibleAssetIds((prev) => {
+       let next = [...prev];
+
+       if (!next.includes(id)) {
+         if (type === "video") {
+           // remove ONLY other videos
+           next = next.filter(
+             (vId) => currentAssets.find((a) => a.id === vId)?.type !== "video"
+           );
+         }
+
+         // images do nothing, just add
+
+         next.push(id);
+       }
+
+       return next;
+     });
+
+     setSelectedAssetId(id);
+   },
+   []
+ );
 
   const resetApp = () => {
     if (isFinalizing || isReviewing) return;
@@ -256,7 +267,7 @@ const [fadeMode, setFadeMode] = useState(false);
     setVisibleAssetIds([]);
     setSelectedAssetId(null);
     setWebcamActive(false);
-    setIsFullFrame(false);
+   
     setIsAssetPlaying(false);
     setIsLooping(false);
     if (externalClose) externalClose();
@@ -284,7 +295,7 @@ const [fadeMode, setFadeMode] = useState(false);
     setVisibleAssetIds((prev) => prev.filter((vId) => vId !== id));
     if (selectedAssetId === id) {
       setSelectedAssetId(null);
-      setIsFullFrame(false);
+  
     }
   };
 
@@ -320,20 +331,27 @@ const [fadeMode, setFadeMode] = useState(false);
       return;
     }
 
-    // Ghost mode OFF → original instant behavior
+    // Normal mode
     setVisibleAssetIds((prev) => {
-      const isVisible = prev.includes(id);
+      let next = [...prev];
 
-      if (isVisible) {
-        setSelectedAssetId(null);
-        return prev.filter((vId) => vId !== id);
-      } else {
-        setSelectedAssetId(id);
-        return [...prev, id];
+      if (!next.includes(id)) {
+        if (asset.type === "video") {
+          // remove ONLY other videos
+          next = next.filter(
+            (vId) => assets.find((a) => a.id === vId)?.type !== "video"
+          );
+        }
+
+        // images stay, just add
+        next.push(id);
       }
+
+      setSelectedAssetId(id);
+
+      return next;
     });
 
-    // instant opacity update
     setAssets((prev) =>
       prev.map((a) =>
         a.id === id
@@ -346,7 +364,7 @@ const [fadeMode, setFadeMode] = useState(false);
       )
     );
   };
-
+  
   const toggleAssetPlayback = useCallback(
     async (forceReset = false) => {
       if (isFinalizing || isReviewing) return;
@@ -737,7 +755,7 @@ const [fadeMode, setFadeMode] = useState(false);
         sy = (v.videoHeight - sh) / 2;
       }
       ctx.save();
-      
+
       if (webcamFlipped) {
         ctx.translate(w, 0);
         ctx.scale(-1, 1);
@@ -768,7 +786,7 @@ const [fadeMode, setFadeMode] = useState(false);
           drawY,
           finalW = drawW,
           finalH = drawH;
-        if (isFullFrame && id === selectedAssetId) {
+        if (asset.fullFrame) {
           const aR = swActual / shActual,
             fR = w / h;
           if (aR > fR) {
@@ -822,7 +840,7 @@ const [fadeMode, setFadeMode] = useState(false);
             color: "#eaff00",
             width: 8
           });
-                }
+        }
 
         allDrawings.forEach((item) => {
           if (item.points.length < 1) return;
@@ -900,7 +918,7 @@ const [fadeMode, setFadeMode] = useState(false);
         if (
           id === selectedAssetId &&
           !isLocked &&
-          !isFullFrame &&
+          !selectedAsset?.fullFrame &&
           !isDrawingMode &&
           !isAiProcessing &&
           !isRecordingRef.current
@@ -951,7 +969,7 @@ const [fadeMode, setFadeMode] = useState(false);
     webcamActive,
     webcamFlipped,
     isLocked,
-    isFullFrame,
+    selectedAsset?.fullFrame,
     isDrawingMode,
     drawingShape,
     isAiProcessing,
@@ -993,7 +1011,7 @@ const [fadeMode, setFadeMode] = useState(false);
         dY,
         fW = drawW,
         fH = drawH;
-      if (isFullFrame) {
+      if (selectedAsset?.fullFrame) {
         const aR = swActual / shActual,
           fR = 1080 / 1920;
         if (aR > fR) {
@@ -1030,7 +1048,7 @@ const [fadeMode, setFadeMode] = useState(false);
       }
       return;
     }
-    if (isLocked || isFullFrame || !selectedAssetId) return;
+    if (isLocked || selectedAsset?.fullFrame || !selectedAssetId) return;
     if (e.touches.length === 1) {
       const trans = selectedAsset!.transform,
         swActual =
@@ -1106,7 +1124,7 @@ const [fadeMode, setFadeMode] = useState(false);
         dY,
         fW = drawW,
         fH = drawH;
-      if (isFullFrame) {
+      if (selectedAsset?.fullFrame) {
         const aR = swActual / shActual,
           fR = 1080 / 1920;
         if (aR > fR) {
@@ -1139,7 +1157,7 @@ const [fadeMode, setFadeMode] = useState(false);
       }
       return;
     }
-    if (isLocked || isFullFrame || !selectedAssetId) return;
+    if (isLocked || selectedAsset?.fullFrame || !selectedAssetId) return;
     if (grabbedPart && e.touches.length === 1) {
       const dx = (clientX - startTouchRef.current.x) * (1080 / rect.width),
         dy = (clientY - startTouchRef.current.y) * (1920 / rect.height);
@@ -1274,7 +1292,7 @@ const [fadeMode, setFadeMode] = useState(false);
           dY,
           fW = drawW,
           fH = drawH;
-        if (isFullFrame) {
+        if (selectedAsset?.fullFrame) {
           // Full frame might have different layout, but usually it fills the 9:16 target
           const aR = swAct / shAct,
             fR = 1080 / 1920;
@@ -1655,12 +1673,16 @@ const [fadeMode, setFadeMode] = useState(false);
               <button
                 onClick={handlePlaybackInteraction}
                 disabled={isFinalizing || isReviewing}
-                className={`w-14 h-14 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${isAssetPlaying ? "text-emerald-400" : "text-white/40"} disabled:opacity-20`}
+                className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                  isAssetPlaying
+                    ? "bg-emerald-500 border-emerald-300 text-white shadow-[0_0_25px_rgba(16,185,129,0.9)]"
+                    : "bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+                }`}
               >
                 {isAssetPlaying ? (
-                  <PauseIcon className="text-2xl" />
+                  <PauseIcon className="text-2xl drop-shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
                 ) : (
-                  <PlayIcon className="text-2xl" />
+                  <PlayIcon className="text-2xl drop-shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
                 )}
                 <span className="text-[8px] font-black mt-1 uppercase">
                   Play
@@ -1669,9 +1691,13 @@ const [fadeMode, setFadeMode] = useState(false);
               <button
                 onClick={() => setIsLooping(!isLooping)}
                 disabled={isFinalizing || isReviewing}
-                className={`w-14 h-14 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${isLooping ? "bg-indigo-600 shadow-[0_0_20px_#4f46e580]" : "bg-white/10 text-white/40"} disabled:opacity-20`}
+                className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                  isLooping
+                    ? "bg-indigo-500 border-indigo-300 text-white shadow-[0_0_25px_rgba(99,102,241,0.9)]"
+                    : "bg-indigo-500/20 border-indigo-400 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
+                }`}
               >
-                <RepeatIcon />
+                <RepeatIcon className="drop-shadow-[0_0_6px_rgba(99,102,241,0.9)]" />
                 <span className="text-[7px] font-black mt-1 uppercase">
                   Loop
                 </span>
@@ -1686,22 +1712,26 @@ const [fadeMode, setFadeMode] = useState(false);
               !isFinalizing && !isReviewing && setWebcamActive(!webcamActive)
             }
             disabled={isFinalizing || isReviewing}
-            className={`w-12 h-12 bg-white/10 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${webcamActive ? "text-white shadow-[0_0_15px_#ffffff40]" : "text-white/30"} disabled:opacity-20`}
+            className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+              webcamActive
+                ? "bg-blue-500 border-blue-300 text-white shadow-[0_0_25px_rgba(59,130,246,0.9)]"
+                : "bg-blue-500/20 border-blue-400 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.5)]"
+            }`}
           >
-            <CameraIcon />
+            <CameraIcon className="drop-shadow-[0_0_6px_rgba(59,130,246,0.9)]" />
             <span className="text-[7px] font-black mt-1 uppercase">Sight</span>
           </button>
           {/* PASTE GHOST BUTTON HERE */}
           <button
             onClick={() => setFadeMode((prev) => !prev)}
             disabled={isFinalizing || isReviewing}
-            className={`w-12 h-12 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${
+            className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
               fadeMode
-                ? "bg-purple-600 shadow-[0_0_20px_rgba(168,85,247,0.6)]"
-                : "bg-white/10 text-white/40"
+                ? "bg-purple-500 border-purple-300 text-white shadow-[0_0_25px_rgba(168,85,247,0.9)]"
+                : "bg-purple-500/20 border-purple-400 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.5)]"
             }`}
           >
-            <GhostIcon />
+            <GhostIcon className="drop-shadow-[0_0_6px_rgba(168,85,247,0.9)]" />
             <span className="text-[7px] font-black mt-1 uppercase">Ghost</span>
           </button>
           {selectedAsset?.type === "image" && (
@@ -1735,14 +1765,23 @@ const [fadeMode, setFadeMode] = useState(false);
             <>
               <button
                 onClick={() =>
-                  !isFinalizing && !isReviewing && setIsFullFrame(!isFullFrame)
+                  selectedAssetId &&
+                  !isFinalizing &&
+                  !isReviewing &&
+                  toggleFullFrame(selectedAssetId)
                 }
                 disabled={isFinalizing || isReviewing}
-                className={`w-12 h-12 backdrop-blur-3xl border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all ${
-                  isFullFrame ? "bg-emerald-600" : "bg-white/10"
+                className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                  selectedAsset?.fullFrame
+                    ? "bg-cyan-500 border-cyan-300 text-white shadow-[0_0_25px_rgba(6,182,212,0.9)]"
+                    : "bg-cyan-500/20 border-cyan-400 text-cyan-300"
                 }`}
               >
-                {isFullFrame ? <CompressIcon /> : <ExpandIcon />}
+                {selectedAsset?.fullFrame ? (
+                  <CompressIcon className="drop-shadow-[0_0_6px_rgba(6,182,212,0.9)]" />
+                ) : (
+                  <ExpandIcon className="drop-shadow-[0_0_6px_rgba(6,182,212,0.9)]" />
+                )}
                 <span className="text-[7px] font-black mt-1 uppercase">
                   View
                 </span>
@@ -1836,8 +1875,8 @@ const [fadeMode, setFadeMode] = useState(false);
         </div>
       </section>
 
-      <footer className="relative flex-none bg-black flex flex-col items-center justify-between pb-safe pt-2 px-4 z-40 min-h-[10px] border-t border-white/5">
-        <div className="w-full flex items-center space-x-2 mt-2 overflow-x-auto overflow-y-hidden no-scrollbar h-[64px]">
+      <footer className="relative flex-none bg-black flex flex-col items-center justify-between pb-safe pt-2 px-4 z-40 border-t border-white/5 overflow-visible">
+        <div className="w-full flex items-center space-x-3 mt-2 overflow-x-auto overflow-y-visible no-scrollbar py-2 px-1">
           {assets.map((asset) => {
             const isVisible = visibleAssetIds.includes(asset.id),
               isSelected = selectedAssetId === asset.id;
@@ -1846,7 +1885,7 @@ const [fadeMode, setFadeMode] = useState(false);
                 key={asset.id}
                 onClick={() => toggleAssetVisibility(asset.id)}
                 disabled={isFinalizing || isReviewing}
-                className={`shrink-0 w-12 h-12 rounded-xl border-2 transition-all relative flex items-center justify-center bg-zinc-900 ${isVisible ? (isSelected ? "border-emerald-500 opacity-100 shadow-[0_0_15px_#10b98160]" : "border-white opacity-80") : "border-zinc-800 opacity-30"} ${isSelected ? "scale-110" : "scale-100"} disabled:opacity-20`}
+                className={`shrink-0 w-12 h-12 rounded-xl border-2 transition-all relative flex items-center justify-center bg-zinc-900 overflow-visible ${isVisible ? (isSelected ? "border-emerald-500 opacity-100 shadow-[0_0_15px_#10b98160]" : "border-white opacity-80") : "border-zinc-800 opacity-30"} ${isSelected ? "scale-110 -translate-y-1 z-20" : "scale-100"} disabled:opacity-20`}
               >
                 <img
                   src={asset.type === "video" ? asset.thumbnail : asset.url}
@@ -1918,15 +1957,15 @@ const [fadeMode, setFadeMode] = useState(false);
             <ClapperboardIcon className="text-6xl text-white" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-5xl font-black italic tracking-tighter text-white uppercase leading-none">
+            <h1 className="text-5xl font-black italic tracking-tighter text-white  leading-none">
               Direct CUT
             </h1>
-            <p className="text-white/30 text-[10px] font-bold tracking-[0.6em] uppercase">
+            <p className="text-white/30 text-[10px] font-bold tracking-[0.6em] ">
               Reaction Assembly Studio
             </p>
           </div>
-          <div className="w-full max-w-xs pt-4">
-            <label className="block w-full bg-white text-black py-5 rounded-3xl font-black cursor-pointer active:scale-95 text-center text-sm tracking-widest uppercase shadow-2xl">
+          <div className="w-full max-w-xs pt-4 space-y-4">
+            <label className="block w-full bg-white text-black py-5 rounded-3xl font-black cursor-pointer active:scale-95 text-center text-sm tracking-widest  shadow-2xl">
               Import Media
               <input
                 type="file"
@@ -1935,6 +1974,14 @@ const [fadeMode, setFadeMode] = useState(false);
                 accept="image/*,video/*"
               />
             </label>
+
+            {/* ENTER STUDIO BUTTON */}
+            <button
+              onClick={() => (window.location.href = "/")}
+              className="w-full bg-white/10 border border-white/20 text-white py-4 rounded-3xl font-black text-xs tracking-[0.3em] uppercase hover:bg-white/20 active:scale-95 transition-all"
+            >
+              ThetoriAi
+            </button>
           </div>
         </div>
       )}
