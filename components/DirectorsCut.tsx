@@ -1671,7 +1671,7 @@ const [fadeMode, setFadeMode] = useState(false);
           <ArrowsRightLeftIcon className="text-xs" />
         </button>
 
-        <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
+        <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
           <button
             onClick={handlePenInteraction}
             disabled={isFinalizing || isReviewing}
@@ -1695,7 +1695,7 @@ const [fadeMode, setFadeMode] = useState(false);
               <button
                 onClick={handlePlaybackInteraction}
                 disabled={isFinalizing || isReviewing}
-                className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
                   isAssetPlaying
                     ? "bg-emerald-500 border-emerald-300 text-white shadow-[0_0_25px_rgba(16,185,129,0.9)]"
                     : "bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
@@ -1713,7 +1713,7 @@ const [fadeMode, setFadeMode] = useState(false);
               <button
                 onClick={() => setIsLooping(!isLooping)}
                 disabled={isFinalizing || isReviewing}
-                className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
                   isLooping
                     ? "bg-indigo-500 border-indigo-300 text-white shadow-[0_0_25px_rgba(99,102,241,0.9)]"
                     : "bg-indigo-500/20 border-indigo-400 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
