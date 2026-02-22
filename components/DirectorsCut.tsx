@@ -1409,7 +1409,7 @@ const [fadeMode, setFadeMode] = useState(false);
         clientX - initialTouchRef.current.x,
         clientY - initialTouchRef.current.y
       );
-      if (dist > 5) {
+      if (dist > 12) {
     isDraggingRef.current = true;
       } else {
         return;
