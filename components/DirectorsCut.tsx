@@ -162,6 +162,7 @@ const [fadeMode, setFadeMode] = useState(false);
   const tapTimeoutRef = useRef<number | null>(null);
   const lastPenTapRef = useRef<number>(0);
   const penTapTimeoutRef = useRef<number | null>(null);
+  const lastTouchTimeRef = useRef<number>(0);
 
   // --- Refs ---
   const isRecordingRef = useRef(false);
@@ -1203,6 +1204,16 @@ const [fadeMode, setFadeMode] = useState(false);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (isAiProcessing || isFinalizing || isReviewing) return;
+
+    if (e.type === "touchstart") {
+      lastTouchTimeRef.current = Date.now();
+    }
+
+    // Prevent default to avoid double-firing with mouse events on touch devices
+    if (e.cancelable !== false && e.preventDefault) {
+      e.preventDefault();
+    }
+
     isDraggingRef.current = false;
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY;
@@ -1401,6 +1412,10 @@ const [fadeMode, setFadeMode] = useState(false);
   const handleTouchMove = (e: React.TouchEvent) => {
     if (isAiProcessing || isFinalizing || isReviewing) return;
 
+    if (e.type === "touchmove") {
+      lastTouchTimeRef.current = Date.now();
+    }
+
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY;
 
@@ -1409,7 +1424,7 @@ const [fadeMode, setFadeMode] = useState(false);
         clientX - initialTouchRef.current.x,
         clientY - initialTouchRef.current.y
       );
-      if (dist > 12) {
+      if (dist > 5) {
     isDraggingRef.current = true;
       } else {
         return;
@@ -1672,8 +1687,19 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e?: any) => {
     if (isAiProcessing || isFinalizing || isReviewing) return;
+
+    if (e && e.type === "touchend") {
+      lastTouchTimeRef.current = Date.now();
+    }
+    if (
+      e &&
+      e.type === "mouseup" &&
+      Date.now() - lastTouchTimeRef.current < 500
+    ) {
+      return;
+    }
 
     const wasDragging = isDraggingRef.current;
 
@@ -1779,6 +1805,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (Date.now() - lastTouchTimeRef.current < 500) return;
     handleTouchStart({
       touches: [{ clientX: e.clientX, clientY: e.clientY }],
       preventDefault: () => e.preventDefault(),
@@ -1788,6 +1815,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (e.buttons !== 1) return;
+    if (Date.now() - lastTouchTimeRef.current < 500) return;
     handleTouchMove({
       touches: [{ clientX: e.clientX, clientY: e.clientY }],
       preventDefault: () => e.preventDefault(),
