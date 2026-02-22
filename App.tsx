@@ -124,7 +124,7 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [activeView, setActiveView] = useState("welcome");
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("desktop");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode | null>(null);
   
 
   // --- BROWSER NAVIGATION LOGIC ---
@@ -168,19 +168,29 @@ const App: React.FC = () => {
   // --------------------------------
   // DO add comment: Separate route for Director's Cut to bypass the main app layout and ensure a clean workspace for video editing.
 useEffect(() => {
+  if (!layoutMode) return;
+
   const path = location.pathname.replace("/", "");
 
-  // If no path, go to welcome
-  if (!path) {
-    isInternalNavRef.current = true;
-    setActiveView("welcome");
+  if (!path) return;
+
+  if (path === "directors-cut") {
+    if (layoutMode === "phone") {
+      isInternalNavRef.current = true;
+      setActiveView("directors-cut");
+    } else {
+      isInternalNavRef.current = true;
+      setActiveView("welcome");
+      navigate("/", { replace: true });
+    }
     return;
   }
 
-  // Always respect URL directly
-  isInternalNavRef.current = true;
-  setActiveView(path);
-}, [location.pathname]);
+  if (path !== activeView) {
+    isInternalNavRef.current = true;
+    setActiveView(path);
+  }
+}, [location.pathname, layoutMode, navigate]);
   // --------------------------------
   useEffect(() => {
     if (activeView === "directors-cut") {
