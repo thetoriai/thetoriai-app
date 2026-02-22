@@ -18,13 +18,12 @@ import {
   CircleIcon,
   SquareIcon,
   ArrowPointerIcon,
-   SparklesIcon,
+  SparklesIcon,
   GhostIcon,
   LoaderIcon,
   RepeatIcon,
   VolumeXIcon
 } from "./Icons";
-
 
 import { supabase } from "../services/supabaseClient";
 
@@ -69,9 +68,6 @@ export interface Asset {
 
   fullFrame?: boolean;
 }
-
-
-
 
 const DEFAULT_TRANSFORM: Transform = {
   x: 50,
@@ -118,13 +114,13 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     "move" | "top" | "bottom" | "left" | "right" | null
   >(null);
   const [isPinching, setIsPinching] = useState(false);
- 
+
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
 
-const [fadeMode, setFadeMode] = useState(false);
+  const [fadeMode, setFadeMode] = useState(false);
 
   // New: Confirmation state for Magic button
   const [isConfirmingMagic, setIsConfirmingMagic] = useState(false);
@@ -256,31 +252,31 @@ const [fadeMode, setFadeMode] = useState(false);
     return t;
   };
 
- const selectAndShowAsset = useCallback(
-   (id: string, type: "video" | "image", currentAssets: Asset[]) => {
-     setVisibleAssetIds((prev) => {
-       let next = [...prev];
+  const selectAndShowAsset = useCallback(
+    (id: string, type: "video" | "image", currentAssets: Asset[]) => {
+      setVisibleAssetIds((prev) => {
+        let next = [...prev];
 
-       if (!next.includes(id)) {
-         if (type === "video") {
-           // remove ONLY other videos
-           next = next.filter(
-             (vId) => currentAssets.find((a) => a.id === vId)?.type !== "video"
-           );
-         }
+        if (!next.includes(id)) {
+          if (type === "video") {
+            // remove ONLY other videos
+            next = next.filter(
+              (vId) => currentAssets.find((a) => a.id === vId)?.type !== "video"
+            );
+          }
 
-         // images do nothing, just add
+          // images do nothing, just add
 
-         next.push(id);
-       }
+          next.push(id);
+        }
 
-       return next;
-     });
+        return next;
+      });
 
-     setSelectedAssetId(id);
-   },
-   []
- );
+      setSelectedAssetId(id);
+    },
+    []
+  );
 
   const resetApp = () => {
     if (isFinalizing || isReviewing) return;
@@ -289,7 +285,7 @@ const [fadeMode, setFadeMode] = useState(false);
     setVisibleAssetIds([]);
     setSelectedAssetId(null);
     setWebcamActive(false);
-   
+
     setIsAssetPlaying(false);
     setIsLooping(false);
     if (externalClose) externalClose();
@@ -317,7 +313,6 @@ const [fadeMode, setFadeMode] = useState(false);
     setVisibleAssetIds((prev) => prev.filter((vId) => vId !== id));
     if (selectedAssetId === id) {
       setSelectedAssetId(null);
-  
     }
   };
 
@@ -354,25 +349,31 @@ const [fadeMode, setFadeMode] = useState(false);
     }
 
     // Normal mode
-    setVisibleAssetIds((prev) => {
-      let next = [...prev];
+    const isVisible = visibleAssetIds.includes(id);
+    let next = [...visibleAssetIds];
 
-      if (!next.includes(id)) {
-        if (asset.type === "video") {
-          // remove ONLY other videos
-          next = next.filter(
-            (vId) => assets.find((a) => a.id === vId)?.type !== "video"
-          );
-        }
-
-        // images stay, just add
+    if (isVisible) {
+      if (selectedAssetId === id) {
+        next = next.filter((vId) => vId !== id);
+        setSelectedAssetId(null);
+      } else {
+        next = next.filter((vId) => vId !== id);
         next.push(id);
+        setSelectedAssetId(id);
+      }
+    } else {
+      if (asset.type === "video") {
+        // remove ONLY other videos
+        next = next.filter(
+          (vId) => assets.find((a) => a.id === vId)?.type !== "video"
+        );
       }
 
+      // images stay, just add
+      next.push(id);
       setSelectedAssetId(id);
-
-      return next;
-    });
+    }
+    setVisibleAssetIds(next);
 
     setAssets((prev) =>
       prev.map((a) =>
@@ -386,24 +387,24 @@ const [fadeMode, setFadeMode] = useState(false);
       )
     );
   };
-  
+
   const toggleAssetPlayback = useCallback(
     async (forceReset = false) => {
       if (isFinalizing || isReviewing) return;
-    const v = videoRef.current;
-    if (!v || !v.src) return;
-    if (!audioContextRef.current)
-      audioContextRef.current = new (
-        window.AudioContext || (window as any).webkitAudioContext
-      )();
-    const audioCtx = audioContextRef.current;
-    if (audioCtx.state === "suspended") await audioCtx.resume();
-    if (!videoSourceNodeRef.current) {
-      videoSourceNodeRef.current = audioCtx.createMediaElementSource(v);
+      const v = videoRef.current;
+      if (!v || !v.src) return;
+      if (!audioContextRef.current)
+        audioContextRef.current = new (
+          window.AudioContext || (window as any).webkitAudioContext
+        )();
+      const audioCtx = audioContextRef.current;
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+      if (!videoSourceNodeRef.current) {
+        videoSourceNodeRef.current = audioCtx.createMediaElementSource(v);
         gainNodeRef.current = audioCtx.createGain();
         videoSourceNodeRef.current.connect(gainNodeRef.current);
         gainNodeRef.current.connect(audioCtx.destination);
-    }
+      }
 
       if (gainNodeRef.current) {
         gainNodeRef.current.gain.setTargetAtTime(
@@ -413,22 +414,22 @@ const [fadeMode, setFadeMode] = useState(false);
         );
       }
 
-    if (forceReset) {
-      v.currentTime = 0;
-      v.pause();
-      setIsAssetPlaying(false);
-      return;
-    }
-    if (v.paused || v.ended) {
+      if (forceReset) {
+        v.currentTime = 0;
+        v.pause();
+        setIsAssetPlaying(false);
+        return;
+      }
+      if (v.paused || v.ended) {
         v.muted = isLooping;
         v.volume = isLooping ? 0 : 1;
         v.play()
           .then(() => setIsAssetPlaying(true))
           .catch((e) => console.warn(e));
-    } else {
-      v.pause();
-      setIsAssetPlaying(false);
-    }
+      } else {
+        v.pause();
+        setIsAssetPlaying(false);
+      }
     },
     [isLooping, isFinalizing, isReviewing]
   );
@@ -576,20 +577,20 @@ const [fadeMode, setFadeMode] = useState(false);
     )
       return;
     // CREDIT DEDUCTION
-   try {
-     const ok = await consumeCredits("IMAGE_NORMAL");
+    try {
+      const ok = await consumeCredits("IMAGE_NORMAL");
 
-     if (!ok) {
-       setMagicError("Not enough credits");
-       setTimeout(() => setMagicError(null), 2000);
-       return;
-     }
-   } catch {
-     setMagicError("Credit check failed");
-     setTimeout(() => setMagicError(null), 2000);
-     return;
-   }
-    
+      if (!ok) {
+        setMagicError("Not enough credits");
+        setTimeout(() => setMagicError(null), 2000);
+        return;
+      }
+    } catch {
+      setMagicError("Credit check failed");
+      setTimeout(() => setMagicError(null), 2000);
+      return;
+    }
+
     setIsAiProcessing(true);
 
     try {
@@ -665,7 +666,7 @@ const [fadeMode, setFadeMode] = useState(false);
       console.error("Magic failed", err);
       setIsAiProcessing(false);
     }
-  };;
+  };
 
   useEffect(() => {
     if (!fadeMode) return;
@@ -1060,10 +1061,10 @@ const [fadeMode, setFadeMode] = useState(false);
         setActivePath([
           {
             x:
-          trans.cropLeft / 100 +
+              trans.cropLeft / 100 +
               rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
             y:
-          trans.cropTop / 100 +
+              trans.cropTop / 100 +
               rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
           }
         ]);
@@ -1166,10 +1167,10 @@ const [fadeMode, setFadeMode] = useState(false);
         rY = (Math.max(dY, Math.min(dY + fH, cY)) - dY) / fH;
       const newPt = {
         x:
-        trans.cropLeft / 100 +
+          trans.cropLeft / 100 +
           rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
         y:
-        trans.cropTop / 100 +
+          trans.cropTop / 100 +
           rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
       };
       if (drawingShape === "free") {
@@ -1333,8 +1334,8 @@ const [fadeMode, setFadeMode] = useState(false);
         }
         if (cX > dX && cX < dX + fW && cY > dY && cY < dY + fH)
           handlePlaybackInteraction();
-        }
       }
+    }
     if (isDrawingMode && activePath.length > 0 && selectedAssetId) {
       setAssets((p) =>
         p.map((a) =>
@@ -1344,10 +1345,10 @@ const [fadeMode, setFadeMode] = useState(false);
                 drawings: [
                   ...a.drawings,
                   {
-        shape: drawingShape,
+                    shape: drawingShape,
                     points: [...activePath],
-        color: "#eaff00",
-        width: 8
+                    color: "#eaff00",
+                    width: 8
                   }
                 ]
               }
@@ -1471,32 +1472,32 @@ const [fadeMode, setFadeMode] = useState(false);
 
   const handleFinalSave = async () => {
     if (!recordedBlob) return;
-        const fileName = `directors-cut-${Date.now()}.mp4`;
+    const fileName = `directors-cut-${Date.now()}.mp4`;
 
-        // --- Web Share API Integration ---
-        if (navigator.share && navigator.canShare) {
+    // --- Web Share API Integration ---
+    if (navigator.share && navigator.canShare) {
       const file = new File([recordedBlob], fileName, {
         type: recordedBlob.type
       });
-          if (navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({
-                files: [file],
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
             title: "My Reaction",
             text: "Made with Director's Cut"
-              });
-              return;
+          });
+          return;
         } catch (err) {}
-            }
-          }
+      }
+    }
     const url = URL.createObjectURL(recordedBlob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1907,7 +1908,7 @@ const [fadeMode, setFadeMode] = useState(false);
                 key={asset.id}
                 onClick={() => toggleAssetVisibility(asset.id)}
                 disabled={isFinalizing || isReviewing}
-                className={`shrink-0 w-12 h-12 rounded-xl border-2 transition-all relative flex items-center justify-center bg-zinc-900 overflow-visible ${isVisible ? (isSelected ? "border-emerald-500 opacity-100 shadow-[0_0_15px_#10b98160]" : "border-white opacity-80") : "border-zinc-800 opacity-30"} ${isSelected ? "scale-110 -translate-y-1 z-20" : "scale-100"} disabled:opacity-20`}
+                className={`shrink-0 w-12 h-12 rounded-xl border-2 transition-all relative flex items-center justify-center bg-zinc-900 overflow-visible ${isVisible ? (isSelected ? "border-emerald-500 opacity-100 shadow-[0_0_15px_#10b98160]" : "border-white opacity-100") : "border-zinc-800 opacity-60"} ${isSelected ? "scale-110 -translate-y-1 z-20" : "scale-100"} disabled:opacity-20`}
               >
                 <img
                   src={asset.type === "video" ? asset.thumbnail : asset.url}
