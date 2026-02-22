@@ -170,29 +170,17 @@ const App: React.FC = () => {
 useEffect(() => {
   const path = location.pathname.replace("/", "");
 
-  if (!path) return;
-
-  // Allow DirectorsCut ONLY on phone
-  if (path === "directors-cut") {
-    if (layoutMode === "phone") {
-      isInternalNavRef.current = true;
-      setActiveView("directors-cut");
-    } else {
-      isInternalNavRef.current = true;
-      setActiveView("welcome");
-
-      navigate("/", { replace: true });
-    }
-
+  // If no path, go to welcome
+  if (!path) {
+    isInternalNavRef.current = true;
+    setActiveView("welcome");
     return;
   }
 
-  // Allow other views normally
-  if (path !== activeView) {
-    isInternalNavRef.current = true;
-    setActiveView(path);
-  }
-}, [location.pathname, layoutMode, navigate]);
+  // Always respect URL directly
+  isInternalNavRef.current = true;
+  setActiveView(path);
+}, [location.pathname]);
   // --------------------------------
   useEffect(() => {
     if (activeView === "directors-cut") {
