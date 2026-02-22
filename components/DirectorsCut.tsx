@@ -1343,11 +1343,20 @@ const [fadeMode, setFadeMode] = useState(false);
       }
       return;
     }
-    if (isLocked || selectedAsset?.fullFrame || !selectedAssetId) return;
+    if (!selectedAssetId) return;
+
     if (e.touches.length === 1) {
+      startTouchRef.current = {
+        ...startTouchRef.current,
+        x: clientX,
+        y: clientY
+      };
       if (selectedAsset) {
         dragStartTransformRef.current = { ...selectedAsset.transform };
       }
+
+      if (isLocked || selectedAsset?.fullFrame) return;
+
       const trans = selectedAsset!.transform,
         swActual =
           selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100),
@@ -1375,12 +1384,8 @@ const [fadeMode, setFadeMode] = useState(false);
         canvasY < dY + drawH
       )
         setGrabbedPart("move");
-      startTouchRef.current = {
-        ...startTouchRef.current,
-        x: clientX,
-        y: clientY
-      };
     } else if (e.touches.length === 2) {
+      if (isLocked || selectedAsset?.fullFrame) return;
       setIsPinching(true);
       startTouchRef.current = {
         ...startTouchRef.current,
