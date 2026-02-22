@@ -18,12 +18,14 @@ import {
   CircleIcon,
   SquareIcon,
   ArrowPointerIcon,
-  SparklesIcon,
+   SparklesIcon,
   GhostIcon,
   LoaderIcon,
   RepeatIcon,
-  VolumeXIcon
+  UserSlashIcon,
+  EraserIcon
 } from "./Icons";
+
 
 import { supabase } from "../services/supabaseClient";
 
@@ -52,6 +54,11 @@ export interface DrawingItem {
   width: number;
 }
 
+export interface Effect {
+  type: "blur";
+  rect: { x: number; y: number; w: number; h: number }; // Normalized 0-1 relative to asset
+}
+
 export interface Asset {
   id: string;
   type: "video" | "image";
@@ -62,12 +69,16 @@ export interface Asset {
   height: number;
   transform: Transform;
   drawings: DrawingItem[];
+  effects?: Effect[];
 
   opacity?: number;
   targetOpacity?: number;
 
   fullFrame?: boolean;
 }
+
+
+
 
 const DEFAULT_TRANSFORM: Transform = {
   x: 50,
@@ -114,17 +125,27 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     "move" | "top" | "bottom" | "left" | "right" | null
   >(null);
   const [isPinching, setIsPinching] = useState(false);
-
+ 
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
 
-  const [fadeMode, setFadeMode] = useState(false);
+const [fadeMode, setFadeMode] = useState(false);
 
   // New: Confirmation state for Magic button
   const [isConfirmingMagic, setIsConfirmingMagic] = useState(false);
   const [magicError, setMagicError] = useState<string | null>(null);
+  const [magicMode, setMagicMode] = useState<
+    "menu" | "blur_selecting" | "cut_selecting" | null
+  >(null);
+  const [selectionRect, setSelectionRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Drawing State
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -156,39 +177,68 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
+  const [isTracking, setIsTracking] = useState<{
+    assetId: string;
+    type: "blur" | "cut";
+    rect: { x: number; y: number; w: number; h: number };
+    progress: number;
+  } | null>(null);
+
   // Magic button timeout effect
   useEffect(() => {
-    const trackSession = async () => {
-      try {
-        const anonymousId =
-          localStorage.getItem("anonymous_id") || crypto.randomUUID();
+    setIsConfirmingMagic(false);
+    setMagicMode(null);
+    setSelectionRect(null);
+    setIsTracking(null);
+  }, [selectedAssetId]);
 
-        localStorage.setItem("anonymous_id", anonymousId);
+  // Tracking Simulation
+  useEffect(() => {
+    if (!isTracking) return;
 
-        const { error } = await supabase.from("directors_cut_sessions").insert({
-          user_id: null,
-          anonymous_id: anonymousId,
-          device: window.innerWidth <= 500 ? "phone" : "desktop",
-          screen_width: window.innerWidth,
-          screen_height: window.innerHeight
-        });
-
-        if (error) {
-          console.error("Supabase insert error:", error);
-        } else {
-          console.log("DirectorsCut session tracked");
+    const interval = setInterval(() => {
+      setIsTracking((prev) => {
+        if (!prev) return null;
+        if (prev.progress >= 100) {
+          // Complete
+          clearInterval(interval);
+          return prev;
         }
-      } catch (err) {
-        console.error("Tracking failed:", err);
-      }
-    };
+        return { ...prev, progress: prev.progress + 2 };
+      });
+    }, 30);
 
-    trackSession();
-  }, []);
+    return () => clearInterval(interval);
+  }, [isTracking?.assetId]); // Depend on assetId to restart if needed, but mainly just running when isTracking exists
 
   useEffect(() => {
-    setIsConfirmingMagic(false);
-  }, [selectedAssetId]);
+    if (isTracking && isTracking.progress >= 100) {
+      // Apply Effect
+      const { assetId, type, rect } = isTracking;
+
+      if (type === "blur") {
+        setAssets((prev) =>
+          prev.map((a) => {
+            if (a.id === assetId) {
+              return {
+                ...a,
+                effects: [...(a.effects || []), { type: "blur", rect }]
+              };
+            }
+            return a;
+          })
+        );
+      } else if (type === "cut") {
+        // For video cut, we currently convert to image.
+        // We can pass the rect to handleMagicCutout
+        // We need to ensure selectedAssetId is correct or pass it
+        if (selectedAssetId === assetId) {
+          handleMagicCutout(rect);
+        }
+      }
+      setIsTracking(null);
+    }
+  }, [isTracking?.progress]);
 
   // --- Visibility Logic ---
   useEffect(() => {
@@ -252,31 +302,31 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     return t;
   };
 
-  const selectAndShowAsset = useCallback(
-    (id: string, type: "video" | "image", currentAssets: Asset[]) => {
-      setVisibleAssetIds((prev) => {
-        let next = [...prev];
+ const selectAndShowAsset = useCallback(
+   (id: string, type: "video" | "image", currentAssets: Asset[]) => {
+     setVisibleAssetIds((prev) => {
+       let next = [...prev];
 
-        if (!next.includes(id)) {
-          if (type === "video") {
-            // remove ONLY other videos
-            next = next.filter(
-              (vId) => currentAssets.find((a) => a.id === vId)?.type !== "video"
-            );
-          }
+       if (!next.includes(id)) {
+         if (type === "video") {
+           // remove ONLY other videos
+           next = next.filter(
+             (vId) => currentAssets.find((a) => a.id === vId)?.type !== "video"
+           );
+         }
 
-          // images do nothing, just add
+         // images do nothing, just add
 
-          next.push(id);
-        }
+         next.push(id);
+       }
 
-        return next;
-      });
+       return next;
+     });
 
-      setSelectedAssetId(id);
-    },
-    []
-  );
+     setSelectedAssetId(id);
+   },
+   []
+ );
 
   const resetApp = () => {
     if (isFinalizing || isReviewing) return;
@@ -285,7 +335,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     setVisibleAssetIds([]);
     setSelectedAssetId(null);
     setWebcamActive(false);
-
+   
     setIsAssetPlaying(false);
     setIsLooping(false);
     if (externalClose) externalClose();
@@ -313,6 +363,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     setVisibleAssetIds((prev) => prev.filter((vId) => vId !== id));
     if (selectedAssetId === id) {
       setSelectedAssetId(null);
+  
     }
   };
 
@@ -362,15 +413,15 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         setSelectedAssetId(id);
       }
     } else {
-      if (asset.type === "video") {
-        // remove ONLY other videos
-        next = next.filter(
-          (vId) => assets.find((a) => a.id === vId)?.type !== "video"
-        );
-      }
+        if (asset.type === "video") {
+          // remove ONLY other videos
+          next = next.filter(
+            (vId) => assets.find((a) => a.id === vId)?.type !== "video"
+          );
+        }
 
-      // images stay, just add
-      next.push(id);
+        // images stay, just add
+        next.push(id);
       setSelectedAssetId(id);
     }
     setVisibleAssetIds(next);
@@ -387,24 +438,24 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       )
     );
   };
-
+  
   const toggleAssetPlayback = useCallback(
     async (forceReset = false) => {
       if (isFinalizing || isReviewing) return;
-      const v = videoRef.current;
-      if (!v || !v.src) return;
-      if (!audioContextRef.current)
-        audioContextRef.current = new (
-          window.AudioContext || (window as any).webkitAudioContext
-        )();
-      const audioCtx = audioContextRef.current;
-      if (audioCtx.state === "suspended") await audioCtx.resume();
-      if (!videoSourceNodeRef.current) {
-        videoSourceNodeRef.current = audioCtx.createMediaElementSource(v);
+    const v = videoRef.current;
+    if (!v || !v.src) return;
+    if (!audioContextRef.current)
+      audioContextRef.current = new (
+        window.AudioContext || (window as any).webkitAudioContext
+      )();
+    const audioCtx = audioContextRef.current;
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+    if (!videoSourceNodeRef.current) {
+      videoSourceNodeRef.current = audioCtx.createMediaElementSource(v);
         gainNodeRef.current = audioCtx.createGain();
         videoSourceNodeRef.current.connect(gainNodeRef.current);
         gainNodeRef.current.connect(audioCtx.destination);
-      }
+    }
 
       if (gainNodeRef.current) {
         gainNodeRef.current.gain.setTargetAtTime(
@@ -414,22 +465,22 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         );
       }
 
-      if (forceReset) {
-        v.currentTime = 0;
-        v.pause();
-        setIsAssetPlaying(false);
-        return;
-      }
-      if (v.paused || v.ended) {
+    if (forceReset) {
+      v.currentTime = 0;
+      v.pause();
+      setIsAssetPlaying(false);
+      return;
+    }
+    if (v.paused || v.ended) {
         v.muted = isLooping;
         v.volume = isLooping ? 0 : 1;
         v.play()
           .then(() => setIsAssetPlaying(true))
           .catch((e) => console.warn(e));
-      } else {
-        v.pause();
-        setIsAssetPlaying(false);
-      }
+    } else {
+      v.pause();
+      setIsAssetPlaying(false);
+    }
     },
     [isLooping, isFinalizing, isReviewing]
   );
@@ -568,36 +619,46 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     return canvas.toDataURL("image/png");
   };
 
-  const handleMagicCutout = async () => {
-    if (
-      !selectedAsset ||
-      selectedAsset.type !== "image" ||
-      isFinalizing ||
-      isReviewing
-    )
-      return;
+  const handleMagicCutout = async (overrideRect?: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }) => {
+    if (!selectedAsset || isFinalizing || isReviewing) return;
     // CREDIT DEDUCTION
-    try {
-      const ok = await consumeCredits("IMAGE_NORMAL");
+   try {
+     const ok = await consumeCredits("IMAGE_NORMAL");
 
-      if (!ok) {
-        setMagicError("Not enough credits");
-        setTimeout(() => setMagicError(null), 2000);
-        return;
-      }
-    } catch {
-      setMagicError("Credit check failed");
-      setTimeout(() => setMagicError(null), 2000);
-      return;
-    }
-
+     if (!ok) {
+       setMagicError("Login and buy credits");
+       return;
+     }
+   } catch {
+     setMagicError("Login and buy credits");
+     return;
+   }
+    
     setIsAiProcessing(true);
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
       let base64Data = "";
-      if (selectedAsset.url.startsWith("data:")) {
+      if (selectedAsset.type === "video") {
+        // Capture frame from video
+        const videoEl = videoRef.current;
+        if (!videoEl) throw new Error("Video element not found");
+
+        const canvas = document.createElement("canvas");
+        canvas.width = videoEl.videoWidth;
+        canvas.height = videoEl.videoHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas context failed");
+
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        base64Data = canvas.toDataURL("image/png").split(",")[1];
+      } else if (selectedAsset.url.startsWith("data:")) {
         base64Data = selectedAsset.url.split(",")[1];
       } else {
         const res = await fetch(selectedAsset.url);
@@ -610,13 +671,24 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         });
       }
       // Enhanced prompt for pure background isolation
+      let prompt = `Precisely isolate the main subject. Place the subject on a pure, solid #FFFFFF white background. No shadows, no gradients, no borders. Ensure every background pixel is perfectly white.`;
+
+      const rectToUse = overrideRect || selectionRect;
+      if (rectToUse) {
+        const center = {
+          x: Math.round((rectToUse.x + rectToUse.w / 2) * 100),
+          y: Math.round((rectToUse.y + rectToUse.h / 2) * 100)
+        };
+        prompt += ` The subject is located approximately at ${center.x}% horizontal and ${center.y}% vertical position. Focus on the subject in this area.`;
+      }
+
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-image",
         contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType: "image/png" } },
             {
-              text: `Precisely isolate the main subject. Place the subject on a pure, solid #FFFFFF white background. No shadows, no gradients, no borders. Ensure every background pixel is perfectly white.`
+              text: prompt
             }
           ]
         }
@@ -647,16 +719,21 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                 a.id === selectedAsset.id
                   ? {
                       ...a,
+                      type: "image", // Force convert to image if it was video
                       url: transparentUrl,
                       width: finalTransparentImg.naturalWidth,
                       height: finalTransparentImg.naturalHeight,
-                      drawings: []
+                      drawings: [],
+                      thumbnail: transparentUrl // Update thumbnail
                     }
                   : a
               )
             );
             setIsAiProcessing(false);
             setIsConfirmingMagic(false);
+            setMagicMode(null);
+            setSelectionRect(null);
+            setActivePath([]);
           };
         };
       } else {
@@ -855,8 +932,123 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           return { x: drawX + relX * finalW, y: drawY + relY * finalH };
         };
 
+        // Render Blur Effects
+        if (asset.effects) {
+          asset.effects.forEach((effect) => {
+            if (effect.type === "blur") {
+              const p0 = sourceToCanvas({ x: effect.rect.x, y: effect.rect.y });
+              const p1 = sourceToCanvas({
+                x: effect.rect.x + effect.rect.w,
+                y: effect.rect.y + effect.rect.h
+              });
+
+              const bx = p0.x;
+              const by = p0.y;
+              const bw = p1.x - p0.x;
+              const bh = p1.y - p0.y;
+
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(bx, by, bw, bh);
+              ctx.clip();
+              ctx.filter = "blur(15px)";
+              // Draw the image again to apply blur only to this region
+              ctx.drawImage(
+                source as CanvasImageSource,
+                sW * (trans.cropLeft / 100),
+                sH * (trans.cropTop / 100),
+                swActual,
+                shActual,
+                drawX,
+                drawY,
+                finalW,
+                finalH
+              );
+              ctx.restore();
+            }
+          });
+        }
+
+        // Render Tracking Progress
+        if (id === selectedAssetId && isTracking) {
+          ctx.save();
+          // Draw tracking box
+          const p0 = sourceToCanvas({
+            x: isTracking.rect.x,
+            y: isTracking.rect.y
+          });
+          const p1 = sourceToCanvas({
+            x: isTracking.rect.x + isTracking.rect.w,
+            y: isTracking.rect.y + isTracking.rect.h
+          });
+
+          const bx = p0.x;
+          const by = p0.y;
+          const bw = p1.x - p0.x;
+          const bh = p1.y - p0.y;
+
+          ctx.strokeStyle = "#10b981";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.strokeRect(bx, by, bw, bh);
+
+          // Draw Progress Bar above box
+          const barW = 100;
+          const barH = 8;
+          const barX = bx + bw / 2 - barW / 2;
+          const barY = by - 20;
+
+          ctx.fillStyle = "rgba(0,0,0,0.7)";
+          ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
+
+          ctx.fillStyle = "#34d399";
+          ctx.fillRect(barX, barY, barW * (isTracking.progress / 100), barH);
+
+          ctx.font = "bold 10px sans-serif";
+          ctx.fillStyle = "#fff";
+          ctx.textAlign = "center";
+          ctx.fillText("TRACKING...", barX + barW / 2, barY - 5);
+
+          ctx.restore();
+        }
+
+        // Render Selection Lasso (Magic Mode)
+        if (
+          id === selectedAssetId &&
+          activePath.length > 0 &&
+          (magicMode === "blur_selecting" || magicMode === "cut_selecting")
+        ) {
+          ctx.save();
+          ctx.beginPath();
+
+          const p0 = sourceToCanvas(activePath[0]);
+          ctx.moveTo(p0.x, p0.y);
+
+          for (let i = 1; i < activePath.length; i++) {
+            const pi = sourceToCanvas(activePath[i]);
+            ctx.lineTo(pi.x, pi.y);
+          }
+
+          // DO NOT close path while drawing
+          ctx.strokeStyle =
+            magicMode === "blur_selecting" ? "#f59e0b" : "#ec4899"; // Amber for blur, Pink for cut
+          ctx.lineWidth = 3;
+          ctx.setLineDash([5, 5]);
+
+          if (!isDraggingRef.current) {
+            ctx.closePath();
+          ctx.stroke();
+            ctx.fillStyle = "rgba(34, 197, 94, 0.4)";
+            ctx.fill();
+          } else {
+            ctx.stroke();
+          }
+
+          ctx.restore();
+        }
+
         const allDrawings = [...asset.drawings];
-        if (id === selectedAssetId && activePath.length > 0) {
+        if (id === selectedAssetId && activePath.length > 0 && isDrawingMode) {
           allDrawings.push({
             shape: drawingShape,
             points: activePath,
@@ -1012,8 +1204,81 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       clientY = e.touches[0].clientY;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const canvasX = (clientX - rect.left) * (1080 / rect.width),
-      canvasY = (clientY - rect.top) * (1920 / rect.height);
+    const canvas = canvasRef.current!;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const canvasX = (clientX - rect.left) * scaleX;
+    const canvasY = (clientY - rect.top) * scaleY;
+
+    // Magic Selection Logic
+    if (
+      (magicMode === "blur_selecting" || magicMode === "cut_selecting") &&
+      selectedAssetId
+    ) {
+    e.preventDefault();
+
+    // Calculate asset-relative coordinates
+    const trans = selectedAsset!.transform;
+    const swActual =
+      selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100);
+    const shActual =
+      selectedAsset!.height * (1 - (trans.cropTop + trans.cropBottom) / 100);
+    const drawW =
+      1080 * (trans.scale / 100) * (swActual / selectedAsset!.width);
+    const drawH =
+      1080 *
+      (trans.scale / 100) *
+      (selectedAsset!.height / selectedAsset!.width) *
+      (shActual / selectedAsset!.height);
+
+    let dX,
+      dY,
+      fW = drawW,
+      fH = drawH;
+
+    if (selectedAsset?.fullFrame) {
+      const aR = swActual / shActual;
+      const fR = 1080 / 1920;
+      if (aR > fR) {
+        fW = 1080;
+        fH = 1080 / aR;
+      } else {
+        fH = 1920;
+        fW = 1920 * aR;
+      }
+      dX = (1080 - fW) / 2;
+      dY = (1920 - fH) / 2;
+    } else {
+      dX = 1080 * (trans.x / 100) - drawW / 2;
+      dY = 1920 * (trans.y / 100) - drawH / 2;
+    }
+
+    // Check if touch is inside asset bounds
+    if (
+      canvasX >= dX &&
+      canvasX <= dX + fW &&
+      canvasY >= dY &&
+      canvasY <= dY + fH
+    ) {
+      const rX = (canvasX - dX) / fW;
+      const rY = (canvasY - dY) / fH;
+
+      // Convert to normalized asset coordinates (0-1) considering crop
+      const normX =
+        trans.cropLeft / 100 +
+        rX * (1 - (trans.cropLeft + trans.cropRight) / 100);
+      const normY =
+        trans.cropTop / 100 +
+        rY * (1 - (trans.cropTop + trans.cropBottom) / 100);
+
+        setActivePath([{ x: normX, y: normY }]);
+      } else {
+        setActivePath([]);
+    }
+    return;
+  }
+
     if (isDrawingMode) {
       e.preventDefault();
       if (!selectedAssetId) return;
@@ -1061,10 +1326,10 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         setActivePath([
           {
             x:
-              trans.cropLeft / 100 +
+          trans.cropLeft / 100 +
               rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
             y:
-              trans.cropTop / 100 +
+          trans.cropTop / 100 +
               rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
           }
         ]);
@@ -1125,11 +1390,108 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       clientY = e.touches[0].clientY,
       rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const canvas = canvasRef.current!;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const cX = (clientX - rect.left) * scaleX;
+    const cY = (clientY - rect.top) * scaleY;
+
+    // Magic Selection Logic (Rectangle)
+    if (
+      (magicMode === "blur_selecting" || magicMode === "cut_selecting") &&
+      selectedAssetId
+    ) {
+      e.preventDefault();
+      const canvas = canvasRef.current!;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      const cX = (clientX - rect.left) * scaleX;
+      const cY = (clientY - rect.top) * scaleY;
+
+      const trans = selectedAsset!.transform,
+        swActual =
+          selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100),
+        shActual =
+          selectedAsset!.height *
+          (1 - (trans.cropTop + trans.cropBottom) / 100);
+      const drawW =
+          1080 * (trans.scale / 100) * (swActual / selectedAsset!.width),
+        drawH =
+        1080 *
+        (trans.scale / 100) *
+        (selectedAsset!.height / selectedAsset!.width) *
+        (shActual / selectedAsset!.height);
+      let dX,
+        dY,
+        fW = drawW,
+        fH = drawH;
+      if (selectedAsset?.fullFrame) {
+        const aR = swActual / shActual,
+          fR = 1080 / 1920;
+        if (aR > fR) {
+          fW = 1080;
+          fH = 1080 / aR;
+        } else {
+          fH = 1920;
+          fW = 1920 * aR;
+        }
+        dX = (1080 - fW) / 2;
+        dY = (1920 - fH) / 2;
+      } else {
+        dX = 1080 * (trans.x / 100) - drawW / 2;
+        dY = 1920 * (trans.y / 100) - drawH / 2;
+      }
+
+      // Clamp coordinates to asset bounds for smooth edge drawing
+     const clampedX = Math.max(dX, Math.min(dX + fW, cX));
+const clampedY = Math.max(dY, Math.min(dY + fH, cY));
+
+      const rX = (clampedX - dX) / fW,
+        rY = (clampedY - dY) / fH;
+
+      // Start point is already in activePath[0]
+      if (activePath.length > 0) {
+        const startPt = activePath[0];
+        const currentPt = {
+        x:
+        trans.cropLeft / 100 +
+          rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
+        y:
+        trans.cropTop / 100 +
+          rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
+      };
+
+        // Create rectangle path: Start -> TopRight -> BottomRight -> BottomLeft -> Start
+        // Actually, we just need 4 points to define the rect for rendering
+        // But for the rect calculation we just need min/max
+
+        // Let's store the 4 corners so it draws as a rect
+        // But to keep it simple for the state, we can just store Start and Current,
+        // and calculate the 4 corners in the render loop?
+        // The previous code expects activePath to be the points to draw.
+        // So let's generate the 4 points.
+
+        const p0 = startPt;
+        const p2 = currentPt;
+        const p1 = { x: p2.x, y: p0.y };
+        const p3 = { x: p0.x, y: p2.y };
+
+        setActivePath([p0, p1, p2, p3, p0]);
+      }
+      return;
+    }
+
     if (isDrawingMode) {
       e.preventDefault();
       if (!selectedAssetId || activePath.length === 0) return;
-      const cX = (clientX - rect.left) * (1080 / rect.width),
-        cY = (clientY - rect.top) * (1920 / rect.height);
+     const canvas = canvasRef.current!;
+     const scaleX = canvas.width / rect.width;
+     const scaleY = canvas.height / rect.height;
+
+     const cX = (clientX - rect.left) * scaleX;
+     const cY = (clientY - rect.top) * scaleY;
       const trans = selectedAsset!.transform,
         swActual =
           selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100),
@@ -1167,10 +1529,10 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         rY = (Math.max(dY, Math.min(dY + fH, cY)) - dY) / fH;
       const newPt = {
         x:
-          trans.cropLeft / 100 +
+        trans.cropLeft / 100 +
           rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
         y:
-          trans.cropTop / 100 +
+        trans.cropTop / 100 +
           rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
       };
       if (drawingShape === "free") {
@@ -1286,8 +1648,35 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
   const handleTouchEnd = () => {
     if (isAiProcessing || isFinalizing || isReviewing) return;
+
+    const wasDragging = isDraggingRef.current;
+
+    if (magicMode === "blur_selecting" || magicMode === "cut_selecting") {
+      // Just ensure the path is valid, don't apply yet
+      if (activePath.length > 0 && selectedAssetId) {
+        // Calculate Rect
+        const xs = activePath.map((p) => p.x);
+        const ys = activePath.map((p) => p.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const rect = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+
+        // Check if valid rect (some size)
+        if (rect.w > 0.01 && rect.h > 0.01) {
+          // Keep the selection for the user to click Apply
+        } else {
+          // Too small, just clear
+          setActivePath([]);
+        }
+      }
+      isDraggingRef.current = false;
+      return;
+    }
+
     if (
-      !isDraggingRef.current &&
+      !wasDragging &&
       !isPinching &&
       !isDrawingMode &&
       selectedAssetId &&
@@ -1334,8 +1723,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         }
         if (cX > dX && cX < dX + fW && cY > dY && cY < dY + fH)
           handlePlaybackInteraction();
+        }
       }
-    }
     if (isDrawingMode && activePath.length > 0 && selectedAssetId) {
       setAssets((p) =>
         p.map((a) =>
@@ -1345,20 +1734,39 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                 drawings: [
                   ...a.drawings,
                   {
-                    shape: drawingShape,
+        shape: drawingShape,
                     points: [...activePath],
-                    color: "#eaff00",
-                    width: 8
+        color: "#eaff00",
+        width: 8
                   }
                 ]
               }
             : a
         )
       );
+      setActivePath([]); // Clear path after adding drawing
     }
     setGrabbedPart(null);
     setIsPinching(false);
-    setActivePath([]);
+    isDraggingRef.current = false;
+    // setActivePath([]); // Removed this global clear to support magic selection persistence
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    handleTouchStart({
+      touches: [{ clientX: e.clientX, clientY: e.clientY }],
+      preventDefault: () => e.preventDefault(),
+      stopPropagation: () => e.stopPropagation()
+    } as any);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (e.buttons !== 1) return;
+    handleTouchMove({
+      touches: [{ clientX: e.clientX, clientY: e.clientY }],
+      preventDefault: () => e.preventDefault(),
+      stopPropagation: () => e.stopPropagation()
+    } as any);
   };
 
   const toggleRecording = async () => {
@@ -1472,32 +1880,32 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
   const handleFinalSave = async () => {
     if (!recordedBlob) return;
-    const fileName = `directors-cut-${Date.now()}.mp4`;
+        const fileName = `directors-cut-${Date.now()}.mp4`;
 
-    // --- Web Share API Integration ---
-    if (navigator.share && navigator.canShare) {
+        // --- Web Share API Integration ---
+        if (navigator.share && navigator.canShare) {
       const file = new File([recordedBlob], fileName, {
         type: recordedBlob.type
       });
-      if (navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
+          if (navigator.canShare({ files: [file] })) {
+            try {
+              await navigator.share({
+                files: [file],
             title: "My Reaction",
             text: "Made with Director's Cut"
-          });
-          return;
+              });
+              return;
         } catch (err) {}
-      }
-    }
+            }
+          }
     const url = URL.createObjectURL(recordedBlob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1642,8 +2050,37 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleTouchEnd}
       >
         <div className="relative aspect-[9/16] h-full max-h-full overflow-hidden bg-[#050505] shadow-2xl rounded-2xl border border-white/10">
+          {magicError && (
+            <div
+              className="absolute inset-0 z-[999] bg-black/85 flex items-center justify-center"
+              onClick={() => setMagicError(null)}
+            >
+              <div
+                className="bg-white text-black px-8 py-6 rounded-3xl text-center shadow-2xl cursor-pointer w-[260px]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.location.href = "/";
+                }}
+              >
+                <div className="text-xs font-bold tracking-widest text-zinc-500 mb-2">
+                  ThetoriAi
+                </div>
+
+                <div className="text-sm font-black mb-4">
+                  Login and buy credits
+                </div>
+
+                <div className="text-[10px] text-zinc-400 font-medium">
+                  Unlock premium magic tools
+                </div>
+              </div>
+            </div>
+          )}
           <canvas
             ref={canvasRef}
             width={1080}
@@ -1653,7 +2090,14 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         </div>
 
         <button
-          onClick={resetApp}
+          onClick={(e) => {
+            e.stopPropagation();
+            resetApp();
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
           disabled={isFinalizing || isReviewing}
           className="absolute top-6 left-6 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
         >
@@ -1661,20 +2105,34 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         </button>
 
         <button
-          onClick={() =>
-            !isFinalizing &&
-            !isReviewing &&
-            setCameraFacing((p) => (p === "user" ? "environment" : "user"))
-          }
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isFinalizing && !isReviewing) {
+              setWebcamFlipped((p) => !p);
+            }
+          }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
           disabled={isFinalizing || isReviewing}
-          className="absolute top-6 right-6 z-50 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
+          className={`absolute top-6 right-6 z-50 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20 ${
+            webcamFlipped ? "text-blue-400 border-blue-400/50" : ""
+          }`}
         >
           <ArrowsRightLeftIcon className="text-xs" />
         </button>
 
         <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
           <button
-            onClick={handlePenInteraction}
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePenInteraction();
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
             disabled={isFinalizing || isReviewing}
             className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center transition-all ${isDrawingMode ? "bg-yellow-400 text-black shadow-[0_0_20px_#eaff0080]" : "bg-white text-black"} disabled:opacity-20`}
           >
@@ -1694,7 +2152,14 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           {selectedAsset?.type === "video" && (
             <div className="flex flex-col space-y-3">
               <button
-                onClick={handlePlaybackInteraction}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePlaybackInteraction();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
                 disabled={isFinalizing || isReviewing}
                 className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
                   isAssetPlaying
@@ -1712,7 +2177,14 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                 </span>
               </button>
               <button
-                onClick={() => setIsLooping(!isLooping)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLooping(!isLooping);
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
                 disabled={isFinalizing || isReviewing}
                 className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
                   isLooping
@@ -1731,9 +2203,23 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col space-y-3 z-30">
           <button
-            onClick={() =>
-              !isFinalizing && !isReviewing && setWebcamActive(!webcamActive)
-            }
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isFinalizing && !isReviewing) {
+                if (!webcamActive) {
+                  setWebcamActive(true);
+                  setCameraFacing("user");
+                } else if (cameraFacing === "user") {
+                  setCameraFacing("environment");
+                } else {
+                  setWebcamActive(false);
+                }
+              }
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
             disabled={isFinalizing || isReviewing}
             className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
               webcamActive
@@ -1742,11 +2228,24 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
             }`}
           >
             <CameraIcon className="drop-shadow-[0_0_6px_rgba(59,130,246,0.9)]" />
-            <span className="text-[7px] font-black mt-1 uppercase">Sight</span>
+            <span className="text-[7px] font-black mt-1 uppercase">
+              {!webcamActive
+                ? "Sight"
+                : cameraFacing === "user"
+                  ? "Front"
+                  : "Back"}
+            </span>
           </button>
           {/* PASTE GHOST BUTTON HERE */}
           <button
-            onClick={() => setFadeMode((prev) => !prev)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setFadeMode((prev) => !prev);
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
             disabled={isFinalizing || isReviewing}
             className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
               fadeMode
@@ -1757,42 +2256,238 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
             <GhostIcon className="drop-shadow-[0_0_6px_rgba(168,85,247,0.9)]" />
             <span className="text-[7px] font-black mt-1 uppercase">Ghost</span>
           </button>
-          {selectedAsset?.type === "image" && (
-            <button
-              onClick={() =>
-                !isConfirmingMagic
-                  ? setIsConfirmingMagic(true)
-                  : handleMagicCutout()
-              }
-              disabled={isAiProcessing || isFinalizing || isReviewing}
-              className={`w-12 h-12 border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all disabled:opacity-20 ${isAiProcessing ? "bg-zinc-800 animate-pulse" : isConfirmingMagic ? "bg-emerald-600" : "bg-gradient-to-tr from-purple-600 to-indigo-600 shadow-xl"}`}
-            >
-              {isAiProcessing ? (
-                <LoaderIcon />
-              ) : isConfirmingMagic ? (
-                <span className="text-base font-black italic">1C</span>
-              ) : (
-                <SparklesIcon />
-              )}
-              <span className="text-[7px] font-black mt-1 uppercase">
-                Magic
-              </span>
-              {magicError && (
-                <span className="text-[7px] font-black text-red-400">
-                  {magicError}
+          {selectedAsset && (
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (magicMode === "menu") {
+                    setMagicMode(null);
+                    setActivePath([]);
+                  } else {
+                    setMagicMode("menu");
+                    setActivePath([]);
+                  }
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                disabled={isAiProcessing || isFinalizing || isReviewing}
+                className={`w-12 h-12 border border-white/20 rounded-2xl flex flex-col items-center justify-center transition-all disabled:opacity-20 ${
+                  isAiProcessing
+                    ? "bg-zinc-800 animate-pulse"
+                    : magicMode !== null
+                      ? "bg-emerald-600"
+                      : "bg-gradient-to-tr from-purple-600 to-indigo-600 shadow-xl"
+                }`}
+              >
+                {isAiProcessing ? <LoaderIcon /> : <SparklesIcon />}
+                <span className="text-[7px] font-black mt-1 uppercase">
+                  Magic
                 </span>
-              )}
-            </button>
+              </button>
+            </div>
           )}
+
+          {magicMode !== null && (
+            <>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (magicMode === "blur_selecting" && activePath.length > 0) {
+                    // CONFIRM BLUR
+                    const xs = activePath.map((p) => p.x);
+                    const ys = activePath.map((p) => p.y);
+                    const minX = Math.min(...xs);
+                    const maxX = Math.max(...xs);
+                    const minY = Math.min(...ys);
+                    const maxY = Math.max(...ys);
+                    const rect = {
+                      x: minX,
+                      y: minY,
+                      w: maxX - minX,
+                      h: maxY - minY
+                    };
+
+                    if (
+                      magicMode === "blur_selecting" &&
+                      activePath.length > 0
+                    ) {
+                      const xs = activePath.map((p) => p.x);
+                      const ys = activePath.map((p) => p.y);
+                      const minX = Math.min(...xs);
+                      const maxX = Math.max(...xs);
+                      const minY = Math.min(...ys);
+                      const maxY = Math.max(...ys);
+
+                      const rect = {
+                        x: minX,
+                        y: minY,
+                        w: maxX - minX,
+                        h: maxY - minY
+                      };
+
+                      try {
+                        const ok = await consumeCredits("IMAGE_NORMAL");
+
+                        if (!ok) {
+                          setMagicError("Login and buy credits");
+                          return;
+                        }
+                      } catch {
+                        setMagicError("Login and buy credits");
+                        return;
+                      }
+
+                      if (selectedAsset?.type === "video") {
+                        setIsTracking({
+                          assetId: selectedAssetId!,
+                          type: "blur",
+                          rect,
+                          progress: 0
+                        });
+                      } else {
+                        try {
+                          const ok = await consumeCredits("IMAGE_NORMAL");
+
+                          if (!ok) {
+                            setMagicError("Login and buy credits");
+                            return;
+                          }
+                        } catch {
+                          setMagicError("Login and buy credits");
+                          return;
+                        }
+
+                        setAssets((prev) =>
+                          prev.map((a) => {
+                            if (a.id === selectedAssetId) {
+                              return {
+                                ...a,
+                                effects: [
+                                  ...(a.effects || []),
+                                  { type: "blur", rect }
+                                ]
+                              };
+                            }
+                            return a;
+                          })
+                        );
+
+                        setMagicMode(null);
+                        setActivePath([]);
+                      }
+
+                      setMagicMode(null);
+                      setActivePath([]);
+                    }
+                  } else {
+                    setMagicMode("blur_selecting");
+                    setActivePath([]);
+                  }
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                  magicMode === "blur_selecting"
+                    ? activePath.length > 0
+                      ? "bg-green-500 border-green-300 text-white shadow-[0_0_25px_rgba(34,197,94,0.9)] animate-pulse"
+                      : "bg-amber-500 border-amber-300 text-white shadow-[0_0_25px_rgba(245,158,11,0.9)]"
+                    : "bg-amber-500/20 border-amber-400/30 text-amber-300/50"
+                }`}
+              >
+                <UserSlashIcon
+                  className={`drop-shadow-[0_0_6px_rgba(245,158,11,0.9)]`}
+                />
+                <span className="text-[7px] font-black mt-1 uppercase">
+                  {magicMode === "blur_selecting" && activePath.length > 0
+                    ? "Apply"
+                    : "Blur"}
+                </span>
+              </button>
+
+              {selectedAsset?.type !== "video" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (
+                      magicMode === "cut_selecting" &&
+                      activePath.length > 0
+                    ) {
+                      // CONFIRM CUT
+                      const xs = activePath.map((p) => p.x);
+                      const ys = activePath.map((p) => p.y);
+                      const minX = Math.min(...xs);
+                      const maxX = Math.max(...xs);
+                      const minY = Math.min(...ys);
+                      const maxY = Math.max(...ys);
+                      const rect = {
+                        x: minX,
+                        y: minY,
+                        w: maxX - minX,
+                        h: maxY - minY
+                      };
+
+                      if (selectedAsset?.type === "video") {
+                        // Start Tracking for Video
+                        setIsTracking({
+                          assetId: selectedAssetId!,
+                          type: "cut",
+                          rect,
+                          progress: 0
+                        });
+                        setMagicMode(null);
+                        setActivePath([]);
+                      } else {
+                        // Apply immediately (AI) for Image
+                        handleMagicCutout(rect);
+                      }
+                    } else {
+                      setMagicMode("cut_selecting");
+                      setActivePath([]);
+                    }
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onMouseUp={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  onTouchEnd={(e) => e.stopPropagation()}
+                  className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                    magicMode === "cut_selecting"
+                      ? activePath.length > 0
+                        ? "bg-green-500 border-green-300 text-white shadow-[0_0_25px_rgba(34,197,94,0.9)] animate-pulse"
+                        : "bg-pink-500 border-pink-300 text-white shadow-[0_0_25px_rgba(236,72,153,0.9)]"
+                      : "bg-pink-500/20 border-pink-400/30 text-pink-300/50"
+                  }`}
+                >
+                  <EraserIcon
+                    className={`drop-shadow-[0_0_6px_rgba(236,72,153,0.9)]`}
+                  />
+                  <span className="text-[7px] font-black mt-1 uppercase">
+                    {magicMode === "cut_selecting" && activePath.length > 0
+                      ? "Apply"
+                      : "Cut"}
+                  </span>
+                </button>
+              )}
+            </>
+          )}
+
           {selectedAssetId && (
             <>
               <button
-                onClick={() =>
-                  selectedAssetId &&
-                  !isFinalizing &&
-                  !isReviewing &&
-                  toggleFullFrame(selectedAssetId)
-                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (selectedAssetId && !isFinalizing && !isReviewing) {
+                    toggleFullFrame(selectedAssetId);
+                  }
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
                 disabled={isFinalizing || isReviewing}
                 className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
                   selectedAsset?.fullFrame
@@ -1813,9 +2508,16 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           )}
         </div>
 
-        {selectedAssetId && !isFinalizing && !isReviewing && (
+        {selectedAssetId && !isFinalizing && !isReviewing && !magicMode && (
           <button
-            onClick={() => deleteAsset(selectedAssetId)}
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteAsset(selectedAssetId);
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
             className="absolute bottom-1 right-3 z-50 w-10 h-10 bg-black/60 backdrop-blur-xl border-2 border-red-500/40 rounded-2xl flex flex-col items-center justify-center text-red-500"
           >
             <TrashIcon className="text-xs" />
