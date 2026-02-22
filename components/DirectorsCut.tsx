@@ -152,7 +152,11 @@ const [fadeMode, setFadeMode] = useState(false);
   const [drawingShape, setDrawingShape] = useState<DrawingShape>("free");
   const [activePath, setActivePath] = useState<Point[]>([]);
 
+
+  
   const startTouchRef = useRef({ x: 0, y: 0, scale: 0, dist: 0 });
+  const initialTouchRef = useRef({ x: 0, y: 0 });
+  const dragStartTransformRef = useRef<Transform>(DEFAULT_TRANSFORM);
   const isDraggingRef = useRef(false);
   const lastTapRef = useRef<number>(0);
   const tapTimeoutRef = useRef<number | null>(null);
@@ -1202,6 +1206,9 @@ const [fadeMode, setFadeMode] = useState(false);
     isDraggingRef.current = false;
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY;
+
+    initialTouchRef.current = { x: clientX, y: clientY };
+
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const canvas = canvasRef.current!;
@@ -1338,6 +1345,9 @@ const [fadeMode, setFadeMode] = useState(false);
     }
     if (isLocked || selectedAsset?.fullFrame || !selectedAssetId) return;
     if (e.touches.length === 1) {
+      if (selectedAsset) {
+        dragStartTransformRef.current = { ...selectedAsset.transform };
+      }
       const trans = selectedAsset!.transform,
         swActual =
           selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100),
@@ -1385,10 +1395,23 @@ const [fadeMode, setFadeMode] = useState(false);
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (isAiProcessing || isFinalizing || isReviewing) return;
-    isDraggingRef.current = true;
+
     const clientX = e.touches[0].clientX,
-      clientY = e.touches[0].clientY,
-      rect = canvasRef.current?.getBoundingClientRect();
+      clientY = e.touches[0].clientY;
+
+    if (!isDraggingRef.current) {
+      const dist = Math.hypot(
+        clientX - initialTouchRef.current.x,
+        clientY - initialTouchRef.current.y
+      );
+      if (dist > 5) {
+    isDraggingRef.current = true;
+      } else {
+        return;
+      }
+    }
+
+    const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const canvas = canvasRef.current!;
     const scaleX = canvas.width / rect.width;
@@ -1544,17 +1567,19 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
     }
     if (isLocked || selectedAsset?.fullFrame || !selectedAssetId) return;
     if (grabbedPart && e.touches.length === 1) {
-      const dx = (clientX - startTouchRef.current.x) * (1080 / rect.width),
-        dy = (clientY - startTouchRef.current.y) * (1920 / rect.height);
-      const trans = { ...selectedAsset!.transform },
-        baseDrawW = 1080 * (trans.scale / 100),
-        baseDrawH = baseDrawW * (selectedAsset!.height / selectedAsset!.width);
-      if (grabbedPart === "move")
+      const dx = (clientX - startTouchRef.current.x) * scaleX,
+        dy = (clientY - startTouchRef.current.y) * scaleY;
+      const trans = { ...dragStartTransformRef.current };
+      const baseDrawW = 1080 * (trans.scale / 100);
+      const baseDrawH =
+        baseDrawW * (selectedAsset!.height / selectedAsset!.width);
+
+      if (grabbedPart === "move") {
         updateAssetTransform(selectedAssetId, {
           x: trans.x + (dx / 1080) * 100,
           y: trans.y + (dy / 1920) * 100
         });
-      else {
+      } else {
         const swAct =
             selectedAsset!.width *
             (1 - (trans.cropLeft + trans.cropRight) / 100),
@@ -1623,11 +1648,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
           });
         }
       }
-      startTouchRef.current = {
-        ...startTouchRef.current,
-        x: clientX,
-        y: clientY
-      };
+      // Do NOT update startTouchRef here for single touch drag
     } else if (isPinching && e.touches.length === 2) {
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
