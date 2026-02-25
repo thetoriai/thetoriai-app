@@ -3078,9 +3078,9 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                 />
                 <div className="absolute top-1 right-1">
                   {asset.type === "video" ? (
-                    <FilmIcon className="text-[10px] bg-black/50 p-1" />
+                    <FilmIcon className="w-6 h-6 stroke-white bg-black/60 p-1 rounded-md" />
                   ) : (
-                    <ImageIcon className="text-[10px] bg-black/50 p-1" />
+                    <ImageIcon className="w-6 h-6 stroke-white bg-black/60 p-1 rounded-md" />
                   )}
                 </div>
               </button>
