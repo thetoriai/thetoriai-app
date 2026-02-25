@@ -3180,9 +3180,9 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
               className="w-12 h-12 rounded-2xl flex items-center justify-center drop-shadow-lg active:scale-90 transition-transform bg-zinc-900 border border-zinc-700"
             >
               {isMuted ? (
-                <MicOffIcon className="text-xl text-red-500" />
+                <MicOffIcon className="w-6 h-6 text-red-500 stroke-red-500" />
               ) : (
-                <MicIcon className="w-8 h-8 fill-red-500" />
+                <MicIcon className="w-6 h-6 text-white fill-white" />
               )}
             </button>
           </div>
