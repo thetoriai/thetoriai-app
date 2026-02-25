@@ -894,8 +894,17 @@ export const GhostIcon = ({ className = "w-6 h-6" }) => (
 
 // Specific Nib Icon as seen in image for DRAW
 export const DrawNibIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M13.12 2.06L7.58 7.6a1 1 0 0 0-.29.7l-.36 4.3a1 1 0 0 0 1.08 1.08l4.3-.36a1 1 0 0 0 .7-.29l5.54-5.54a1 1 0 0 0 0-1.42l-4-4a1 1 0 0 0-1.42 0zm-1.84 9.1l-1.38 1.38-1.07-1.07 1.38-1.38a1.5 1.5 0 0 1 1.07 1.07zM2 21h20v2H2v-2z" />
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
   </svg>
 );
 

@@ -114,7 +114,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
   const [webcamActive, setWebcamActive] = useState(false);
   const [webcamFlipped, setWebcamFlipped] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [webcamMode, setWebcamMode] = useState<"fullscreen" | "floating">(
     "fullscreen"
   );
@@ -195,6 +195,10 @@ const [fadeMode, setFadeMode] = useState(false);
   const requestRef = useRef<number>(0);
   const recordingIntervalRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const audioDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(
+    null
+  );
+  const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const videoSourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -419,6 +423,11 @@ const [fadeMode, setFadeMode] = useState(false);
     setVisibleAssetIds([]);
     setSelectedAssetId(null);
     setWebcamActive(false);
+    setIsMuted(true);
+    if (micOnlyStreamRef.current) {
+      micOnlyStreamRef.current.getTracks().forEach((t) => t.stop());
+      micOnlyStreamRef.current = null;
+    }
    
     setIsAssetPlaying(false);
     setIsLooping(false);
@@ -443,6 +452,18 @@ const [fadeMode, setFadeMode] = useState(false);
       URL.revokeObjectURL(asset.url);
       imageCache.current.delete(id);
     }
+
+    // Check if this is the last asset being deleted
+    const remainingAssets = assets.filter((a) => a.id !== id);
+    if (remainingAssets.length === 0) {
+      setWebcamActive(false);
+      setIsMuted(true);
+      if (micOnlyStreamRef.current) {
+        micOnlyStreamRef.current.getTracks().forEach((t) => t.stop());
+        micOnlyStreamRef.current = null;
+      }
+    }
+
     setAssets((prev) => prev.filter((a) => a.id !== id));
     setVisibleAssetIds((prev) => prev.filter((vId) => vId !== id));
     if (selectedAssetId === id) {
@@ -912,24 +933,44 @@ const [fadeMode, setFadeMode] = useState(false);
     return () => stopTracks();
   }, [webcamActive, cameraFacing]);
 
-  const toggleMute = useCallback(() => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      // Update webcam stream
-      if (activeStreamRef.current) {
-        activeStreamRef.current.getAudioTracks().forEach((track) => {
-          track.enabled = !next;
+  const toggleMute = useCallback(async () => {
+    if (isMuted) {
+      // Currently muted (off), so turn it ON
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true
         });
+        micOnlyStreamRef.current = stream;
+        setIsMuted(false);
+
+        // If recording, connect to destination
+        if (
+          isRecordingRef.current &&
+          audioContextRef.current &&
+          audioDestinationRef.current
+        ) {
+          const source =
+            audioContextRef.current.createMediaStreamSource(stream);
+          source.connect(audioDestinationRef.current);
+          micSourceNodeRef.current = source;
+        }
+      } catch (err) {
+        console.warn("Mic permission denied");
+        // Keep isMuted as true
       }
-      // Update mic only stream
+    } else {
+      // Currently unmuted (on), so turn it OFF
       if (micOnlyStreamRef.current) {
-        micOnlyStreamRef.current.getAudioTracks().forEach((track) => {
-          track.enabled = !next;
-        });
+        micOnlyStreamRef.current.getTracks().forEach((t) => t.stop());
+        micOnlyStreamRef.current = null;
       }
-      return next;
-    });
-  }, []);
+      if (micSourceNodeRef.current) {
+        micSourceNodeRef.current.disconnect();
+        micSourceNodeRef.current = null;
+      }
+      setIsMuted(true);
+    }
+  }, [isMuted]);
 
   const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
@@ -2293,29 +2334,26 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
       if (audioCtx.state === "suspended") await audioCtx.resume();
 
       const dest = audioCtx.createMediaStreamDestination();
+      audioDestinationRef.current = dest;
 
-      let commentary: MediaStream | null = webcamRef.current
-        ?.srcObject as MediaStream;
-      if (!commentary || commentary.getAudioTracks().length === 0) {
-        try {
-          commentary = await navigator.mediaDevices.getUserMedia({
-            audio: true
-          });
-          micOnlyStreamRef.current = commentary;
-        } catch (err) {
-          console.warn("Mic access denied, continuing without audio.");
-        }
-      }
+      // Use existing mic stream if available (controlled by Mic button)
+      let commentary: MediaStream | null = micOnlyStreamRef.current;
 
-      // Apply mute state immediately
+      // If micOnlyStreamRef is set, it means the user enabled the mic.
+
+      // Apply mute state immediately (though it should already be handled by the toggleMute)
       if (commentary) {
         commentary.getAudioTracks().forEach((track) => {
           track.enabled = !isMuted;
         });
       }
 
-      if (commentary && commentary.getAudioTracks().length > 0)
-        audioCtx.createMediaStreamSource(commentary).connect(dest);
+      if (commentary && commentary.getAudioTracks().length > 0) {
+        const source = audioCtx.createMediaStreamSource(commentary);
+        source.connect(dest);
+        micSourceNodeRef.current = source;
+      }
+
       if (videoRef.current?.src) {
         if (!videoSourceNodeRef.current) {
           videoSourceNodeRef.current = audioCtx.createMediaElementSource(
@@ -3029,6 +3067,15 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                 onClick={() => {
                   setIsReviewing(false);
                   setRecordedBlob(null);
+                  // Reset webcam and mic when returning from review
+                  setWebcamActive(false);
+                  setIsMuted(true);
+                  if (micOnlyStreamRef.current) {
+                    micOnlyStreamRef.current
+                      .getTracks()
+                      .forEach((t) => t.stop());
+                    micOnlyStreamRef.current = null;
+                  }
                 }}
                 className="w-full bg-white/5 border border-white/10 text-white/60 py-5 rounded-3xl font-bold uppercase text-xs tracking-[0.2em] active:scale-95 transition-all"
               >
@@ -3080,7 +3127,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                   {asset.type === "video" ? (
                     <FilmIcon className="w-6 h-6 stroke-white bg-black/60 p-1 rounded-md" />
                   ) : (
-                    <ImageIcon className="w-6 h-6 stroke-white bg-black/60 p-1 rounded-md" />
+                    <ImageIcon className="w-6 h-5 stroke-white bg-black/60 p-1 rounded-md" />
                   )}
                 </div>
               </button>
@@ -3177,12 +3224,16 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
               onMouseUp={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
               onTouchEnd={(e) => e.stopPropagation()}
-              className="w-12 h-12 rounded-2xl flex items-center justify-center drop-shadow-lg active:scale-90 transition-transform bg-zinc-900 border border-zinc-700"
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center drop-shadow-lg active:scale-90 transition-transform border ${
+                isMuted
+                  ? "bg-red-500/20 border-red-400 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.5)]"
+                  : "bg-white border-white text-black shadow-[0_0_25px_rgba(255,255,255,0.9)]"
+              }`}
             >
               {isMuted ? (
-                <MicOffIcon className="w-6 h-6 text-red-500 stroke-red-500" />
+                <MicOffIcon className="text-xl text-red-500" />
               ) : (
-                <MicIcon className="w-6 h-6 text-white fill-white" />
+                <MicIcon className="w-6 h-6 text-black fill-black" />
               )}
             </button>
           </div>
