@@ -926,3 +926,54 @@ export const RepeatIcon: React.FC<IconProps> = ({ className }) => (
 export const VolumeXIcon: React.FC<IconProps> = ({ className }) => (
   <i className={`fa-solid fa-volume-xmark ${className}`}></i>
 );
+// ADDED: MicIcon
+export const MicIcon: React.FC<IconProps> = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <g transform="scale(0.8) translate(3 2)">
+      <path d="M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3z" />
+      <path d="M5 10a1 1 0 012 0 5 5 0 0010 0 1 1 0 112 0 7 7 0 01-6 6.92V20h3a1 1 0 110 2H8a1 1 0 110-2h3v-3.08A7 7 0 015 10z" />
+    </g>
+  </svg>
+);
+// ADDED: MicOffIcon
+export const MicOffIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {/* Mic body */}
+    <path d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3z" />
+    <path d="M5 10a7 7 0 0014 0" />
+    <path d="M12 17v4" />
+
+    {/* Single slash */}
+    <path d="M4 4l16 16" />
+  </svg>
+);
+
+// ADDED: WatermarkIcon
+export const WatermarkIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    fill="none"
+    viewBox="0 0 24 24"
+    stroke="currentColor"
+    strokeWidth="2"
+  >
+    <circle cx="12" cy="12" r="9" />
+    <text
+      x="12"
+      y="16"
+      textAnchor="middle"
+      fontSize="8"
+      fill="currentColor"
+    >
+      ©
+    </text>
+  </svg>
+);

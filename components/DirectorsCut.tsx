@@ -23,7 +23,10 @@ import {
   LoaderIcon,
   RepeatIcon,
   UserSlashIcon,
-  EraserIcon
+  EraserIcon,
+  MicIcon,
+  MicOffIcon,
+  WatermarkIcon
 } from "./Icons";
 
 
@@ -57,6 +60,8 @@ export interface DrawingItem {
 export interface Effect {
   type: "blur";
   rect: { x: number; y: number; w: number; h: number }; // Normalized 0-1 relative to asset
+  isTracked?: boolean;
+  trackingId?: string;
 }
 
 export interface Asset {
@@ -109,6 +114,19 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
   const [webcamActive, setWebcamActive] = useState(false);
   const [webcamFlipped, setWebcamFlipped] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [webcamMode, setWebcamMode] = useState<"fullscreen" | "floating">(
+    "fullscreen"
+  );
+  const [webcamTransform, setWebcamTransform] = useState<Transform>({
+    x: 80,
+    y: 80,
+    scale: 25,
+    cropTop: 0,
+    cropBottom: 0,
+    cropLeft: 0,
+    cropRight: 0
+  });
   const [cameraFacing, setCameraFacing] = useState<"user" | "environment">(
     "user"
   );
@@ -118,6 +136,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [isAssetPlaying, setIsAssetPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [showWatermark, setShowWatermark] = useState(true);
+  const [watermarkUnlocked, setWatermarkUnlocked] = useState(false);
 
   // Interaction Mode
   const [isLocked, setIsLocked] = useState(false);
@@ -158,7 +178,9 @@ const [fadeMode, setFadeMode] = useState(false);
   const initialTouchRef = useRef({ x: 0, y: 0 });
   const dragStartTransformRef = useRef<Transform>(DEFAULT_TRANSFORM);
   const isDraggingRef = useRef(false);
+  const isDraggingWebcamRef = useRef(false);
   const lastTapRef = useRef<number>(0);
+  const tapCountRef = useRef<number>(0);
   const tapTimeoutRef = useRef<number | null>(null);
   const lastPenTapRef = useRef<number>(0);
   const penTapTimeoutRef = useRef<number | null>(null);
@@ -179,6 +201,22 @@ const [fadeMode, setFadeMode] = useState(false);
   const activeStreamRef = useRef<MediaStream | null>(null);
   const wakeLockRef = useRef<any>(null);
   const micOnlyStreamRef = useRef<MediaStream | null>(null);
+
+  const trackingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const trackingState = useRef<
+    Map<
+      string,
+      {
+        template: Uint8ClampedArray;
+        tWidth: number;
+        tHeight: number;
+        lastX: number;
+        lastY: number;
+        assetWidth: number;
+        assetHeight: number;
+      }
+    >
+  >(new Map());
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
@@ -209,7 +247,8 @@ const [fadeMode, setFadeMode] = useState(false);
           clearInterval(interval);
           return prev;
         }
-        return { ...prev, progress: prev.progress + 2 };
+        // Slower progress for more realistic "analysis" feel (0.5% per 30ms -> ~6 seconds)
+        return { ...prev, progress: prev.progress + 0.5 };
       });
     }, 30);
 
@@ -222,12 +261,52 @@ const [fadeMode, setFadeMode] = useState(false);
       const { assetId, type, rect } = isTracking;
 
       if (type === "blur") {
+        // Initialize Tracker
+        const trackId = `${assetId}-${Date.now()}`;
+
+        // Capture template
+        const asset = assets.find((a) => a.id === assetId);
+        if (asset && asset.type === "video" && videoRef.current) {
+          const vid = videoRef.current;
+          const tCanvas = document.createElement("canvas"); // Temporary canvas for capture
+          const tw = 32; // Template width (small for performance)
+          const th = 32;
+          tCanvas.width = tw;
+          tCanvas.height = th;
+          const tCtx = tCanvas.getContext("2d");
+
+          if (tCtx) {
+            // Draw the specific region of the video to the template canvas
+            // rect is normalized 0-1.
+            const sx = rect.x * vid.videoWidth;
+            const sy = rect.y * vid.videoHeight;
+            const sw = rect.w * vid.videoWidth;
+            const sh = rect.h * vid.videoHeight;
+
+            tCtx.drawImage(vid, sx, sy, sw, sh, 0, 0, tw, th);
+            const templateData = tCtx.getImageData(0, 0, tw, th).data;
+
+            trackingState.current.set(trackId, {
+              template: templateData,
+              tWidth: tw,
+              tHeight: th,
+              lastX: rect.x,
+              lastY: rect.y,
+              assetWidth: vid.videoWidth,
+              assetHeight: vid.videoHeight
+            });
+          }
+        }
+
         setAssets((prev) =>
           prev.map((a) => {
             if (a.id === assetId) {
               return {
                 ...a,
-                effects: [...(a.effects || []), { type: "blur", rect }]
+                effects: [
+                  ...(a.effects || []),
+                  { type: "blur", rect, isTracked: true, trackingId: trackId }
+                ]
               };
             }
             return a;
@@ -816,7 +895,7 @@ const [fadeMode, setFadeMode] = useState(false);
             width: { ideal: 1280 },
             height: { ideal: 720 }
           },
-          audio: true
+          audio: false
         });
         activeStreamRef.current = stream;
         if (webcamRef.current) {
@@ -833,6 +912,25 @@ const [fadeMode, setFadeMode] = useState(false);
     return () => stopTracks();
   }, [webcamActive, cameraFacing]);
 
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      // Update webcam stream
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = !next;
+        });
+      }
+      // Update mic only stream
+      if (micOnlyStreamRef.current) {
+        micOnlyStreamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = !next;
+        });
+      }
+      return next;
+    });
+  }, []);
+
   const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -843,10 +941,44 @@ const [fadeMode, setFadeMode] = useState(false);
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, w, h);
+
+    // Helper to draw webcam
+    const drawWebcam = (isFloating: boolean) => {
     if (webcamActive && webcamRef.current?.readyState >= 2) {
       const v = webcamRef.current;
-      const vRatio = v.videoWidth / v.videoHeight,
-        targetRatio = w / h;
+        const vRatio = v.videoWidth / v.videoHeight;
+
+        ctx.save();
+
+        if (isFloating) {
+          // Floating Mode
+          const trans = webcamTransform;
+          const baseDrawW = w * (trans.scale / 100);
+          const baseDrawH = baseDrawW / vRatio; // Keep original aspect ratio
+
+          const drawX = w * (trans.x / 100) - baseDrawW / 2;
+          const drawY = h * (trans.y / 100) - baseDrawH / 2;
+
+          // Shadow/Border for floating cam
+          ctx.shadowColor = "rgba(0,0,0,0.5)";
+          ctx.shadowBlur = 20;
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 2;
+
+          if (webcamFlipped) {
+            ctx.translate(drawX + baseDrawW, drawY);
+            ctx.scale(-1, 1);
+            ctx.drawImage(v, 0, 0, baseDrawW, baseDrawH);
+          } else {
+            ctx.drawImage(v, drawX, drawY, baseDrawW, baseDrawH);
+          }
+
+          // Reset transform for border
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.strokeRect(drawX, drawY, baseDrawW, baseDrawH);
+        } else {
+          // Fullscreen Mode (Background)
+          const targetRatio = w / h;
       let sw, sh, sx, sy;
       if (vRatio > targetRatio) {
         sh = v.videoHeight;
@@ -866,8 +998,16 @@ const [fadeMode, setFadeMode] = useState(false);
         ctx.scale(-1, 1);
       }
       ctx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h);
+        }
       ctx.restore();
     }
+    };
+
+    // 1. Draw Webcam if Fullscreen (Background)
+    if (webcamMode === "fullscreen") {
+      drawWebcam(false);
+    }
+
     const renderOrder = [...visibleAssetIds];
     renderOrder.forEach((id) => {
       const asset = assets.find((a) => a.id === id);
@@ -928,29 +1068,169 @@ const [fadeMode, setFadeMode] = useState(false);
 
         // Helper to convert source-relative points to canvas coordinates
         const sourceToCanvas = (pt: Point) => {
-          const relX =
-            (pt.x - trans.cropLeft / 100) /
-            (1 - (trans.cropLeft + trans.cropRight) / 100);
-          const relY =
-            (pt.y - trans.cropTop / 100) /
-            (1 - (trans.cropTop + trans.cropBottom) / 100);
-          return { x: drawX + relX * finalW, y: drawY + relY * finalH };
+          const cropW = 1 - (trans.cropLeft + trans.cropRight) / 100;
+          const cropH = 1 - (trans.cropTop + trans.cropBottom) / 100;
+
+          // Relative position within the visible crop (0 to 1)
+          const relX = (pt.x - trans.cropLeft / 100) / cropW;
+          const relY = (pt.y - trans.cropTop / 100) / cropH;
+
+          return {
+            x: drawX + relX * finalW,
+            y: drawY + relY * finalH
+          };
         };
 
         // Render Blur Effects
         if (asset.effects) {
           asset.effects.forEach((effect) => {
             if (effect.type === "blur") {
-              const p0 = sourceToCanvas({ x: effect.rect.x, y: effect.rect.y });
+              let rx = effect.rect.x;
+              let ry = effect.rect.y;
+
+              // Real-time Template Matching Tracking
+              if (
+                effect.isTracked &&
+                effect.trackingId &&
+                asset.type === "video" &&
+                videoRef.current &&
+                trackingState.current.has(effect.trackingId)
+              ) {
+                const tracker = trackingState.current.get(effect.trackingId)!;
+                const vid = videoRef.current;
+
+                // Perform tracking update (simple template matching)
+                // We do this every frame. For optimization, could skip frames.
+
+                // 1. Define search window around last known position
+                // Search range: +/- 10% of video dimension or fixed pixels?
+                // Let's use fixed pixels for stability. +/- 20px.
+                const searchRange = 20;
+                const tw = tracker.tWidth;
+                const th = tracker.tHeight;
+
+                // Current position in video pixels
+                const curX = tracker.lastX * vid.videoWidth;
+                const curY = tracker.lastY * vid.videoHeight;
+
+                // Search bounds
+                const searchX = Math.max(0, curX - searchRange);
+                const searchY = Math.max(0, curY - searchRange);
+                const searchW = Math.min(
+                  vid.videoWidth - searchX,
+                  tw + searchRange * 2
+                );
+                const searchH = Math.min(
+                  vid.videoHeight - searchY,
+                  th + searchRange * 2
+                );
+
+                // Use a shared canvas for processing to avoid creating one every frame
+                if (!trackingCanvasRef.current) {
+                  trackingCanvasRef.current = document.createElement("canvas");
+                }
+                const tc = trackingCanvasRef.current;
+                if (tc.width < searchW || tc.height < searchH) {
+                  tc.width = Math.max(tc.width, searchW);
+                  tc.height = Math.max(tc.height, searchH);
+                }
+                const tCtx = tc.getContext("2d", { willReadFrequently: true });
+
+                if (tCtx) {
+                  tCtx.drawImage(
+                    vid,
+                    searchX,
+                    searchY,
+                    searchW,
+                    searchH,
+                    0,
+                    0,
+                    searchW,
+                    searchH
+                  );
+                  const searchData = tCtx.getImageData(
+                    0,
+                    0,
+                    searchW,
+                    searchH
+                  ).data;
+                  const template = tracker.template;
+
+                  let minSAD = Infinity;
+                  let bestX = 0;
+                  let bestY = 0;
+
+                  // SAD (Sum of Absolute Differences) Loop
+                  // Step size 2 for performance
+                  for (let y = 0; y <= searchH - th; y += 2) {
+                    for (let x = 0; x <= searchW - tw; x += 2) {
+                      let sad = 0;
+                      // Subsample pixels for performance (check every 4th pixel)
+                      for (let i = 0; i < th; i += 4) {
+                        for (let j = 0; j < tw; j += 4) {
+                          const tIdx = (i * tw + j) * 4;
+                          const sIdx = ((y + i) * searchW + (x + j)) * 4;
+                          sad += Math.abs(template[tIdx] - searchData[sIdx]); // R
+                          sad += Math.abs(
+                            template[tIdx + 1] - searchData[sIdx + 1]
+                          ); // G
+                          sad += Math.abs(
+                            template[tIdx + 2] - searchData[sIdx + 2]
+                          ); // B
+                        }
+                        if (sad > minSAD) break; // Optimization: Early exit
+                      }
+
+                      if (sad < minSAD) {
+                        minSAD = sad;
+                        bestX = x;
+                        bestY = y;
+                      }
+                    }
+                  }
+
+                  // Update position
+                  // New center relative to search window -> relative to video -> normalized
+                  const newVidX = searchX + bestX;
+                  const newVidY = searchY + bestY;
+
+                  // Smooth update (Exponential Moving Average) to reduce jitter
+                  const smoothFactor = 0.5;
+                  tracker.lastX =
+                    tracker.lastX * (1 - smoothFactor) +
+                    (newVidX / vid.videoWidth) * smoothFactor;
+                  tracker.lastY =
+                    tracker.lastY * (1 - smoothFactor) +
+                    (newVidY / vid.videoHeight) * smoothFactor;
+
+                  rx = tracker.lastX;
+                  ry = tracker.lastY;
+                }
+              } else if (
+                effect.isTracked &&
+                asset.type === "video" &&
+                videoRef.current
+              ) {
+                // Fallback to simulation if tracking data missing (shouldn't happen with new logic)
+                const t = videoRef.current.currentTime;
+                const wobbleX =
+                  Math.sin(t * 3.5) * 0.01 + Math.cos(t * 1.2) * 0.01;
+                const wobbleY =
+                  Math.cos(t * 2.8) * 0.01 + Math.sin(t * 0.9) * 0.01;
+                rx += wobbleX;
+                ry += wobbleY;
+              }
+
+              const p0 = sourceToCanvas({ x: rx, y: ry });
               const p1 = sourceToCanvas({
-                x: effect.rect.x + effect.rect.w,
-                y: effect.rect.y + effect.rect.h
+                x: rx + effect.rect.w,
+                y: ry + effect.rect.h
               });
 
-              const bx = p0.x;
-              const by = p0.y;
-              const bw = p1.x - p0.x;
-              const bh = p1.y - p0.y;
+              const bx = Math.min(p0.x, p1.x);
+              const by = Math.min(p0.y, p1.y);
+              const bw = Math.abs(p1.x - p0.x);
+              const bh = Math.abs(p1.y - p0.y);
 
               ctx.save();
               ctx.beginPath();
@@ -977,25 +1257,45 @@ const [fadeMode, setFadeMode] = useState(false);
         // Render Tracking Progress
         if (id === selectedAssetId && isTracking) {
           ctx.save();
-          // Draw tracking box
+
+          // Simulate tracking box movement during analysis
+          let tx = isTracking.rect.x;
+          let ty = isTracking.rect.y;
+          const t = Date.now() / 1000;
+          const wobbleX = Math.sin(t * 10) * 0.005; // Fast jitter
+          const wobbleY = Math.cos(t * 8) * 0.005;
+          tx += wobbleX;
+          ty += wobbleY;
+
           const p0 = sourceToCanvas({
-            x: isTracking.rect.x,
-            y: isTracking.rect.y
+            x: tx,
+            y: ty
           });
           const p1 = sourceToCanvas({
-            x: isTracking.rect.x + isTracking.rect.w,
-            y: isTracking.rect.y + isTracking.rect.h
+            x: tx + isTracking.rect.w,
+            y: ty + isTracking.rect.h
           });
 
-          const bx = p0.x;
-          const by = p0.y;
-          const bw = p1.x - p0.x;
-          const bh = p1.y - p0.y;
+          const bx = Math.min(p0.x, p1.x);
+          const by = Math.min(p0.y, p1.y);
+          const bw = Math.abs(p1.x - p0.x);
+          const bh = Math.abs(p1.y - p0.y);
 
+          // Draw Tracking Box
           ctx.strokeStyle = "#10b981";
           ctx.lineWidth = 2;
           ctx.setLineDash([5, 5]);
           ctx.strokeRect(bx, by, bw, bh);
+
+          // Draw Scanning Line
+          const scanY = by + bh * ((Date.now() % 1000) / 1000);
+          ctx.beginPath();
+          ctx.moveTo(bx, scanY);
+          ctx.lineTo(bx + bw, scanY);
+          ctx.strokeStyle = "rgba(16, 185, 129, 0.8)";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([]);
+          ctx.stroke();
 
           // Draw Progress Bar above box
           const barW = 100;
@@ -1012,7 +1312,11 @@ const [fadeMode, setFadeMode] = useState(false);
           ctx.font = "bold 10px sans-serif";
           ctx.fillStyle = "#fff";
           ctx.textAlign = "center";
-          ctx.fillText("TRACKING...", barX + barW / 2, barY - 5);
+          ctx.fillText(
+            `ANALYZING ${Math.floor(isTracking.progress)}%`,
+            barX + barW / 2,
+            barY - 5
+          );
 
           ctx.restore();
         }
@@ -1181,6 +1485,27 @@ const [fadeMode, setFadeMode] = useState(false);
         }
       }
     });
+
+    // 2. Draw Webcam if Floating (Foreground)
+    if (webcamMode === "floating") {
+      drawWebcam(true);
+    }
+
+    // 3. Draw Watermark
+   if (showWatermark || !watermarkUnlocked) {
+     ctx.save();
+     ctx.font = "900 24px 'Inter', sans-serif";
+     ctx.textAlign = "right";
+     ctx.textBaseline = "bottom";
+     ctx.shadowColor = "rgba(0,0,0,0.8)";
+     ctx.shadowBlur = 4;
+     ctx.shadowOffsetX = 2;
+     ctx.shadowOffsetY = 2;
+     ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+     ctx.fillText("DIRECTOR'S CUT", canvas.width - 30, canvas.height - 30);
+     ctx.restore();
+   }
+
     requestRef.current = requestAnimationFrame(drawFrame);
   }, [
     visibleAssetIds,
@@ -1188,13 +1513,16 @@ const [fadeMode, setFadeMode] = useState(false);
     selectedAssetId,
     webcamActive,
     webcamFlipped,
+    webcamMode,
+    webcamTransform,
     isLocked,
     selectedAsset?.fullFrame,
     isDrawingMode,
     drawingShape,
     isAiProcessing,
     isRecording,
-    activePath
+    activePath,
+    showWatermark
   ]);
 
   useEffect(() => {
@@ -1228,6 +1556,60 @@ const [fadeMode, setFadeMode] = useState(false);
 
     const canvasX = (clientX - rect.left) * scaleX;
     const canvasY = (clientY - rect.top) * scaleY;
+
+    // Webcam Floating Interaction
+    if (webcamActive && webcamMode === "floating") {
+      const trans = webcamTransform;
+      const v = webcamRef.current;
+      const vRatio = v ? v.videoWidth / v.videoHeight : 16 / 9;
+      const baseDrawW = 1080 * (trans.scale / 100);
+      const baseDrawH = baseDrawW / vRatio;
+      const dX = 1080 * (trans.x / 100) - baseDrawW / 2;
+      const dY = 1920 * (trans.y / 100) - baseDrawH / 2;
+
+      if (
+        canvasX >= dX &&
+        canvasX <= dX + baseDrawW &&
+        canvasY >= dY &&
+        canvasY <= dY + baseDrawH
+      ) {
+        e.preventDefault();
+
+        // Triple Tap Detection for Webcam Flip
+        const now = Date.now();
+        if (now - lastTapRef.current < 300) {
+          tapCountRef.current += 1;
+        } else {
+          tapCountRef.current = 1;
+        }
+        lastTapRef.current = now;
+
+        if (tapCountRef.current === 3) {
+          setWebcamFlipped((prev) => !prev);
+          tapCountRef.current = 0;
+          return;
+        }
+
+        isDraggingWebcamRef.current = true;
+        dragStartTransformRef.current = { ...webcamTransform };
+        startTouchRef.current = {
+          ...startTouchRef.current,
+          x: clientX,
+          y: clientY,
+          scale: trans.scale,
+          dist: 0 // Will be set if pinching
+        };
+
+        if (e.touches.length === 2) {
+          setIsPinching(true);
+          startTouchRef.current.dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+        }
+        return;
+      }
+    }
 
     // Magic Selection Logic
     if (
@@ -1419,6 +1801,44 @@ const [fadeMode, setFadeMode] = useState(false);
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY;
 
+    // Handle Webcam Dragging
+    if (isDraggingWebcamRef.current) {
+      e.preventDefault();
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const canvas = canvasRef.current!;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      if (e.touches.length === 1 && !isPinching) {
+        const dx = (clientX - startTouchRef.current.x) * scaleX;
+        const dy = (clientY - startTouchRef.current.y) * scaleY;
+        const trans = dragStartTransformRef.current;
+
+        setWebcamTransform({
+          ...trans,
+          x: trans.x + (dx / 1080) * 100,
+          y: trans.y + (dy / 1920) * 100
+        });
+      } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const scaleFactor = dist / (startTouchRef.current.dist || 1);
+        const newScale = Math.min(
+          100,
+          Math.max(10, startTouchRef.current.scale * scaleFactor)
+        );
+
+        setWebcamTransform((prev) => ({
+          ...prev,
+          scale: newScale
+        }));
+      }
+      return;
+    }
+
     if (!isDraggingRef.current) {
       const dist = Math.hypot(
         clientX - initialTouchRef.current.x,
@@ -1606,6 +2026,8 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
           shAct =
             selectedAsset!.height *
             (1 - (trans.cropTop + trans.cropBottom) / 100);
+
+        // Calculate original bounding box from initial transform
         const xL =
             (1080 * trans.x) / 100 -
             (baseDrawW * swAct) / selectedAsset!.width / 2,
@@ -1618,6 +2040,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
           yB =
             (1920 * trans.y) / 100 +
             (baseDrawH * shAct) / selectedAsset!.height / 2;
+
         if (grabbedPart === "left") {
           const nc = Math.max(
             0,
@@ -1801,6 +2224,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
     setGrabbedPart(null);
     setIsPinching(false);
     isDraggingRef.current = false;
+    isDraggingWebcamRef.current = false;
     // setActivePath([]); // Removed this global clear to support magic selection persistence
   };
 
@@ -1881,6 +2305,13 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         } catch (err) {
           console.warn("Mic access denied, continuing without audio.");
         }
+      }
+
+      // Apply mute state immediately
+      if (commentary) {
+        commentary.getAudioTracks().forEach((track) => {
+          track.enabled = !isMuted;
+        });
       }
 
       if (commentary && commentary.getAudioTracks().length > 0)
@@ -2100,7 +2531,9 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
   return (
     <div className="flex flex-col h-[100dvh] bg-black text-white overflow-hidden font-sans touch-none select-none">
       <section
-        className="relative w-full flex-1 flex items-center justify-center overflow-hidden z-10"
+        className={`relative w-full flex-1 flex items-center justify-center overflow-hidden z-10 ${
+          isReviewing ? "pointer-events-none select-none" : ""
+        }`}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -2156,25 +2589,6 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
           className="absolute top-6 left-6 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
         >
           <XIcon className="text-xs" />
-        </button>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!isFinalizing && !isReviewing) {
-              setWebcamFlipped((p) => !p);
-            }
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-          onMouseUp={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
-          onTouchEnd={(e) => e.stopPropagation()}
-          disabled={isFinalizing || isReviewing}
-          className={`absolute top-6 right-6 z-50 w-7 h-7 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20 ${
-            webcamFlipped ? "text-blue-400 border-blue-400/50" : ""
-          }`}
-        >
-          <ArrowsRightLeftIcon className="text-xs" />
         </button>
 
         <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
@@ -2256,40 +2670,6 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         </div>
 
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col space-y-3 z-30">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!isFinalizing && !isReviewing) {
-                if (!webcamActive) {
-                  setWebcamActive(true);
-                  setCameraFacing("user");
-                } else if (cameraFacing === "user") {
-                  setCameraFacing("environment");
-                } else {
-                  setWebcamActive(false);
-                }
-              }
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
-            disabled={isFinalizing || isReviewing}
-            className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
-              webcamActive
-                ? "bg-blue-500 border-blue-300 text-white shadow-[0_0_25px_rgba(59,130,246,0.9)]"
-                : "bg-blue-500/20 border-blue-400 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.5)]"
-            }`}
-          >
-            <CameraIcon className="drop-shadow-[0_0_6px_rgba(59,130,246,0.9)]" />
-            <span className="text-[7px] font-black mt-1 uppercase">
-              {!webcamActive
-                ? "Sight"
-                : cameraFacing === "user"
-                  ? "Front"
-                  : "Back"}
-            </span>
-          </button>
           {/* PASTE GHOST BUTTON HERE */}
           <button
             onClick={(e) => {
@@ -2338,7 +2718,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
               >
                 {isAiProcessing ? <LoaderIcon /> : <SparklesIcon />}
                 <span className="text-[7px] font-black mt-1 uppercase">
-                  Magic
+                  {magicMode !== null ? "Close" : "Magic"}
                 </span>
               </button>
             </div>
@@ -2463,69 +2843,60 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                 </span>
               </button>
 
-              {selectedAsset?.type !== "video" && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (
-                      magicMode === "cut_selecting" &&
-                      activePath.length > 0
-                    ) {
-                      // CONFIRM CUT
-                      const xs = activePath.map((p) => p.x);
-                      const ys = activePath.map((p) => p.y);
-                      const minX = Math.min(...xs);
-                      const maxX = Math.max(...xs);
-                      const minY = Math.min(...ys);
-                      const maxY = Math.max(...ys);
-                      const rect = {
-                        x: minX,
-                        y: minY,
-                        w: maxX - minX,
-                        h: maxY - minY
-                      };
+              {
+                /* Cut Tool - ONLY for Images */
+                selectedAsset?.type !== "video" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (
+                        magicMode === "cut_selecting" &&
+                        activePath.length > 0
+                      ) {
+                        // CONFIRM CUT (Image Only)
+                        const xs = activePath.map((p) => p.x);
+                        const ys = activePath.map((p) => p.y);
+                        const minX = Math.min(...xs);
+                        const maxX = Math.max(...xs);
+                        const minY = Math.min(...ys);
+                        const maxY = Math.max(...ys);
+                        const rect = {
+                          x: minX,
+                          y: minY,
+                          w: maxX - minX,
+                          h: maxY - minY
+                        };
 
-                      if (selectedAsset?.type === "video") {
-                        // Start Tracking for Video
-                        setIsTracking({
-                          assetId: selectedAssetId!,
-                          type: "cut",
-                          rect,
-                          progress: 0
-                        });
-                        setMagicMode(null);
-                        setActivePath([]);
-                      } else {
                         // Apply immediately (AI) for Image
                         handleMagicCutout(rect);
+                      } else {
+                        setMagicMode("cut_selecting");
+                        setActivePath([]);
                       }
-                    } else {
-                      setMagicMode("cut_selecting");
-                      setActivePath([]);
-                    }
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onMouseUp={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
-                  onTouchEnd={(e) => e.stopPropagation()}
-                  className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
-                    magicMode === "cut_selecting"
-                      ? activePath.length > 0
-                        ? "bg-green-500 border-green-300 text-white shadow-[0_0_25px_rgba(34,197,94,0.9)] animate-pulse"
-                        : "bg-pink-500 border-pink-300 text-white shadow-[0_0_25px_rgba(236,72,153,0.9)]"
-                      : "bg-pink-500/20 border-pink-400/30 text-pink-300/50"
-                  }`}
-                >
-                  <EraserIcon
-                    className={`drop-shadow-[0_0_6px_rgba(236,72,153,0.9)]`}
-                  />
-                  <span className="text-[7px] font-black mt-1 uppercase">
-                    {magicMode === "cut_selecting" && activePath.length > 0
-                      ? "Apply"
-                      : "Cut"}
-                  </span>
-                </button>
-              )}
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onMouseUp={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                      magicMode === "cut_selecting"
+                        ? activePath.length > 0
+                          ? "bg-green-500 border-green-300 text-white shadow-[0_0_25px_rgba(34,197,94,0.9)] animate-pulse"
+                          : "bg-pink-500 border-pink-300 text-white shadow-[0_0_25px_rgba(236,72,153,0.9)]"
+                        : "bg-pink-500/20 border-pink-400/30 text-pink-300/50"
+                    }`}
+                  >
+                    <EraserIcon
+                      className={`drop-shadow-[0_0_6px_rgba(236,72,153,0.9)]`}
+                    />
+                    <span className="text-[7px] font-black mt-1 uppercase">
+                      {magicMode === "cut_selecting" && activePath.length > 0
+                        ? "Apply"
+                        : "Cut"}
+                    </span>
+                  </button>
+                )
+              }
             </>
           )}
 
@@ -2561,6 +2932,37 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
             </>
           )}
         </div>
+
+        {/* Watermark Button */}
+        {!isFinalizing && !isReviewing && !magicMode && (
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+
+              try {
+                const ok = await consumeCredits("CHECK_ONLY");
+
+                if (!ok) {
+                  setMagicError("Login and buy credits");
+                  return;
+                }
+
+                setShowWatermark((prev) => !prev);
+              } catch {
+                setMagicError("Login and buy credits");
+              }
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            className="absolute bottom-14 right-3 z-50 w-10 h-10 flex items-center justify-center drop-shadow-lg active:scale-90 transition-transform"
+          >
+            <WatermarkIcon
+              className={`text-2xl ${showWatermark ? "text-white" : "text-red-500/50"}`}
+            />
+          </button>
+        )}
 
         {selectedAssetId && !isFinalizing && !isReviewing && !magicMode && (
           <button
@@ -2654,7 +3056,11 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         </div>
       </section>
 
-      <footer className="relative flex-none bg-black flex flex-col items-center justify-between pb-safe pt-2 px-4 z-40 border-t border-white/5 overflow-visible">
+      <footer
+        className={`relative flex-none bg-black flex flex-col items-center justify-between pb-safe pt-2 px-4 z-40 border-t border-white/5 overflow-visible ${
+          isReviewing ? "pointer-events-none select-none opacity-50" : ""
+        }`}
+      >
         <div className="w-full flex items-center space-x-3 mt-2 overflow-x-auto overflow-y-visible no-scrollbar py-2 px-1">
           {assets.map((asset) => {
             const isVisible = visibleAssetIds.includes(asset.id),
@@ -2693,6 +3099,94 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
           )}
         </div>
         <div className="relative w-full flex flex-col items-center justify-center py-4">
+          {/* Left Controls: Webcam & Mic */}
+          <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center space-x-4 z-50">
+            {/* Webcam Toggle */}
+            <div className="relative w-12 h-12">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isFinalizing && !isReviewing) {
+                    if (!webcamActive) {
+                      setWebcamActive(true);
+                      setWebcamMode("fullscreen");
+                      setCameraFacing("user");
+                    } else if (webcamMode === "fullscreen") {
+                      setWebcamMode("floating");
+                    } else {
+                      setWebcamActive(false);
+                    }
+                  }
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                disabled={isFinalizing || isReviewing}
+                className={`w-full h-full rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
+                  webcamActive
+                    ? "bg-blue-500 border-blue-300 text-white shadow-[0_0_25px_rgba(59,130,246,0.9)]"
+                    : "bg-blue-500/20 border-blue-400 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.5)]"
+                }`}
+              >
+                {webcamActive && webcamMode === "floating" ? (
+                  <ExpandIcon className="drop-shadow-[0_0_6px_rgba(59,130,246,0.9)]" />
+                ) : webcamActive ? (
+                  <CompressIcon className="drop-shadow-[0_0_6px_rgba(59,130,246,0.9)]" />
+                ) : (
+                  <CameraIcon className="drop-shadow-[0_0_6px_rgba(59,130,246,0.9)]" />
+                )}
+                <span className="text-[7px] font-black mt-1 uppercase">
+                  {!webcamActive
+                    ? "Sight"
+                    : webcamMode === "fullscreen"
+                      ? "Full"
+                      : "Float"}
+                </span>
+              </button>
+
+              {/* Mini Toggle Switch for Front/Back Camera */}
+              {webcamActive && (
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCameraFacing((prev) =>
+                      prev === "user" ? "environment" : "user"
+                    );
+                  }}
+                  className="absolute -top-5 left-1/2 -translate-x-1/2 w-8 h-4 bg-black/60 backdrop-blur-md border border-white/30 rounded-full flex items-center p-0.5 cursor-pointer z-50 shadow-lg"
+                >
+                  <div
+                    className={`w-3 h-3 rounded-full shadow-sm transition-all duration-300 ${
+                      cameraFacing === "environment"
+                        ? "bg-blue-400 translate-x-4"
+                        : "bg-white translate-x-0"
+                    }`}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Mic Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMute();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              className="w-12 h-12 rounded-2xl flex items-center justify-center drop-shadow-lg active:scale-90 transition-transform bg-zinc-900 border border-zinc-700"
+            >
+              {isMuted ? (
+                <MicOffIcon className="text-xl text-red-500" />
+              ) : (
+                <MicIcon className="text-xl text-white" />
+              )}
+            </button>
+          </div>
+
           {isRecordConfirming && (
             <div className="absolute bottom-20 bg-emerald-600/90 backdrop-blur-lg px-4 py-2 rounded-2xl text-[10px] font-black tracking-widest uppercase text-white shadow-2xl animate-bounce">
               Are you sure?
