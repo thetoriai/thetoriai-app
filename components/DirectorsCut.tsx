@@ -3100,7 +3100,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         </div>
         <div className="relative w-full flex flex-col items-center justify-center py-4">
           {/* Left Controls: Webcam & Mic */}
-          <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center space-x-4 z-50">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center space-x-4 z-50">
             {/* Webcam Toggle */}
             <div className="relative w-12 h-12">
               <button
