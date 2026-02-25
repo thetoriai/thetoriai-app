@@ -196,6 +196,8 @@ export const TrashIcon: React.FC<IconProps> = ({ className }) => (
 
 export const PlusIcon: React.FC<IconProps> = ({ className }) => (
   <svg
+    width="20"
+    height="20"
     className={className}
     fill="none"
     viewBox="0 0 24 24"
@@ -938,6 +940,8 @@ export const MicIcon: React.FC<IconProps> = ({ className }) => (
 // ADDED: MicOffIcon
 export const MicOffIcon: React.FC<IconProps> = ({ className }) => (
   <svg
+    width="20"
+height="20"
     className={className}
     viewBox="0 0 24 24"
     fill="none"
