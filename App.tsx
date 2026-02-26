@@ -10,6 +10,7 @@ import { Sidebar, VIEW_COLORS } from "./components/Sidebar";
 import { Auth } from "./components/Auth";
 import { Modals } from "./components/Modals";
 import { WelcomePage } from "./components/WelcomePage";
+import { StudioHub } from "./components/StudioHub";
 import { ActorRoster } from "./components/ActorRoster";
 import { StorybookCreator } from "./components/Storybook";
 import { Storyboard } from "./components/Storyboard";
@@ -2864,6 +2865,9 @@ useEffect(() => {
               </div>
             ) : (
               <div className="flex-1 flex flex-col h-full overflow-hidden">
+                {activeView === "welcome" && session && (
+                  <StudioHub onNavigate={setActiveView} />
+                )}
                 {activeView === "roster" && renderRoster()}
                 {activeView === "storybook" && renderStorybook()}
                 {activeView === "storyboard" && renderStoryboard()}
