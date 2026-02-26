@@ -732,17 +732,7 @@ const [fadeMode, setFadeMode] = useState(false);
   }) => {
     if (!selectedAsset || isFinalizing || isReviewing) return;
     // CREDIT DEDUCTION
-   try {
-     const ok = await consumeCredits("IMAGE_NORMAL");
-
-     if (!ok) {
-       setMagicError("Login and buy credits");
-       return;
-     }
-   } catch {
-     setMagicError("Login and buy credits");
-     return;
-   }
+   
     
     setIsAiProcessing(true);
 
