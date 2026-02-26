@@ -2790,56 +2790,46 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                         h: maxY - minY
                       };
 
-                      try {
-                        const ok = await consumeCredits("IMAGE_NORMAL");
+                     
 
-                        if (!ok) {
-                          setMagicError("Login and buy credits");
-                          return;
-                        }
-                      } catch {
-                        setMagicError("Login and buy credits");
-                        return;
-                      }
+                     if (!selectedAsset) return;
 
-                      if (selectedAsset?.type === "video") {
-                        setIsTracking({
-                          assetId: selectedAssetId!,
-                          type: "blur",
-                          rect,
-                          progress: 0
-                        });
-                      } else {
-                        try {
-                          const ok = await consumeCredits("IMAGE_NORMAL");
+                     if (selectedAsset.type === "video") {
+                       setIsTracking({
+                         assetId: selectedAssetId!,
+                         type: "blur",
+                         rect,
+                         progress: 0
+                       });
+                     } else {
+                       try {
+                         const ok = await consumeCredits("IMAGE_NORMAL");
+                         if (!ok) {
+                           setMagicError("Login and buy credits");
+                           return;
+                         }
+                       } catch {
+                         setMagicError("Login and buy credits");
+                         return;
+                       }
+                       setAssets((prev) =>
+                         prev.map((a) => {
+                           if (a.id === selectedAssetId) {
+                             return {
+                               ...a,
+                               effects: [
+                                 ...(a.effects || []),
+                                 { type: "blur", rect }
+                               ]
+                             };
+                           }
+                           return a;
+                         })
+                       );
 
-                          if (!ok) {
-                            setMagicError("Login and buy credits");
-                            return;
-                          }
-                        } catch {
-                          setMagicError("Login and buy credits");
-                          return;
-                        }
-
-                        setAssets((prev) =>
-                          prev.map((a) => {
-                            if (a.id === selectedAssetId) {
-                              return {
-                                ...a,
-                                effects: [
-                                  ...(a.effects || []),
-                                  { type: "blur", rect }
-                                ]
-                              };
-                            }
-                            return a;
-                          })
-                        );
-
-                        setMagicMode(null);
-                        setActivePath([]);
-                      }
+                       setMagicMode(null);
+                       setActivePath([]);
+                     }
 
                       setMagicMode(null);
                       setActivePath([]);
