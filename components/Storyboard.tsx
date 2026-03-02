@@ -98,6 +98,7 @@ interface StoryboardProps {
     imageTier?: string,
     endImage?: string
   ) => void;
+  initialTab?: "quickFootage" | "storybook";
 }
 
 export const Storyboard = React.memo(
@@ -109,7 +110,14 @@ export const Storyboard = React.memo(
 
     const [activeStudioTab, setActiveStudioTab] = useState<
       "quickFootage" | "storybook"
-    >("quickFootage");
+    >(props.initialTab || "quickFootage");
+
+    useEffect(() => {
+      if (props.initialTab) {
+        setActiveStudioTab(props.initialTab);
+      }
+    }, [props.initialTab]);
+
     const [qfPrompt, setQfPrompt] = useState("");
     const [qfMode, setQfMode] = useState<"image" | "video">("image");
     const [qfImageTier, setQfImageTier] = useState<"fast" | "pro">("fast");
@@ -226,13 +234,17 @@ export const Storyboard = React.memo(
 
     let action = "IMAGE_FAST";
 
-    if (hasRefs) {
-      action = "IMAGE_PRO";
-    } else if (qfMode === "image") {
-      action = qfImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
+  if (hasRefs) {
+    action = qfImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
+  } else if (qfMode === "image") {
+    action = qfImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
+  } else if (qfMode === "video") {
+    if (qfVideoTier === "veo31-quality") {
+      action = videoLength === 8 ? "VIDEO_HQ_8S" : "VIDEO_HQ_6S";
     } else {
-      action = qfVideoTier === "veo31-quality" ? "VIDEO_HQ" : "VIDEO_FAST";
+      action = videoLength === 8 ? "VIDEO_FAST_8S" : "VIDEO_FAST_6S";
     }
+  }
 
     try {
       const ok = await props.consumeCredits(action);
@@ -240,13 +252,13 @@ export const Storyboard = React.memo(
       if (!ok) {
         setQfCreditError(true);
         setIsConfirmingQF(false);
-        setTimeout(() => setQfCreditError(false), 3000);
+        
         return;
       }
     } catch {
       setQfCreditError(true);
       setIsConfirmingQF(false);
-      setTimeout(() => setQfCreditError(false), 3000);
+      
       return;
     }
 
@@ -557,6 +569,7 @@ export const Storyboard = React.memo(
                   value={qfPrompt}
                   onChange={(e) => {
                     setQfPrompt(e.target.value);
+                    setQfCreditError(false);
                     setIsConfirmingQF(false);
                   }}
                   placeholder="Describe your emotion vision or motion process... results appear below."

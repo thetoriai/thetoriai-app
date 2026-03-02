@@ -139,7 +139,16 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const [confirmingBatch, setConfirmingBatch] = useState(false);
   const [confirmingExecuteIdx, setConfirmingExecuteIdx] = useState<
     number | null
-  >(null);
+    >(null);
+  const [sceneCreditErrorIdx, setSceneCreditErrorIdx] = useState<number | null>(
+    null
+  );
+ const [sceneImageTiers, setSceneImageTiers] = useState<
+   Record<number, "fast" | "pro">
+   >({});
+  
+  const [batchCreditError, setBatchCreditError] = useState(false);
+
   const [isConfirmingSpeak, setIsConfirmingSpeak] = useState(false);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const speakButtonRef = useRef<HTMLButtonElement>(null);
@@ -505,33 +514,60 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   };
 
   const handleExecuteSingleScene = (index: number) => {
+    const currentTier = sceneImageTiers[index] || "fast";
+    const cost = currentTier === "pro" ? 2 : 1;
+
+    // FIRST: immediate credit check
+    if (creditBalance < cost) {
+      setSceneCreditErrorIdx(index);
+      setConfirmingExecuteIdx(null);
+      setTimeout(() => setSceneCreditErrorIdx(null), 2000);
+      return;
+    }
+
+    // THEN confirmation
     if (confirmingExecuteIdx !== index) {
+      setSceneCreditErrorIdx(null);
       setConfirmingExecuteIdx(index);
       return;
     }
-    if (creditBalance < 1) {
-      setStoryError("Insufficient credits.");
-      setConfirmingExecuteIdx(null);
-      return;
-    }
-    if (onGenerateSingleStorybookScene)
-      onGenerateSingleStorybookScene(index, "gemini-2.5-flash-image");
+
+    setSceneCreditErrorIdx(null);
     setConfirmingExecuteIdx(null);
+
+    const model =
+      currentTier === "pro"
+        ? "gemini-2.5-flash-image-pro"
+        : "gemini-2.5-flash-image";
+
+    if (onGenerateSingleStorybookScene) {
+      onGenerateSingleStorybookScene(index, model);
+    }
   };
 
   const handleBatchProduce = () => {
     if (storybookContent.scenes.length === 0) return;
+
+    const totalCost = calculateTotalBatchCost();
+
+    // FIRST: always check credit immediately
+    if (creditBalance < totalCost) {
+      setBatchCreditError(true);
+      setConfirmingBatch(false);
+      setTimeout(() => setBatchCreditError(false), 2000);
+      return;
+    }
+
+    // THEN handle confirmation
     if (!confirmingBatch) {
       setConfirmingBatch(true);
       return;
     }
-    if (creditBalance < storybookContent.scenes.length) {
-      setStoryError("Insufficient credits for full sequence production.");
-      setConfirmingBatch(false);
-      return;
-    }
+
     setConfirmingBatch(false);
+
     const scenes = storybookContent.scenes.map((s) => s.imageDescription);
+
     onGenerateFromStorybook(scenes);
   };
 
@@ -543,6 +579,15 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     link.click();
     document.body.removeChild(link);
   };
+
+  const calculateTotalBatchCost = () => {
+    return storybookContent.scenes.reduce((total, _, index) => {
+      const tier = sceneImageTiers[index] || "fast";
+      return total + (tier === "pro" ? 2 : 1);
+    }, 0);
+  };
+
+  
 
   return (
     <div className="w-full h-full flex flex-col bg-gray-950 overflow-y-auto lg:overflow-hidden font-sans scroll-smooth">
@@ -968,14 +1013,66 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                           </button>
                         </div>
                         <div className="flex items-center gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-all duration-300">
-                          <button
-                            onClick={() => handleExecuteSingleScene(index)}
-                            className={`px-5 py-2 text-[10px] font-black rounded-xl tracking-widest transition-all active:scale-95 shadow-lg ${confirmingExecuteIdx === index ? "bg-green-600 text-white" : "bg-indigo-600 text-white"}`}
-                          >
-                            {confirmingExecuteIdx === index
-                              ? "Confirm"
-                              : "Produce"}
-                          </button>
+                          <div className="relative">
+                            {sceneCreditErrorIdx === index && (
+                              <div className="absolute -top-7 right-0 text-red-500 text-[9px] font-bold">
+                                Insufficient credits
+                              </div>
+                            )}
+
+                            <button
+                              onClick={() => handleExecuteSingleScene(index)}
+                              className={`h-11 font-black tracking-widest rounded-xl transition-all active:scale-95 flex items-center border shadow-lg overflow-hidden ${
+                                sceneCreditErrorIdx === index
+                                  ? "bg-red-600 text-white border-red-500 animate-pulse"
+                                  : confirmingExecuteIdx === index
+                                    ? "bg-green-600 text-white border-green-500"
+                                    : "bg-indigo-600 text-white border-indigo-400"
+                              }`}
+                            >
+                              <div className="flex-1 px-4 flex items-center justify-center">
+                                {sceneCreditErrorIdx === index
+                                  ? "Insufficient"
+                                  : confirmingExecuteIdx === index
+                                    ? "Confirm"
+                                    : "Produce"}
+                              </div>
+
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmingExecuteIdx(null);
+
+                                  const currentTier =
+                                    sceneImageTiers[index] || "fast";
+                                  const newTier =
+                                    currentTier === "fast" ? "pro" : "fast";
+
+                                  setSceneImageTiers((prev) => ({
+                                    ...prev,
+                                    [index]: newTier
+                                  }));
+                                }}
+                                className="h-full flex items-center px-4 bg-black/20 border-l border-white/10 cursor-pointer group"
+                              >
+                                <div className="flex flex-col items-center leading-none">
+                                  <span className="text-[10px] font-black">
+                                    {(sceneImageTiers[index] || "fast") ===
+                                    "pro"
+                                      ? "PRO"
+                                      : "FAST"}
+                                  </span>
+                                  <span className="text-[11px] font-black text-sky-400">
+                                    {(sceneImageTiers[index] || "fast") ===
+                                    "pro"
+                                      ? "2C"
+                                      : "1C"}
+                                  </span>
+                                </div>
+                                <ArrowsRightLeftIcon className="w-3 h-3 ml-2 opacity-40 group-hover:opacity-100 group-hover:rotate-180 transition-all" />
+                              </div>
+                            </button>
+                          </div>
                           <button
                             onClick={() => handleRegenerateVisual(index)}
                             className="p-2 text-gray-500 hover:text-white transition-colors rounded-xl bg-white/5 border border-white/5"
@@ -1128,10 +1225,33 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 <button
                   ref={batchButtonRef}
                   onClick={handleBatchProduce}
-                  className={`px-8 py-3.5 font-black  tracking-widest rounded-full shadow-2xl transition-all active:scale-95 flex items-center gap-3 text-[15px] border ${confirmingBatch ? "bg-green-600 border-green-400 text-white" : "bg-indigo-600 border-indigo-400 text-white shadow-[0_8px_30px_rgba(79,70,229,0.4)]"}`}
+                  className={`h-14 font-black tracking-widest rounded-full transition-all active:scale-95 flex items-center border shadow-2xl overflow-hidden ${
+                    batchCreditError
+                      ? "bg-red-600 text-white border-red-500 animate-pulse"
+                      : confirmingBatch
+                        ? "bg-green-600 text-white border-green-400"
+                        : "bg-indigo-600 text-white border-indigo-400"
+                  }`}
                 >
-                  <DocumentMagnifyingGlassIcon className="w-4 h-4" />
-                  {confirmingBatch ? `Confirm Batch` : "Produce All"}
+                  <div className="flex-1 px-8 flex items-center justify-center gap-3">
+                    <DocumentMagnifyingGlassIcon className="w-4 h-4" />
+                    {batchCreditError
+                      ? "Insufficient"
+                      : confirmingBatch
+                        ? "Confirm Batch"
+                        : "Produce All"}
+                  </div>
+
+                  <div className="h-full flex items-center px-6 bg-black/20 border-l border-white/10">
+                    <div className="flex flex-col items-center leading-none">
+                      <span className="text-[11px] font-black text-white">
+                        TOTAL
+                      </span>
+                      <span className="text-[14px] font-black text-sky-400">
+                        {calculateTotalBatchCost()}C
+                      </span>
+                    </div>
+                  </div>
                 </button>
               </div>
             </div>

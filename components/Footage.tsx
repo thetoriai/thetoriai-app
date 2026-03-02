@@ -372,70 +372,17 @@ export const Footage: React.FC<FootageProps> = ({
 const handleProduceClick = async () => {
   if (!footagePrompt.trim() || isGenerating) return;
 
-  // STEP 1: calculate action FIRST
-  let action = "IMAGE_FAST";
-
-if (hasRefImages) {
-  action = footageImageTier === "pro"
-    ? "IMAGE_PRO"
-    : "IMAGE_FAST";
-}
-
-else if (footageMode === "image") {
-  action = footageImageTier === "pro"
-    ? "IMAGE_PRO"
-    : "IMAGE_FAST";
-}
-
-else if (footageMode === "video") {
-
-  const duration = videoLength === 8 ? "8S" : "6S";
-
-  if (footageVideoTier === "veo31-quality") {
-    action = duration === "8S"
-      ? "VIDEO_HQ_8S"
-      : "VIDEO_HQ_6S";
-  }
-
-  else {
-    action = duration === "8S"
-      ? "VIDEO_FAST_8S"
-      : "VIDEO_FAST_6S";
-  }
-
-}
-
-  // STEP 2: first click = confirmation only
+  // First click = confirmation only
   if (!isConfirming) {
-      if (creditError) return;
+    if (creditError) return;
     setCreditError(false);
     setIsConfirming(true);
     return;
   }
 
-  // STEP 3: second click = real credit check
-    let success = false;
-    try {
-      success = await consumeCredits(action);
-    } catch (err) {
-      success = false;
-    }
-
-  if (!success) {
-    // THIS is what makes the button red
-    setCreditError(true);
-
-    // IMPORTANT: keep confirming OFF so it does not stay green
-    setIsConfirming(false);
-
-    // STOP here
-    return;
-  }
-
-  // STEP 4: success → reset error
+  // Second click = trigger production (App will deduct credits)
   setCreditError(false);
 
-  // STEP 5: produce
   onProduce(
     footagePrompt,
     hasRefImages ? "i2i" : footageMode,

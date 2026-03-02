@@ -57,7 +57,7 @@ const HoverVideo: React.FC<{
         loop
         playsInline
         preload="auto"
-        className="w-full h-full object-cover"
+        className="w-full h-full object-cover scale-105"
       />
       <div className="absolute inset-0 ring-1 ring-inset ring-white/5 rounded-2xl pointer-events-none"></div>
 
@@ -207,7 +207,9 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({
                     isMobile={isMobile}
                     onActivate={() => !isMobile && setActiveReelIdx(i)}
                     onDeactivate={() =>
-                      !isMobile && activeReelIdx === i && setActiveReelIdx(null)
+                        !isMobile &&
+                        activeReelIdx === i &&
+                        setActiveReelIdx(null)
                     }
                   />
                   <div className="mt-4 flex items-center justify-between px-2">
