@@ -2268,7 +2268,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
     if (
       e &&
       e.type === "mouseup" &&
-      Date.now() - lastTouchTimeRef.current < 250
+      Date.now() - lastTouchTimeRef.current < 20
     ) {
       return;
     }
@@ -3239,238 +3239,238 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
 
         {/* Review & Choice Screen */}
         {isReviewing && (
-          <div className="fixed inset-0 z-[110] bg-black flex flex-col items-center justify-center animate-fade-in pointer-events-auto">
-            {/* Top Speed Controls */}
-            <div className="absolute top-10 flex space-x-2 z-20 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/10">
-              {[1.5, 2, 2.5].map((speed) => (
-                <button
-                  key={speed}
-                  onClick={() => togglePlaybackSpeed(speed)}
-                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                    reviewPlaybackRate === speed
-                      ? "bg-emerald-500 text-black shadow-lg"
-                      : "text-white/60 hover:text-white hover:bg-white/10"
-                  }`}
-                >
-                  {speed}x
-                </button>
-              ))}
-            </div>
+          <>
+            {/* Blur + Dark Background Overlay */}
+            <div className="fixed inset-0 z-[9000] backdrop-blur-lg bg-black/70"></div>
 
-            {/* Video Preview - Full Screen */}
-            <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
-              {reviewVideoUrl && (
-                <div className="relative w-full h-full">
-                  <video
-                    ref={reviewVideoRef}
-                    src={reviewVideoUrl}
-                    className="w-full h-full object-contain"
-                    playsInline
-                  
-                    loop={false}
-                    controls={false}
-                    onPlay={() => setIsReviewPlaying(true)}
-                    onPause={() => setIsReviewPlaying(false)}
-                    onTimeUpdate={handleReviewTimeUpdate}
-                    onClick={() => {
-                      const now = Date.now();
-                      const timeSinceLastTap = now - lastTapRef.current;
+            {/* Review Panel */}
+            <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center animate-fade-in pointer-events-auto">
+              {/* Top Speed Controls */}
+              <div className="absolute top-10 flex space-x-2 z-20 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/10">
+                {[1.5, 2, 2.5].map((speed) => (
+                  <button
+                    key={speed}
+                    onClick={() => togglePlaybackSpeed(speed)}
+                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                      reviewPlaybackRate === speed
+                        ? "bg-emerald-500 text-black shadow-lg"
+                        : "text-white/60 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </div>
 
-                      const video = reviewVideoRef.current;
-                      if (!video) return;
+              {/* Video Preview - Full Screen */}
+              <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
+                {reviewVideoUrl && (
+                  <div className="relative w-full h-full">
+                    <video
+                      ref={reviewVideoRef}
+                      src={reviewVideoUrl}
+                      className="w-full h-full object-contain"
+                      playsInline
+                      loop={false}
+                      controls={false}
+                      onPlay={() => setIsReviewPlaying(true)}
+                      onPause={() => setIsReviewPlaying(false)}
+                      onTimeUpdate={handleReviewTimeUpdate}
+                      onClick={() => {
+                        const now = Date.now();
+                        const timeSinceLastTap = now - lastTapRef.current;
 
-                      const duration = video.duration || 1;
-                      const start = trimRange[0] * duration;
+                        const video = reviewVideoRef.current;
+                        if (!video) return;
 
-                      if (timeSinceLastTap < 300) {
-                        // DOUBLE TAP → Restart from trim start
-                        video.currentTime = start;
-                        video.play();
-                        lastTapRef.current = 0;
-                      } else {
-                        // SINGLE TAP → Play / Pause
-                        lastTapRef.current = now;
-                        setTimeout(() => {
-                          if (!reviewVideoRef.current) return;
+                        const duration = video.duration || 1;
+                        const start = trimRange[0] * duration;
+                        const end = trimRange[1] * duration;
 
-                          if (reviewVideoRef.current.paused) {
-                            reviewVideoRef.current.play();
-                          } else {
-                            reviewVideoRef.current.pause();
+                        if (video.paused) {
+                          // If finished or out of bounds, restart from trim start
+                          if (
+                            video.currentTime >= end - 0.1 ||
+                            video.currentTime < start
+                          ) {
+                          video.currentTime = start;
                           }
-                        }, 200);
-                      }
+                          video.play();
+                        } else {
+                          video.pause();
+                        }
+                      }}
+                    />
+                    {/* Play Overlay */}
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Controls Area */}
+              <div className="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent pb-safe pt-12 px-6 z-30">
+                {/* Timeline / Trim Slider */}
+                <div className="relative w-full h-16 mb-6 select-none touch-none">
+                  {/* Thumbnails Background */}
+                  <div className="absolute inset-0 flex overflow-hidden rounded-lg opacity-80 border border-white/10">
+                    {thumbnails.map((src, i) => (
+                      <img
+                        key={i}
+                        src={src}
+                        className="h-full flex-1 object-cover"
+                        draggable={false}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Dimmed Overlays */}
+                  <div
+                    className="absolute top-0 bottom-0 left-0 bg-black/60 pointer-events-none backdrop-blur-[1px]"
+                    style={{ width: `${trimRange[0] * 100}%` }}
+                  />
+                  <div
+                    className="absolute top-0 bottom-0 right-0 bg-black/60 pointer-events-none backdrop-blur-[1px]"
+                    style={{ width: `${(1 - trimRange[1]) * 100}%` }}
+                  />
+
+                  {/* Active Range Border */}
+                  <div
+                    className="absolute top-0 bottom-0 border-t-2 border-b-2 border-emerald-500 pointer-events-none"
+                    style={{
+                      left: `${trimRange[0] * 100}%`,
+                      width: `${(trimRange[1] - trimRange[0]) * 100}%`
                     }}
                   />
-                  {/* Play Overlay */}
+
+                  {/* Left Handle */}
+                  <div
+                    className="absolute top-0 bottom-0 w-6 -ml-3 bg-emerald-500 rounded-l-md cursor-ew-resize flex items-center justify-center z-20 touch-manipulation shadow-lg"
+                    style={{ left: `${trimRange[0] * 100}%` }}
+                    onTouchStart={(e) => {
+                      const startX = e.touches[0].clientX;
+                      const startVal = trimRange[0];
+                      const w = e.currentTarget.parentElement?.clientWidth || 1;
+
+                      const handleMove = (em: TouchEvent) => {
+                        const dx = em.touches[0].clientX - startX;
+                        const dVal = dx / w;
+                        let newVal = Math.max(
+                          0,
+                          Math.min(trimRange[1] - 0.1, startVal + dVal)
+                        );
+                        setTrimRange((prev) => {
+                          const next: [number, number] = [newVal, prev[1]];
+
+                          const video = reviewVideoRef.current;
+                          if (video && video.duration) {
+                            video.currentTime = video.duration * next[0];
+                          }
+
+                          return next;
+                        });
+                      };
+                      const handleEnd = () => {
+                        window.removeEventListener("touchmove", handleMove);
+                        window.removeEventListener("touchend", handleEnd);
+                      };
+                      window.addEventListener("touchmove", handleMove);
+                      window.addEventListener("touchend", handleEnd);
+                    }}
+                    onMouseDown={(e) => {
+                      const startX = e.clientX;
+                      const startVal = trimRange[0];
+                      const w = e.currentTarget.parentElement?.clientWidth || 1;
+
+                      const handleMove = (em: MouseEvent) => {
+                        const dx = em.clientX - startX;
+                        const dVal = dx / w;
+                        let newVal = Math.max(
+                          0,
+                          Math.min(trimRange[1] - 0.1, startVal + dVal)
+                        );
+                        setTrimRange((prev) => [newVal, prev[1]]);
+                      };
+                      const handleEnd = () => {
+                        window.removeEventListener("mousemove", handleMove);
+                        window.removeEventListener("mouseup", handleEnd);
+                      };
+                      window.addEventListener("mousemove", handleMove);
+                      window.addEventListener("mouseup", handleEnd);
+                    }}
+                  >
+                    <div className="w-1 h-4 bg-black/20 rounded-full" />
+                  </div>
+
+                  {/* Right Handle */}
+                  <div
+                    className="absolute top-0 bottom-0 w-6 -ml-3 bg-emerald-500 rounded-r-md cursor-ew-resize flex items-center justify-center z-20 touch-manipulation shadow-lg"
+                    style={{ left: `${trimRange[1] * 100}%` }}
+                    onTouchStart={(e) => {
+                      const startX = e.touches[0].clientX;
+                      const startVal = trimRange[1];
+                      const w = e.currentTarget.parentElement?.clientWidth || 1;
+
+                      const handleMove = (em: TouchEvent) => {
+                        const dx = em.touches[0].clientX - startX;
+                        const dVal = dx / w;
+                        let newVal = Math.min(
+                          1,
+                          Math.max(trimRange[0] + 0.1, startVal + dVal)
+                        );
+                        setTrimRange((prev) => [prev[0], newVal]);
+                      };
+                      const handleEnd = () => {
+                        window.removeEventListener("touchmove", handleMove);
+                        window.removeEventListener("touchend", handleEnd);
+                      };
+                      window.addEventListener("touchmove", handleMove);
+                      window.addEventListener("touchend", handleEnd);
+                    }}
+                    onMouseDown={(e) => {
+                      const startX = e.clientX;
+                      const startVal = trimRange[1];
+                      const w = e.currentTarget.parentElement?.clientWidth || 1;
+
+                      const handleMove = (em: MouseEvent) => {
+                        const dx = em.clientX - startX;
+                        const dVal = dx / w;
+                        let newVal = Math.min(
+                          1,
+                          Math.max(trimRange[0] + 0.1, startVal + dVal)
+                        );
+                        setTrimRange((prev) => [prev[0], newVal]);
+                      };
+                      const handleEnd = () => {
+                        window.removeEventListener("mousemove", handleMove);
+                        window.removeEventListener("mouseup", handleEnd);
+                      };
+                      window.addEventListener("mousemove", handleMove);
+                      window.addEventListener("mouseup", handleEnd);
+                    }}
+                  >
+                    <div className="w-1 h-4 bg-black/20 rounded-full" />
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Bottom Controls Area */}
-            <div className="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent pb-safe pt-12 px-6 z-30">
-              {/* Timeline / Trim Slider */}
-              <div className="relative w-full h-16 mb-6 select-none touch-none">
-                {/* Thumbnails Background */}
-                <div className="absolute inset-0 flex overflow-hidden rounded-lg opacity-80 border border-white/10">
-                  {thumbnails.map((src, i) => (
-                    <img
-                      key={i}
-                      src={src}
-                      className="h-full flex-1 object-cover"
-                      draggable={false}
-                    />
-                  ))}
-                </div>
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  {/* Close Button */}
+                  <button
+                    onClick={handleReviewClose}
+                    className="flex-1 bg-white/10 border border-white/10 text-white py-3 rounded-full font-bold text-sm active:scale-95 transition-all hover:bg-white/20"
+                  >
+                    Discard
+                  </button>
 
-                {/* Dimmed Overlays */}
-                <div
-                  className="absolute top-0 bottom-0 left-0 bg-black/60 pointer-events-none backdrop-blur-[1px]"
-                  style={{ width: `${trimRange[0] * 100}%` }}
-                />
-                <div
-                  className="absolute top-0 bottom-0 right-0 bg-black/60 pointer-events-none backdrop-blur-[1px]"
-                  style={{ width: `${(1 - trimRange[1]) * 100}%` }}
-                />
-
-                {/* Active Range Border */}
-                <div
-                  className="absolute top-0 bottom-0 border-t-2 border-b-2 border-emerald-500 pointer-events-none"
-                  style={{
-                    left: `${trimRange[0] * 100}%`,
-                    width: `${(trimRange[1] - trimRange[0]) * 100}%`
-                  }}
-                />
-
-                {/* Left Handle */}
-                <div
-                  className="absolute top-0 bottom-0 w-6 -ml-3 bg-emerald-500 rounded-l-md cursor-ew-resize flex items-center justify-center z-20 touch-manipulation shadow-lg"
-                  style={{ left: `${trimRange[0] * 100}%` }}
-                  onTouchStart={(e) => {
-                    const startX = e.touches[0].clientX;
-                    const startVal = trimRange[0];
-                    const w = e.currentTarget.parentElement?.clientWidth || 1;
-
-                    const handleMove = (em: TouchEvent) => {
-                      const dx = em.touches[0].clientX - startX;
-                      const dVal = dx / w;
-                      let newVal = Math.max(
-                        0,
-                        Math.min(trimRange[1] - 0.1, startVal + dVal)
-                      );
-                     setTrimRange((prev) => {
-                       const next: [number, number] = [newVal, prev[1]];
-
-                       const video = reviewVideoRef.current;
-                       if (video && video.duration) {
-                         video.currentTime = video.duration * next[0];
-                       }
-
-                       return next;
-                     });
-                    };
-                    const handleEnd = () => {
-                      window.removeEventListener("touchmove", handleMove);
-                      window.removeEventListener("touchend", handleEnd);
-                    };
-                    window.addEventListener("touchmove", handleMove);
-                    window.addEventListener("touchend", handleEnd);
-                  }}
-                  onMouseDown={(e) => {
-                    const startX = e.clientX;
-                    const startVal = trimRange[0];
-                    const w = e.currentTarget.parentElement?.clientWidth || 1;
-
-                    const handleMove = (em: MouseEvent) => {
-                      const dx = em.clientX - startX;
-                      const dVal = dx / w;
-                      let newVal = Math.max(
-                        0,
-                        Math.min(trimRange[1] - 0.1, startVal + dVal)
-                      );
-                      setTrimRange((prev) => [newVal, prev[1]]);
-                    };
-                    const handleEnd = () => {
-                      window.removeEventListener("mousemove", handleMove);
-                      window.removeEventListener("mouseup", handleEnd);
-                    };
-                    window.addEventListener("mousemove", handleMove);
-                    window.addEventListener("mouseup", handleEnd);
-                  }}
-                >
-                  <div className="w-1 h-4 bg-black/20 rounded-full" />
-                </div>
-
-                {/* Right Handle */}
-                <div
-                  className="absolute top-0 bottom-0 w-6 -ml-3 bg-emerald-500 rounded-r-md cursor-ew-resize flex items-center justify-center z-20 touch-manipulation shadow-lg"
-                  style={{ left: `${trimRange[1] * 100}%` }}
-                  onTouchStart={(e) => {
-                    const startX = e.touches[0].clientX;
-                    const startVal = trimRange[1];
-                    const w = e.currentTarget.parentElement?.clientWidth || 1;
-
-                    const handleMove = (em: TouchEvent) => {
-                      const dx = em.touches[0].clientX - startX;
-                      const dVal = dx / w;
-                      let newVal = Math.min(
-                        1,
-                        Math.max(trimRange[0] + 0.1, startVal + dVal)
-                      );
-                      setTrimRange((prev) => [prev[0], newVal]);
-                    };
-                    const handleEnd = () => {
-                      window.removeEventListener("touchmove", handleMove);
-                      window.removeEventListener("touchend", handleEnd);
-                    };
-                    window.addEventListener("touchmove", handleMove);
-                    window.addEventListener("touchend", handleEnd);
-                  }}
-                  onMouseDown={(e) => {
-                    const startX = e.clientX;
-                    const startVal = trimRange[1];
-                    const w = e.currentTarget.parentElement?.clientWidth || 1;
-
-                    const handleMove = (em: MouseEvent) => {
-                      const dx = em.clientX - startX;
-                      const dVal = dx / w;
-                      let newVal = Math.min(
-                        1,
-                        Math.max(trimRange[0] + 0.1, startVal + dVal)
-                      );
-                      setTrimRange((prev) => [prev[0], newVal]);
-                    };
-                    const handleEnd = () => {
-                      window.removeEventListener("mousemove", handleMove);
-                      window.removeEventListener("mouseup", handleEnd);
-                    };
-                    window.addEventListener("mousemove", handleMove);
-                    window.addEventListener("mouseup", handleEnd);
-                  }}
-                >
-                  <div className="w-1 h-4 bg-black/20 rounded-full" />
+                  {/* Export Button */}
+                  <button
+                    onClick={handleFinalSave}
+                    className="flex-[2] bg-emerald-500 text-white py-3 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all hover:bg-emerald-400"
+                  >
+                    Export
+                  </button>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between gap-4 mb-4">
-                {/* Close Button */}
-                <button
-                  onClick={handleReviewClose}
-                  className="flex-1 bg-white/10 border border-white/10 text-white py-3 rounded-full font-bold text-sm active:scale-95 transition-all hover:bg-white/20"
-                >
-                  Discard
-                </button>
-
-                {/* Export Button */}
-                <button
-                  onClick={handleFinalSave}
-                  className="flex-[2] bg-emerald-500 text-white py-3 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all hover:bg-emerald-400"
-                >
-                  Export
-                </button>
-              </div>
             </div>
-          </div>
+          </>
         )}
 
         <div className="fixed top-0 left-0 opacity-0 pointer-events-none w-10 h-10 -z-50 overflow-hidden">
@@ -3528,7 +3528,11 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
             </label>
           )}
         </div>
-        <div className="relative w-full flex flex-col items-center justify-center py-4">
+        <div
+          className={`relative w-full flex flex-col items-center justify-center py-4 transition-all duration-500 ${
+            isReviewing ? "blur-xl opacity-30 grayscale" : ""
+          }`}
+        >
           {/* Left Controls: Webcam & Mic */}
           <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center space-x-4 z-50">
             {/* Webcam Toggle */}
