@@ -150,6 +150,12 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [reviewPlaybackRate, setReviewPlaybackRate] = useState(1);
+  const [reviewVideoUrl, setReviewVideoUrl] = useState<string | null>(null);
+  const [isReviewPlaying, setIsReviewPlaying] = useState(true);
+  const [trimRange, setTrimRange] = useState<[number, number]>([0, 1]);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+  const [videoDuration, setVideoDuration] = useState(0);
 
 const [fadeMode, setFadeMode] = useState(false);
 
@@ -205,6 +211,7 @@ const [fadeMode, setFadeMode] = useState(false);
   const activeStreamRef = useRef<MediaStream | null>(null);
   const wakeLockRef = useRef<any>(null);
   const micOnlyStreamRef = useRef<MediaStream | null>(null);
+  const reviewVideoRef = useRef<HTMLVideoElement>(null);
 
   const trackingCanvasRef = useRef<HTMLCanvasElement>(null);
   const trackingState = useRef<
@@ -339,6 +346,105 @@ const [fadeMode, setFadeMode] = useState(false);
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
+
+  useEffect(() => {
+    if (recordedBlob) {
+      const url = URL.createObjectURL(recordedBlob);
+      setReviewVideoUrl(url);
+      setTrimRange([0, 1]);
+      setReviewPlaybackRate(1);
+
+      // Generate thumbnails
+      const generateThumbnails = async () => {
+        const video = document.createElement("video");
+        video.src = url;
+        video.muted = true;
+        video.playsInline = true;
+        video.crossOrigin = "anonymous";
+        await video.play();
+        video.pause();
+
+        const duration = video.duration;
+        setVideoDuration(duration);
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const thumbCount = 10;
+        const thumbs: string[] = [];
+
+        canvas.width = 160; // Small width for performance
+        canvas.height = 90; // 16:9 aspect ratio roughly
+
+        for (let i = 0; i < thumbCount; i++) {
+          const time = (duration / thumbCount) * i;
+          video.currentTime = time;
+          await new Promise((resolve) => {
+            const onSeek = () => {
+              video.removeEventListener("seeked", onSeek);
+              resolve(null);
+            };
+            video.addEventListener("seeked", onSeek);
+          });
+
+          if (ctx) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            thumbs.push(canvas.toDataURL("image/jpeg", 0.5));
+          }
+        }
+        setThumbnails(thumbs);
+      };
+
+      generateThumbnails();
+
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setReviewVideoUrl(null);
+      setThumbnails([]);
+    }
+  }, [recordedBlob]);
+
+  const togglePlaybackSpeed = (speed: number) => {
+    const newSpeed = reviewPlaybackRate === speed ? 1 : speed;
+    setReviewPlaybackRate(newSpeed);
+    if (reviewVideoRef.current) {
+      reviewVideoRef.current.playbackRate = newSpeed;
+      if (reviewVideoRef.current.paused) {
+        reviewVideoRef.current.play();
+        setIsReviewPlaying(true);
+      }
+    }
+  };
+
+ const handleReviewTimeUpdate = () => {
+   const video = reviewVideoRef.current;
+   if (!video) return;
+
+   const duration = video.duration;
+   if (!duration) return;
+
+   const start = trimRange[0] * duration;
+   const end = trimRange[1] * duration;
+
+   if (video.currentTime < start) {
+     video.currentTime = start;
+   }
+
+   if (video.currentTime >= end) {
+     video.pause();
+     video.currentTime = start;
+   }
+ };
+
+  const handleReviewClose = () => {
+    setIsReviewing(false);
+    setRecordedBlob(null);
+    setWebcamActive(false);
+    setIsMuted(true);
+    if (micOnlyStreamRef.current) {
+      micOnlyStreamRef.current.getTracks().forEach((t) => t.stop());
+      micOnlyStreamRef.current = null;
+    }
+  };
 
   // --- Boundary Constraint Logic ---
 
@@ -589,6 +695,18 @@ const [fadeMode, setFadeMode] = useState(false);
     },
     [isLooping, isFinalizing, isReviewing]
   );
+
+useEffect(() => {
+  const video = reviewVideoRef.current;
+  if (!video) return;
+
+  const duration = video.duration;
+  if (!duration) return;
+
+  const start = trimRange[0] * duration;
+
+  video.currentTime = start;
+}, [trimRange[0]]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -2150,7 +2268,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
     if (
       e &&
       e.type === "mouseup" &&
-      Date.now() - lastTouchTimeRef.current < 500
+      Date.now() - lastTouchTimeRef.current < 250
     ) {
       return;
     }
@@ -2368,12 +2486,12 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunks.push(e.data);
       };
-      recorder.onstop = () => {
+     recorder.onstop = () => {
         setRecordedBlob(new Blob(chunks, { type: mime }));
-        setRecordingTime(0);
-        setIsFinalizing(false);
-        setIsReviewing(true);
-      };
+       setRecordingTime(0);
+       setIsFinalizing(false);
+       setIsReviewing(true);
+     };
       recorder.start(1000);
       mediaRecorderRef.current = recorder;
       recordingIntervalRef.current = window.setInterval(
@@ -2393,32 +2511,134 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
 
   const handleFinalSave = async () => {
     if (!recordedBlob) return;
-        const fileName = `directors-cut-${Date.now()}.mp4`;
 
-        // --- Web Share API Integration ---
-        if (navigator.share && navigator.canShare) {
-      const file = new File([recordedBlob], fileName, {
-        type: recordedBlob.type
-      });
-          if (navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({
-                files: [file],
-            title: "My Reaction",
-            text: "Made with Director's Cut"
-              });
-              return;
-        } catch (err) {}
-            }
-          }
-    const url = URL.createObjectURL(recordedBlob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+    // If no changes (1x speed, full trim), just save original
+    if (reviewPlaybackRate === 1 && trimRange[0] === 0 && trimRange[1] === 1) {
+      const fileName = `directors-cut-${Date.now()}.mp4`;
+      if (navigator.share && navigator.canShare) {
+        const file = new File([recordedBlob], fileName, {
+          type: recordedBlob.type
+        });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: "My Reaction",
+              text: "Made with Director's Cut"
+            });
+            return;
+          } catch (err) {}
+        }
+      }
+      const url = URL.createObjectURL(recordedBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    // Re-encode logic
+    const video = document.createElement("video");
+    video.src = URL.createObjectURL(recordedBlob);
+    video.muted = false; // We want audio
+    video.playsInline = true;
+    video.crossOrigin = "anonymous";
+    await new Promise((r) => {
+      video.onloadedmetadata = r;
+    });
+
+    const duration = video.duration;
+    const start = trimRange[0] * duration;
+    const end = trimRange[1] * duration;
+    const speed = reviewPlaybackRate;
+
+    // Setup Canvas for recording
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Setup Audio Context for speed adjustment
+    const audioCtx = new (
+      window.AudioContext || (window as any).webkitAudioContext
+    )();
+    const source = audioCtx.createMediaElementSource(video);
+    const dest = audioCtx.createMediaStreamDestination();
+    source.connect(dest);
+
+    video.currentTime = start;
+    video.playbackRate = speed;
+
+    const stream = canvas.captureStream(30);
+    const audioTrack = dest.stream.getAudioTracks()[0];
+    if (audioTrack) stream.addTrack(audioTrack);
+
+    // Try MP4 if supported, otherwise fallback to WebM
+    let mimeType = "video/webm;codecs=vp9";
+    let fileExt = "webm";
+
+    if (MediaRecorder.isTypeSupported("video/mp4")) {
+      mimeType = "video/mp4";
+      fileExt = "mp4";
+    }
+
+    const recorder = new MediaRecorder(stream, { mimeType });
+    const chunks: BlobPart[] = [];
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: mimeType });
+      const fileName = `directors-cut-edited-${Date.now()}.${fileExt}`;
+
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], fileName, { type: mimeType });
+        if (navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: "My Reaction",
+              text: "Made with Director's Cut"
+            });
+            return;
+          } catch (err) {}
+        }
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      audioCtx.close();
+    };
+
+    recorder.start();
+    await video.play();
+
+    // Draw loop
+    const draw = () => {
+      if (video.paused || video.ended || video.currentTime >= end) {
+        recorder.stop();
+        video.pause();
+        return;
+      }
+      ctx.drawImage(video, 0, 0);
+      requestAnimationFrame(draw);
+    };
+    draw();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2790,46 +3010,44 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                         h: maxY - minY
                       };
 
-                     
+                      if (!selectedAsset) return;
 
-                     if (!selectedAsset) return;
+                      if (selectedAsset.type === "video") {
+                        setIsTracking({
+                          assetId: selectedAssetId!,
+                          type: "blur",
+                          rect,
+                          progress: 0
+                        });
+                      } else {
+                        try {
+                          const ok = await consumeCredits("IMAGE_NORMAL");
+                          if (!ok) {
+                            setMagicError("Login and buy credits");
+                            return;
+                          }
+                        } catch {
+                          setMagicError("Login and buy credits");
+                          return;
+                        }
+                        setAssets((prev) =>
+                          prev.map((a) => {
+                            if (a.id === selectedAssetId) {
+                              return {
+                                ...a,
+                                effects: [
+                                  ...(a.effects || []),
+                                  { type: "blur", rect }
+                                ]
+                              };
+                            }
+                            return a;
+                          })
+                        );
 
-                     if (selectedAsset.type === "video") {
-                       setIsTracking({
-                         assetId: selectedAssetId!,
-                         type: "blur",
-                         rect,
-                         progress: 0
-                       });
-                     } else {
-                       try {
-                         const ok = await consumeCredits("IMAGE_NORMAL");
-                         if (!ok) {
-                           setMagicError("Login and buy credits");
-                           return;
-                         }
-                       } catch {
-                         setMagicError("Login and buy credits");
-                         return;
-                       }
-                       setAssets((prev) =>
-                         prev.map((a) => {
-                           if (a.id === selectedAssetId) {
-                             return {
-                               ...a,
-                               effects: [
-                                 ...(a.effects || []),
-                                 { type: "blur", rect }
-                               ]
-                             };
-                           }
-                           return a;
-                         })
-                       );
-
-                       setMagicMode(null);
-                       setActivePath([]);
-                     }
+                        setMagicMode(null);
+                        setActivePath([]);
+                      }
 
                       setMagicMode(null);
                       setActivePath([]);
@@ -3021,52 +3239,237 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
 
         {/* Review & Choice Screen */}
         {isReviewing && (
-          <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-10 text-center pointer-events-auto animate-fade-in">
-            <div className="w-24 h-24 mb-10 bg-emerald-600 rounded-[2rem] flex items-center justify-center shadow-[0_20px_50px_rgba(16,185,129,0.4)] animate-bounce">
-              <FilmIcon className="text-5xl text-white" />
-            </div>
-            <div className="space-y-2 mb-12">
-              <h2 className="text-4xl font-black tracking-tighter uppercase italic leading-none">
-                Production Ready
-              </h2>
-              <p className="text-emerald-400/60 text-xs font-bold tracking-[0.4em] uppercase">
-                Cut #{(assets.length + 1).toString().padStart(3, "0")}
-              </p>
-            </div>
-
-            <div className="w-full max-w-sm space-y-4">
-              <button
-                onClick={handleFinalSave}
-                className="w-full bg-white text-black py-6 rounded-3xl font-black uppercase text-sm tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center space-x-3"
-              >
-                <i className="fa-solid fa-share-nodes"></i>
-                <span>Share / Save Video</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsReviewing(false);
-                  setRecordedBlob(null);
-                  // Reset webcam and mic when returning from review
-                  setWebcamActive(false);
-                  setIsMuted(true);
-                  if (micOnlyStreamRef.current) {
-                    micOnlyStreamRef.current
-                      .getTracks()
-                      .forEach((t) => t.stop());
-                    micOnlyStreamRef.current = null;
-                  }
-                }}
-                className="w-full bg-white/5 border border-white/10 text-white/60 py-5 rounded-3xl font-bold uppercase text-xs tracking-[0.2em] active:scale-95 transition-all"
-              >
-                Close & Return to Studio
-              </button>
+          <div className="fixed inset-0 z-[110] bg-black flex flex-col items-center justify-center animate-fade-in pointer-events-auto">
+            {/* Top Speed Controls */}
+            <div className="absolute top-10 flex space-x-2 z-20 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/10">
+              {[1.5, 2, 2.5].map((speed) => (
+                <button
+                  key={speed}
+                  onClick={() => togglePlaybackSpeed(speed)}
+                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                    reviewPlaybackRate === speed
+                      ? "bg-emerald-500 text-black shadow-lg"
+                      : "text-white/60 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  {speed}x
+                </button>
+              ))}
             </div>
 
-            <p className="mt-12 text-[10px] text-white/20 font-medium max-w-[200px]">
-              The video file is processed and ready for your gallery or social
-              media.
-            </p>
+            {/* Video Preview - Full Screen */}
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
+              {reviewVideoUrl && (
+                <div className="relative w-full h-full">
+                  <video
+                    ref={reviewVideoRef}
+                    src={reviewVideoUrl}
+                    className="w-full h-full object-contain"
+                    playsInline
+                  
+                    loop={false}
+                    controls={false}
+                    onPlay={() => setIsReviewPlaying(true)}
+                    onPause={() => setIsReviewPlaying(false)}
+                    onTimeUpdate={handleReviewTimeUpdate}
+                    onClick={() => {
+                      const now = Date.now();
+                      const timeSinceLastTap = now - lastTapRef.current;
+
+                      const video = reviewVideoRef.current;
+                      if (!video) return;
+
+                      const duration = video.duration || 1;
+                      const start = trimRange[0] * duration;
+
+                      if (timeSinceLastTap < 300) {
+                        // DOUBLE TAP → Restart from trim start
+                        video.currentTime = start;
+                        video.play();
+                        lastTapRef.current = 0;
+                      } else {
+                        // SINGLE TAP → Play / Pause
+                        lastTapRef.current = now;
+                        setTimeout(() => {
+                          if (!reviewVideoRef.current) return;
+
+                          if (reviewVideoRef.current.paused) {
+                            reviewVideoRef.current.play();
+                          } else {
+                            reviewVideoRef.current.pause();
+                          }
+                        }, 200);
+                      }
+                    }}
+                  />
+                  {/* Play Overlay */}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Controls Area */}
+            <div className="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent pb-safe pt-12 px-6 z-30">
+              {/* Timeline / Trim Slider */}
+              <div className="relative w-full h-16 mb-6 select-none touch-none">
+                {/* Thumbnails Background */}
+                <div className="absolute inset-0 flex overflow-hidden rounded-lg opacity-80 border border-white/10">
+                  {thumbnails.map((src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      className="h-full flex-1 object-cover"
+                      draggable={false}
+                    />
+                  ))}
+                </div>
+
+                {/* Dimmed Overlays */}
+                <div
+                  className="absolute top-0 bottom-0 left-0 bg-black/60 pointer-events-none backdrop-blur-[1px]"
+                  style={{ width: `${trimRange[0] * 100}%` }}
+                />
+                <div
+                  className="absolute top-0 bottom-0 right-0 bg-black/60 pointer-events-none backdrop-blur-[1px]"
+                  style={{ width: `${(1 - trimRange[1]) * 100}%` }}
+                />
+
+                {/* Active Range Border */}
+                <div
+                  className="absolute top-0 bottom-0 border-t-2 border-b-2 border-emerald-500 pointer-events-none"
+                  style={{
+                    left: `${trimRange[0] * 100}%`,
+                    width: `${(trimRange[1] - trimRange[0]) * 100}%`
+                  }}
+                />
+
+                {/* Left Handle */}
+                <div
+                  className="absolute top-0 bottom-0 w-6 -ml-3 bg-emerald-500 rounded-l-md cursor-ew-resize flex items-center justify-center z-20 touch-manipulation shadow-lg"
+                  style={{ left: `${trimRange[0] * 100}%` }}
+                  onTouchStart={(e) => {
+                    const startX = e.touches[0].clientX;
+                    const startVal = trimRange[0];
+                    const w = e.currentTarget.parentElement?.clientWidth || 1;
+
+                    const handleMove = (em: TouchEvent) => {
+                      const dx = em.touches[0].clientX - startX;
+                      const dVal = dx / w;
+                      let newVal = Math.max(
+                        0,
+                        Math.min(trimRange[1] - 0.1, startVal + dVal)
+                      );
+                     setTrimRange((prev) => {
+                       const next: [number, number] = [newVal, prev[1]];
+
+                       const video = reviewVideoRef.current;
+                       if (video && video.duration) {
+                         video.currentTime = video.duration * next[0];
+                       }
+
+                       return next;
+                     });
+                    };
+                    const handleEnd = () => {
+                      window.removeEventListener("touchmove", handleMove);
+                      window.removeEventListener("touchend", handleEnd);
+                    };
+                    window.addEventListener("touchmove", handleMove);
+                    window.addEventListener("touchend", handleEnd);
+                  }}
+                  onMouseDown={(e) => {
+                    const startX = e.clientX;
+                    const startVal = trimRange[0];
+                    const w = e.currentTarget.parentElement?.clientWidth || 1;
+
+                    const handleMove = (em: MouseEvent) => {
+                      const dx = em.clientX - startX;
+                      const dVal = dx / w;
+                      let newVal = Math.max(
+                        0,
+                        Math.min(trimRange[1] - 0.1, startVal + dVal)
+                      );
+                      setTrimRange((prev) => [newVal, prev[1]]);
+                    };
+                    const handleEnd = () => {
+                      window.removeEventListener("mousemove", handleMove);
+                      window.removeEventListener("mouseup", handleEnd);
+                    };
+                    window.addEventListener("mousemove", handleMove);
+                    window.addEventListener("mouseup", handleEnd);
+                  }}
+                >
+                  <div className="w-1 h-4 bg-black/20 rounded-full" />
+                </div>
+
+                {/* Right Handle */}
+                <div
+                  className="absolute top-0 bottom-0 w-6 -ml-3 bg-emerald-500 rounded-r-md cursor-ew-resize flex items-center justify-center z-20 touch-manipulation shadow-lg"
+                  style={{ left: `${trimRange[1] * 100}%` }}
+                  onTouchStart={(e) => {
+                    const startX = e.touches[0].clientX;
+                    const startVal = trimRange[1];
+                    const w = e.currentTarget.parentElement?.clientWidth || 1;
+
+                    const handleMove = (em: TouchEvent) => {
+                      const dx = em.touches[0].clientX - startX;
+                      const dVal = dx / w;
+                      let newVal = Math.min(
+                        1,
+                        Math.max(trimRange[0] + 0.1, startVal + dVal)
+                      );
+                      setTrimRange((prev) => [prev[0], newVal]);
+                    };
+                    const handleEnd = () => {
+                      window.removeEventListener("touchmove", handleMove);
+                      window.removeEventListener("touchend", handleEnd);
+                    };
+                    window.addEventListener("touchmove", handleMove);
+                    window.addEventListener("touchend", handleEnd);
+                  }}
+                  onMouseDown={(e) => {
+                    const startX = e.clientX;
+                    const startVal = trimRange[1];
+                    const w = e.currentTarget.parentElement?.clientWidth || 1;
+
+                    const handleMove = (em: MouseEvent) => {
+                      const dx = em.clientX - startX;
+                      const dVal = dx / w;
+                      let newVal = Math.min(
+                        1,
+                        Math.max(trimRange[0] + 0.1, startVal + dVal)
+                      );
+                      setTrimRange((prev) => [prev[0], newVal]);
+                    };
+                    const handleEnd = () => {
+                      window.removeEventListener("mousemove", handleMove);
+                      window.removeEventListener("mouseup", handleEnd);
+                    };
+                    window.addEventListener("mousemove", handleMove);
+                    window.addEventListener("mouseup", handleEnd);
+                  }}
+                >
+                  <div className="w-1 h-4 bg-black/20 rounded-full" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 mb-4">
+                {/* Close Button */}
+                <button
+                  onClick={handleReviewClose}
+                  className="flex-1 bg-white/10 border border-white/10 text-white py-3 rounded-full font-bold text-sm active:scale-95 transition-all hover:bg-white/20"
+                >
+                  Discard
+                </button>
+
+                {/* Export Button */}
+                <button
+                  onClick={handleFinalSave}
+                  className="flex-[2] bg-emerald-500 text-white py-3 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all hover:bg-emerald-400"
+                >
+                  Export
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
