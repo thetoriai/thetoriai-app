@@ -990,3 +990,7 @@ export const WatermarkIcon: React.FC<IconProps> = ({ className }) => (
     </text>
   </svg>
 );
+
+export const TextIcon: React.FC<IconProps> = ({ className }) => (
+  <i className={`fa-solid fa-font ${className}`}></i>
+);

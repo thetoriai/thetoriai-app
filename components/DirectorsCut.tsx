@@ -26,7 +26,8 @@ import {
   EraserIcon,
   MicIcon,
   MicOffIcon,
-  WatermarkIcon
+  WatermarkIcon,
+  TextIcon
 } from "./Icons";
 
 
@@ -41,6 +42,16 @@ export interface Transform {
   cropBottom: number;
   cropLeft: number;
   cropRight: number;
+}
+
+export interface TextItem {
+  id: string;
+  text: string;
+  x: number; // 0-1 relative to canvas
+  y: number; // 0-1 relative to canvas
+  scale: number;
+  color: string;
+  rotation: number;
 }
 
 export interface Point {
@@ -178,13 +189,19 @@ const [fadeMode, setFadeMode] = useState(false);
   const [drawingShape, setDrawingShape] = useState<DrawingShape>("free");
   const [activePath, setActivePath] = useState<Point[]>([]);
 
-
+  // Text State
+  const [isTextMode, setIsTextMode] = useState(false);
+  const [textItems, setTextItems] = useState<TextItem[]>([]);
+  const [activeTextId, setActiveTextId] = useState<string | null>(null);
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [editingTextValue, setEditingTextValue] = useState("");
   
   const startTouchRef = useRef({ x: 0, y: 0, scale: 0, dist: 0 });
   const initialTouchRef = useRef({ x: 0, y: 0 });
   const dragStartTransformRef = useRef<Transform>(DEFAULT_TRANSFORM);
   const isDraggingRef = useRef(false);
   const isDraggingWebcamRef = useRef(false);
+  const isResizingTextRef = useRef(false);
   const lastTapRef = useRef<number>(0);
   const tapCountRef = useRef<number>(0);
   const tapTimeoutRef = useRef<number | null>(null);
@@ -749,6 +766,7 @@ useEffect(() => {
 
   const handlePenInteraction = useCallback(() => {
     if (isFinalizing || isReviewing) return;
+    setIsTextMode(false);
     const now = Date.now();
     const timeSinceLastTap = now - lastPenTapRef.current;
     if (timeSinceLastTap < 300) {
@@ -781,6 +799,20 @@ useEffect(() => {
       }, 300);
     }
   }, [isFinalizing, isReviewing, clearAllDrawings]);
+
+  const handleTextInteraction = useCallback(() => {
+    if (isFinalizing || isReviewing) return;
+    setIsDrawingMode(false);
+    setIsTextMode((prev) => {
+      const next = !prev;
+      if (next) {
+        setIsLocked(true);
+      } else {
+        setIsLocked(false);
+      }
+      return next;
+    });
+  }, [isFinalizing, isReviewing]);
 
   // --- Magic Cutout Logic ---
   const processTransparency = (img: HTMLImageElement): string => {
@@ -1640,6 +1672,51 @@ useEffect(() => {
       drawWebcam(true);
     }
 
+    // Render Text Items
+    textItems.forEach((item) => {
+      if (isEditingText && item.id === activeTextId) return;
+      ctx.save();
+      const fontSize = 50 * (item.scale / 100);
+      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.fillStyle = item.color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const x = 1080 * item.x;
+      const y = 1920 * item.y;
+
+      // Shadow for visibility
+      ctx.shadowColor = "rgba(0,0,0,0.5)";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+
+      ctx.fillText(item.text, x, y);
+
+      // Selection box if active and in text mode
+      if (isTextMode && item.id === activeTextId) {
+        const textMetrics = ctx.measureText(item.text);
+        const w = textMetrics.width;
+        const h = fontSize; // Approximate height
+
+        ctx.strokeStyle = "#eaff00";
+        ctx.lineWidth = 4;
+        ctx.setLineDash([10, 10]);
+        ctx.strokeRect(x - w / 2 - 10, y - h / 2 - 10, w + 20, h + 20);
+
+        // Resize Handle
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#eaff00";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x + w / 2 + 10, y + h / 2 + 10, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
+
     // 3. Draw Watermark
    if (showWatermark || !watermarkUnlocked) {
      ctx.save();
@@ -1671,7 +1748,10 @@ useEffect(() => {
     isAiProcessing,
     isRecording,
     activePath,
-    showWatermark
+    showWatermark,
+    textItems,
+    activeTextId,
+    isTextMode
   ]);
 
   useEffect(() => {
@@ -1758,6 +1838,126 @@ useEffect(() => {
         }
         return;
       }
+    }
+
+    // Text Mode Interaction
+    if (isTextMode) {
+      e.preventDefault();
+      let hitTextId = null;
+      let isResizeHandle = false;
+
+      for (let i = textItems.length - 1; i >= 0; i--) {
+        const item = textItems[i];
+        const fontSize = 50 * (item.scale / 100);
+        // Use canvas context to measure text width accurately if possible,
+        // but here we approximate or use the same logic as drawFrame if context is not available.
+        // In drawFrame we use ctx.measureText. Here we don't have ctx easily.
+        // Let's use the same approximation as before for hit testing, but maybe refine it?
+        // Actually, let's use a slightly more generous hit box.
+        const textWidth = item.text.length * fontSize * 0.6;
+        const textHeight = fontSize;
+        const itemX = 1080 * item.x;
+        const itemY = 1920 * item.y;
+
+        // Check Resize Handle (only for active item)
+        if (activeTextId === item.id) {
+          const handleX = itemX + textWidth / 2 + 10;
+          const handleY = itemY + textHeight / 2 + 10;
+          const dist = Math.hypot(canvasX - handleX, canvasY - handleY);
+          if (dist < 40) {
+            hitTextId = item.id;
+            isResizeHandle = true;
+            break;
+          }
+        }
+
+        const left = itemX - textWidth / 2;
+        const right = itemX + textWidth / 2;
+        const top = itemY - textHeight / 2;
+        const bottom = itemY + textHeight / 2;
+
+        if (
+          canvasX >= left &&
+          canvasX <= right &&
+          canvasY >= top &&
+          canvasY <= bottom
+        ) {
+          hitTextId = item.id;
+          break;
+        }
+      }
+
+      if (hitTextId) {
+        if (isResizeHandle) {
+          isResizingTextRef.current = true;
+          setActiveTextId(hitTextId);
+          startTouchRef.current = {
+            ...startTouchRef.current,
+            x: clientX,
+            y: clientY,
+            scale: textItems.find((t) => t.id === hitTextId)!.scale,
+            dist: 0 // Not used for single touch resize
+          };
+          return;
+        }
+
+        const now = Date.now();
+        if (now - lastTapRef.current < 300 && activeTextId === hitTextId) {
+          setEditingTextValue(textItems.find((t) => t.id === hitTextId)!.text);
+          setIsEditingText(true);
+          return;
+        }
+        lastTapRef.current = now;
+
+        setActiveTextId(hitTextId);
+        isDraggingRef.current = true;
+        startTouchRef.current = {
+          ...startTouchRef.current,
+          x: clientX,
+          y: clientY,
+          scale: textItems.find((t) => t.id === hitTextId)!.scale,
+          dist: 0
+        };
+        if (e.touches.length === 2) {
+          setIsPinching(true);
+          startTouchRef.current.dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+        }
+      } else {
+        if (activeTextId) {
+          // If text is selected, deselect it and allow fall-through to video playback
+          setActiveTextId(null);
+          setIsEditingText(false);
+          // Update startTouchRef so handleTouchEnd works correctly for playback toggle
+          startTouchRef.current = {
+            ...startTouchRef.current,
+            x: clientX,
+            y: clientY,
+            scale: 100, // Reset scale just in case
+            dist: 0
+          };
+          // Do NOT return here, let it fall through to asset interaction logic
+        } else {
+          const newId = Date.now().toString();
+          const newItem: TextItem = {
+            id: newId,
+            text: "",
+            x: canvasX / 1080,
+            y: canvasY / 1920,
+            scale: 100,
+            color: "#ffffff",
+            rotation: 0
+          };
+          setTextItems((prev) => [...prev, newItem]);
+          setActiveTextId(newId);
+          setEditingTextValue("");
+          setIsEditingText(true);
+          return;
+        }
+      }
+      if (hitTextId) return;
     }
 
     // Magic Selection Logic
@@ -2008,6 +2208,95 @@ useEffect(() => {
 
     const cX = (clientX - rect.left) * scaleX;
     const cY = (clientY - rect.top) * scaleY;
+
+    // Text Mode Move/Scale
+    if (isTextMode && activeTextId) {
+      e.preventDefault();
+
+      if (isResizingTextRef.current) {
+        const item = textItems.find((t) => t.id === activeTextId);
+        if (item) {
+          const itemX = 1080 * item.x; // Center X
+          const itemY = 1920 * item.y; // Center Y
+
+          // Convert start touch to canvas coords
+          const startCanvasX = (startTouchRef.current.x - rect.left) * scaleX;
+          const startCanvasY = (startTouchRef.current.y - rect.top) * scaleY;
+
+          // Convert current touch to canvas coords
+          const currentCanvasX = cX; // calculated above as (clientX - rect.left) * scaleX
+          const currentCanvasY = cY;
+
+          const initialDist = Math.hypot(
+            startCanvasX - itemX,
+            startCanvasY - itemY
+          );
+          const currentDist = Math.hypot(
+            currentCanvasX - itemX,
+            currentCanvasY - itemY
+          );
+
+          if (initialDist > 0) {
+            const scaleFactor = currentDist / initialDist;
+            const newScale = Math.max(
+              10,
+              startTouchRef.current.scale * scaleFactor
+            );
+
+            setTextItems((prev) =>
+              prev.map((t) => {
+                if (t.id === activeTextId) {
+                  return { ...t, scale: newScale };
+                }
+                return t;
+              })
+            );
+          }
+        }
+        return;
+      }
+
+      if (e.touches.length === 1 && !isPinching) {
+        const dx = (clientX - startTouchRef.current.x) * scaleX;
+        const dy = (clientY - startTouchRef.current.y) * scaleY;
+
+        setTextItems((prev) =>
+          prev.map((item) => {
+            if (item.id === activeTextId) {
+              return {
+                ...item,
+                x: item.x + dx / 1080,
+                y: item.y + dy / 1920
+              };
+            }
+            return item;
+          })
+        );
+        startTouchRef.current = {
+          ...startTouchRef.current,
+          x: clientX,
+          y: clientY
+        };
+      } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const scaleFactor = dist / (startTouchRef.current.dist || 1);
+        setTextItems((prev) =>
+          prev.map((item) => {
+            if (item.id === activeTextId) {
+              return {
+                ...item,
+                scale: Math.max(10, startTouchRef.current.scale * scaleFactor)
+              };
+            }
+            return item;
+          })
+        );
+      }
+      return;
+    }
 
     // Magic Selection Logic (Rectangle)
     if (
@@ -2274,6 +2563,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
     }
 
     const wasDragging = isDraggingRef.current;
+    isResizingTextRef.current = false;
 
     if (magicMode === "blur_selecting" || magicMode === "cut_selecting") {
       // Just ensure the path is valid, don't apply yet
@@ -2474,6 +2764,9 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         gainNodeRef.current.connect(dest);
       }
 
+      // Delay starting the recorder to ensure the next frame (without UI) is drawn
+      setTimeout(() => {
+        if (!canvasRef.current) return;
       const stream = canvasRef.current.captureStream(30);
       dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
 
@@ -2498,6 +2791,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         () => setRecordingTime((p) => p + 1),
         1000
       );
+      }, 100);
     } else {
       // Prompt for confirmation
       setIsRecordConfirming(true);
@@ -2777,9 +3071,9 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
   );
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-black text-white overflow-hidden font-sans touch-none select-none">
+    <div className="flex flex-col h-[100dvh] bg-black text-white overflow-hidden font-sans touch-none select-none outline-none ring-0">
       <section
-        className={`relative w-full flex-1 flex items-center justify-center overflow-hidden z-10 ${
+        className={`relative w-full flex-1 flex items-center justify-center overflow-hidden z-10 outline-none ring-0 ${
           isReviewing ? "pointer-events-none select-none" : ""
         }`}
         onTouchStart={handleTouchStart}
@@ -2789,7 +3083,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         onMouseMove={handleMouseMove}
         onMouseUp={handleTouchEnd}
       >
-        <div className="relative aspect-[9/16] h-full max-h-full overflow-hidden bg-[#050505] shadow-2xl rounded-2xl border border-white/10">
+        <div className="relative aspect-[9/16] h-full max-h-full overflow-hidden bg-[#050505] shadow-2xl rounded-b-[2.5rem] border-x border-b border-white/10">
           {magicError && (
             <div
               className="absolute inset-0 z-[999] bg-black/85 flex items-center justify-center"
@@ -2822,6 +3116,64 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
             height={1920}
             className="w-full h-full object-contain"
           />
+          {isEditingText &&
+            activeTextId &&
+            (() => {
+              const activeItem = textItems.find((t) => t.id === activeTextId);
+              if (!activeItem) return null;
+
+              return (
+                <div
+                  className="absolute inset-0 z-50 bg-black/30"
+                  onClick={() => {
+                    setIsEditingText(false);
+                    if (!editingTextValue.trim()) {
+                      setTextItems((prev) =>
+                        prev.filter((item) => item.id !== activeTextId)
+                      );
+                      setActiveTextId(null);
+                    }
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={editingTextValue}
+                    onChange={(e) => {
+                      setEditingTextValue(e.target.value);
+                      setTextItems((prev) =>
+                        prev.map((item) => {
+                          if (item.id === activeTextId) {
+                            return { ...item, text: e.target.value };
+                          }
+                          return item;
+                        })
+                      );
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute bg-transparent border-none text-center focus:outline-none p-0 m-0"
+                    autoFocus
+                    style={{
+                      left: `${activeItem.x * 100}%`,
+                      top: `${activeItem.y * 100}%`,
+                      transform: "translate(-50%, -50%)",
+                      fontSize: `${Math.max(16, 50 * (activeItem.scale / 100) * (Math.min(window.innerHeight, window.innerWidth * (16 / 9)) / 1920))}px`,
+                      lineHeight: "1",
+                      color: activeItem.color,
+                      fontFamily: "Arial",
+                      fontWeight: "bold",
+                      textShadow: "0 2px 4px rgba(0,0,0,0.5)",
+                      width: "80%"
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        setIsEditingText(false);
+                      }
+                    }}
+                  />
+                </div>
+              );
+            })()}
         </div>
 
         <button
@@ -2840,6 +3192,21 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         </button>
 
         <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTextInteraction();
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            disabled={isFinalizing || isReviewing}
+            className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center transition-all ${isTextMode ? "bg-yellow-400 text-black shadow-[0_0_20px_#eaff0080]" : "bg-white text-black"} disabled:opacity-20`}
+          >
+            <TextIcon className="text-lg" />
+            <span className="text-[5px] font-black mt-0.5 uppercase">TEXT</span>
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -3277,9 +3644,6 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                       onPause={() => setIsReviewPlaying(false)}
                       onTimeUpdate={handleReviewTimeUpdate}
                       onClick={() => {
-                        const now = Date.now();
-                        const timeSinceLastTap = now - lastTapRef.current;
-
                         const video = reviewVideoRef.current;
                         if (!video) return;
 
