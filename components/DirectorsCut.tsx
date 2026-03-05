@@ -18,7 +18,7 @@ import {
   CircleIcon,
   SquareIcon,
   ArrowPointerIcon,
-   SparklesIcon,
+  SparklesIcon,
   GhostIcon,
   LoaderIcon,
   RepeatIcon,
@@ -29,7 +29,6 @@ import {
   WatermarkIcon,
   TextIcon
 } from "./Icons";
-
 
 import { supabase } from "../services/supabaseClient";
 
@@ -93,9 +92,6 @@ export interface Asset {
   fullFrame?: boolean;
 }
 
-
-
-
 const DEFAULT_TRANSFORM: Transform = {
   x: 50,
   y: 35,
@@ -156,7 +152,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     "move" | "top" | "bottom" | "left" | "right" | null
   >(null);
   const [isPinching, setIsPinching] = useState(false);
- 
+
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
@@ -168,7 +164,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [thumbnails, setThumbnails] = useState<string[]>([]);
   const [videoDuration, setVideoDuration] = useState(0);
 
-const [fadeMode, setFadeMode] = useState(false);
+  const [fadeMode, setFadeMode] = useState(false);
 
   // New: Confirmation state for Magic button
   const [isConfirmingMagic, setIsConfirmingMagic] = useState(false);
@@ -195,7 +191,7 @@ const [fadeMode, setFadeMode] = useState(false);
   const [activeTextId, setActiveTextId] = useState<string | null>(null);
   const [isEditingText, setIsEditingText] = useState(false);
   const [editingTextValue, setEditingTextValue] = useState("");
-  
+
   const startTouchRef = useRef({ x: 0, y: 0, scale: 0, dist: 0 });
   const initialTouchRef = useRef({ x: 0, y: 0 });
   const dragStartTransformRef = useRef<Transform>(DEFAULT_TRANSFORM);
@@ -208,6 +204,7 @@ const [fadeMode, setFadeMode] = useState(false);
   const lastPenTapRef = useRef<number>(0);
   const penTapTimeoutRef = useRef<number | null>(null);
   const lastTouchTimeRef = useRef<number>(0);
+  const lastActiveTextIdRef = useRef<string | null>(null);
 
   // --- Refs ---
   const isRecordingRef = useRef(false);
@@ -432,25 +429,25 @@ const [fadeMode, setFadeMode] = useState(false);
     }
   };
 
- const handleReviewTimeUpdate = () => {
-   const video = reviewVideoRef.current;
-   if (!video) return;
+  const handleReviewTimeUpdate = () => {
+    const video = reviewVideoRef.current;
+    if (!video) return;
 
-   const duration = video.duration;
-   if (!duration) return;
+    const duration = video.duration;
+    if (!duration) return;
 
-   const start = trimRange[0] * duration;
-   const end = trimRange[1] * duration;
+    const start = trimRange[0] * duration;
+    const end = trimRange[1] * duration;
 
-   if (video.currentTime < start) {
-     video.currentTime = start;
-   }
+    if (video.currentTime < start) {
+      video.currentTime = start;
+    }
 
-   if (video.currentTime >= end) {
-     video.pause();
-     video.currentTime = start;
-   }
- };
+    if (video.currentTime >= end) {
+      video.pause();
+      video.currentTime = start;
+    }
+  };
 
   const handleReviewClose = () => {
     setIsReviewing(false);
@@ -513,31 +510,31 @@ const [fadeMode, setFadeMode] = useState(false);
     return t;
   };
 
- const selectAndShowAsset = useCallback(
-   (id: string, type: "video" | "image", currentAssets: Asset[]) => {
-     setVisibleAssetIds((prev) => {
-       let next = [...prev];
+  const selectAndShowAsset = useCallback(
+    (id: string, type: "video" | "image", currentAssets: Asset[]) => {
+      setVisibleAssetIds((prev) => {
+        let next = [...prev];
 
-       if (!next.includes(id)) {
-         if (type === "video") {
-           // remove ONLY other videos
-           next = next.filter(
-             (vId) => currentAssets.find((a) => a.id === vId)?.type !== "video"
-           );
-         }
+        if (!next.includes(id)) {
+          if (type === "video") {
+            // remove ONLY other videos
+            next = next.filter(
+              (vId) => currentAssets.find((a) => a.id === vId)?.type !== "video"
+            );
+          }
 
-         // images do nothing, just add
+          // images do nothing, just add
 
-         next.push(id);
-       }
+          next.push(id);
+        }
 
-       return next;
-     });
+        return next;
+      });
 
-     setSelectedAssetId(id);
-   },
-   []
- );
+      setSelectedAssetId(id);
+    },
+    []
+  );
 
   const resetApp = () => {
     if (isFinalizing || isReviewing) return;
@@ -551,7 +548,7 @@ const [fadeMode, setFadeMode] = useState(false);
       micOnlyStreamRef.current.getTracks().forEach((t) => t.stop());
       micOnlyStreamRef.current = null;
     }
-   
+
     setIsAssetPlaying(false);
     setIsLooping(false);
     if (externalClose) externalClose();
@@ -591,7 +588,6 @@ const [fadeMode, setFadeMode] = useState(false);
     setVisibleAssetIds((prev) => prev.filter((vId) => vId !== id));
     if (selectedAssetId === id) {
       setSelectedAssetId(null);
-  
     }
   };
 
@@ -641,15 +637,15 @@ const [fadeMode, setFadeMode] = useState(false);
         setSelectedAssetId(id);
       }
     } else {
-        if (asset.type === "video") {
-          // remove ONLY other videos
-          next = next.filter(
-            (vId) => assets.find((a) => a.id === vId)?.type !== "video"
-          );
-        }
+      if (asset.type === "video") {
+        // remove ONLY other videos
+        next = next.filter(
+          (vId) => assets.find((a) => a.id === vId)?.type !== "video"
+        );
+      }
 
-        // images stay, just add
-        next.push(id);
+      // images stay, just add
+      next.push(id);
       setSelectedAssetId(id);
     }
     setVisibleAssetIds(next);
@@ -666,24 +662,24 @@ const [fadeMode, setFadeMode] = useState(false);
       )
     );
   };
-  
+
   const toggleAssetPlayback = useCallback(
     async (forceReset = false) => {
       if (isFinalizing || isReviewing) return;
-    const v = videoRef.current;
-    if (!v || !v.src) return;
-    if (!audioContextRef.current)
-      audioContextRef.current = new (
-        window.AudioContext || (window as any).webkitAudioContext
-      )();
-    const audioCtx = audioContextRef.current;
-    if (audioCtx.state === "suspended") await audioCtx.resume();
-    if (!videoSourceNodeRef.current) {
-      videoSourceNodeRef.current = audioCtx.createMediaElementSource(v);
+      const v = videoRef.current;
+      if (!v || !v.src) return;
+      if (!audioContextRef.current)
+        audioContextRef.current = new (
+          window.AudioContext || (window as any).webkitAudioContext
+        )();
+      const audioCtx = audioContextRef.current;
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+      if (!videoSourceNodeRef.current) {
+        videoSourceNodeRef.current = audioCtx.createMediaElementSource(v);
         gainNodeRef.current = audioCtx.createGain();
         videoSourceNodeRef.current.connect(gainNodeRef.current);
         gainNodeRef.current.connect(audioCtx.destination);
-    }
+      }
 
       if (gainNodeRef.current) {
         gainNodeRef.current.gain.setTargetAtTime(
@@ -693,37 +689,39 @@ const [fadeMode, setFadeMode] = useState(false);
         );
       }
 
-    if (forceReset) {
-      v.currentTime = 0;
-      v.pause();
-      setIsAssetPlaying(false);
-      return;
-    }
-    if (v.paused || v.ended) {
+      if (forceReset) {
+        v.currentTime = 0;
+        v.pause();
+        setIsAssetPlaying(false);
+        return;
+      }
+      if (v.paused || v.ended) {
         v.muted = isLooping;
         v.volume = isLooping ? 0 : 1;
-        v.play()
-          .then(() => setIsAssetPlaying(true))
-          .catch((e) => console.warn(e));
-    } else {
-      v.pause();
-      setIsAssetPlaying(false);
-    }
+        setIsAssetPlaying(true);
+        v.play().catch((e) => {
+          console.warn(e);
+          setIsAssetPlaying(false);
+        });
+      } else {
+        v.pause();
+        setIsAssetPlaying(false);
+      }
     },
     [isLooping, isFinalizing, isReviewing]
   );
 
-useEffect(() => {
-  const video = reviewVideoRef.current;
-  if (!video) return;
+  useEffect(() => {
+    const video = reviewVideoRef.current;
+    if (!video) return;
 
-  const duration = video.duration;
-  if (!duration) return;
+    const duration = video.duration;
+    if (!duration) return;
 
-  const start = trimRange[0] * duration;
+    const start = trimRange[0] * duration;
 
-  video.currentTime = start;
-}, [trimRange[0]]);
+    video.currentTime = start;
+  }, [trimRange[0]]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -741,11 +739,31 @@ useEffect(() => {
     }
   }, [isLooping]);
 
- const handlePlaybackInteraction = useCallback(() => {
-   if (isFinalizing || isReviewing) return;
-   toggleAssetPlayback();
- }, [toggleAssetPlayback, isFinalizing, isReviewing]);
-  
+  const handlePlaybackInteraction = useCallback(() => {
+    if (isFinalizing || isReviewing) return;
+
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapRef.current;
+
+    if (timeSinceLastTap < 250) {
+      // Double tap detected: RESET
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+        tapTimeoutRef.current = null;
+      }
+      toggleAssetPlayback(true);
+      lastTapRef.current = 0;
+    } else {
+      // Single tap: PLAY/STOP
+      lastTapRef.current = now;
+      // Debounce single tap to wait for potential double tap
+      tapTimeoutRef.current = window.setTimeout(() => {
+      toggleAssetPlayback();
+        tapTimeoutRef.current = null;
+      }, 250);
+    }
+  }, [toggleAssetPlayback, isFinalizing, isReviewing]);
+
   const clearAllDrawings = useCallback(() => {
     setAssets((prev) => prev.map((a) => ({ ...a, drawings: [] })));
   }, []);
@@ -793,11 +811,52 @@ useEffect(() => {
       const next = !prev;
       if (next) {
         setIsLocked(true);
+        // Resume last active text if available, otherwise create new
+        if (
+          lastActiveTextIdRef.current &&
+          textItems.some((t) => t.id === lastActiveTextIdRef.current)
+        ) {
+          setActiveTextId(lastActiveTextIdRef.current);
+        } else {
+          // Create new text item if none exists
+        const newId = Date.now().toString();
+        const newItem: TextItem = {
+          id: newId,
+          text: "Double tap to edit",
+          x: 0.5,
+          y: 0.5,
+          scale: 100,
+          color: "#ffffff",
+          rotation: 0
+        };
+        setTextItems((prevItems) => [...prevItems, newItem]);
+        setActiveTextId(newId);
+          lastActiveTextIdRef.current = newId;
+        }
       } else {
         setIsLocked(false);
+        setActiveTextId(null);
+        setIsEditingText(false);
       }
       return next;
     });
+  }, [isFinalizing, isReviewing, textItems]);
+
+  const handleAddText = useCallback(() => {
+    if (isFinalizing || isReviewing) return;
+    const newId = Date.now().toString();
+    const newItem: TextItem = {
+      id: newId,
+      text: "Double tap to edit",
+      x: 0.5,
+      y: 0.5,
+      scale: 100,
+      color: "#ffffff",
+      rotation: 0
+    };
+    setTextItems((prevItems) => [...prevItems, newItem]);
+    setActiveTextId(newId);
+    lastActiveTextIdRef.current = newId;
   }, [isFinalizing, isReviewing]);
 
   // --- Magic Cutout Logic ---
@@ -868,8 +927,7 @@ useEffect(() => {
   }) => {
     if (!selectedAsset || isFinalizing || isReviewing) return;
     // CREDIT DEDUCTION
-   
-    
+
     setIsAiProcessing(true);
 
     try {
@@ -1111,8 +1169,8 @@ useEffect(() => {
 
     // Helper to draw webcam
     const drawWebcam = (isFloating: boolean) => {
-    if (webcamActive && webcamRef.current?.readyState >= 2) {
-      const v = webcamRef.current;
+      if (webcamActive && webcamRef.current?.readyState >= 2) {
+        const v = webcamRef.current;
         const vRatio = v.videoWidth / v.videoHeight;
 
         ctx.save();
@@ -1146,28 +1204,28 @@ useEffect(() => {
         } else {
           // Fullscreen Mode (Background)
           const targetRatio = w / h;
-      let sw, sh, sx, sy;
-      if (vRatio > targetRatio) {
-        sh = v.videoHeight;
-        sw = sh * targetRatio;
-        sx = (v.videoWidth - sw) / 2;
-        sy = 0;
-      } else {
-        sw = v.videoWidth;
-        sh = sw / targetRatio;
-        sx = 0;
-        sy = (v.videoHeight - sh) / 2;
-      }
-      ctx.save();
+          let sw, sh, sx, sy;
+          if (vRatio > targetRatio) {
+            sh = v.videoHeight;
+            sw = sh * targetRatio;
+            sx = (v.videoWidth - sw) / 2;
+            sy = 0;
+          } else {
+            sw = v.videoWidth;
+            sh = sw / targetRatio;
+            sx = 0;
+            sy = (v.videoHeight - sh) / 2;
+          }
+          ctx.save();
 
-      if (webcamFlipped) {
-        ctx.translate(w, 0);
-        ctx.scale(-1, 1);
-      }
-      ctx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h);
+          if (webcamFlipped) {
+            ctx.translate(w, 0);
+            ctx.scale(-1, 1);
+          }
+          ctx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h);
         }
-      ctx.restore();
-    }
+        ctx.restore();
+      }
     };
 
     // 1. Draw Webcam if Fullscreen (Background)
@@ -1513,7 +1571,7 @@ useEffect(() => {
 
           if (!isDraggingRef.current) {
             ctx.closePath();
-          ctx.stroke();
+            ctx.stroke();
             ctx.fillStyle = "rgba(34, 197, 94, 0.4)";
             ctx.fill();
           } else {
@@ -1699,24 +1757,46 @@ useEffect(() => {
         ctx.arc(x + w / 2 + 10, y + h / 2 + 10, 15, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+
+        // Delete Handle (Top-Left)
+        ctx.fillStyle = "#ef4444"; // Red
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x - w / 2 - 10, y - h / 2 - 10, 15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw X
+        ctx.beginPath();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
+        const dx = x - w / 2 - 10;
+        const dy = y - h / 2 - 10;
+        const r = 6;
+        ctx.moveTo(dx - r, dy - r);
+        ctx.lineTo(dx + r, dy + r);
+        ctx.moveTo(dx + r, dy - r);
+        ctx.lineTo(dx - r, dy + r);
+        ctx.stroke();
       }
       ctx.restore();
     });
 
     // 3. Draw Watermark
-   if (showWatermark || !watermarkUnlocked) {
-     ctx.save();
-     ctx.font = "900 24px 'Inter', sans-serif";
-     ctx.textAlign = "right";
-     ctx.textBaseline = "bottom";
-     ctx.shadowColor = "rgba(0,0,0,0.8)";
-     ctx.shadowBlur = 4;
-     ctx.shadowOffsetX = 2;
-     ctx.shadowOffsetY = 2;
-     ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-     ctx.fillText("DIRECTOR'S CUT", canvas.width - 30, canvas.height - 30);
-     ctx.restore();
-   }
+    if (showWatermark || !watermarkUnlocked) {
+      ctx.save();
+      ctx.font = "900 24px 'Inter', sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+      ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+      ctx.fillText("DIRECTOR'S CUT", canvas.width - 30, canvas.height - 30);
+      ctx.restore();
+    }
 
     requestRef.current = requestAnimationFrame(drawFrame);
   }, [
@@ -1760,15 +1840,6 @@ useEffect(() => {
     isDraggingRef.current = false;
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY;
-
-    // Detect double tap early for mobile reliability
-    const now = Date.now();
-    if (now - lastTapRef.current < 280) {
-      lastTapRef.current = 0;
-      toggleAssetPlayback(true); // restart video
-      return;
-    }
-    lastTapRef.current = now;
 
     initialTouchRef.current = { x: clientX, y: clientY };
 
@@ -1840,6 +1911,7 @@ useEffect(() => {
       e.preventDefault();
       let hitTextId = null;
       let isResizeHandle = false;
+      let isDeleteHandle = false;
 
       for (let i = textItems.length - 1; i >= 0; i--) {
         const item = textItems[i];
@@ -1854,7 +1926,7 @@ useEffect(() => {
         const itemX = 1080 * item.x;
         const itemY = 1920 * item.y;
 
-        // Check Resize Handle (only for active item)
+        // Check Handles (only for active item)
         if (activeTextId === item.id) {
           const handleX = itemX + textWidth / 2 + 10;
           const handleY = itemY + textHeight / 2 + 10;
@@ -1862,6 +1934,16 @@ useEffect(() => {
           if (dist < 40) {
             hitTextId = item.id;
             isResizeHandle = true;
+            break;
+          }
+
+          // Delete Handle (Top-Left)
+          const deleteX = itemX - textWidth / 2 - 10;
+          const deleteY = itemY - textHeight / 2 - 10;
+          const distDelete = Math.hypot(canvasX - deleteX, canvasY - deleteY);
+          if (distDelete < 40) {
+            hitTextId = item.id;
+            isDeleteHandle = true;
             break;
           }
         }
@@ -1883,6 +1965,15 @@ useEffect(() => {
       }
 
       if (hitTextId) {
+        if (isDeleteHandle) {
+          setTextItems((prev) => prev.filter((t) => t.id !== hitTextId));
+          if (activeTextId === hitTextId) {
+            setActiveTextId(null);
+            lastActiveTextIdRef.current = null;
+          }
+          return;
+        }
+
         if (isResizeHandle) {
           isResizingTextRef.current = true;
           setActiveTextId(hitTextId);
@@ -1905,6 +1996,7 @@ useEffect(() => {
         lastTapRef.current = now;
 
         setActiveTextId(hitTextId);
+        lastActiveTextIdRef.current = hitTextId;
         isDraggingRef.current = true;
         startTouchRef.current = {
           ...startTouchRef.current,
@@ -1922,34 +2014,22 @@ useEffect(() => {
         }
       } else {
         if (activeTextId) {
-          // If text is selected, deselect it and allow fall-through to video playback
+          // If text is selected, deselect it and STOP propagation (do NOT play video)
           setActiveTextId(null);
           setIsEditingText(false);
-          // Update startTouchRef so handleTouchEnd works correctly for playback toggle
+          return;
+        } else {
+          // No text hit, no text selected.
+          // Allow fall-through to video playback logic in handleTouchEnd.
+          // We need to set startTouchRef so handleTouchEnd detects it as a tap.
           startTouchRef.current = {
             ...startTouchRef.current,
             x: clientX,
             y: clientY,
-            scale: 100, // Reset scale just in case
+            scale: 100,
             dist: 0
           };
-          // Do NOT return here, let it fall through to asset interaction logic
-        } else {
-          const newId = Date.now().toString();
-          const newItem: TextItem = {
-            id: newId,
-            text: "",
-            x: canvasX / 1080,
-            y: canvasY / 1920,
-            scale: 100,
-            color: "#ffffff",
-            rotation: 0
-          };
-          setTextItems((prev) => [...prev, newItem]);
-          setActiveTextId(newId);
-          setEditingTextValue("");
-          setIsEditingText(true);
-          return;
+          // Do NOT return, let it fall through to asset interaction logic setup
         }
       }
       if (hitTextId) return;
@@ -1960,68 +2040,68 @@ useEffect(() => {
       (magicMode === "blur_selecting" || magicMode === "cut_selecting") &&
       selectedAssetId
     ) {
-    e.preventDefault();
+      e.preventDefault();
 
-    // Calculate asset-relative coordinates
-    const trans = selectedAsset!.transform;
-    const swActual =
-      selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100);
-    const shActual =
-      selectedAsset!.height * (1 - (trans.cropTop + trans.cropBottom) / 100);
-    const drawW =
-      1080 * (trans.scale / 100) * (swActual / selectedAsset!.width);
-    const drawH =
-      1080 *
-      (trans.scale / 100) *
-      (selectedAsset!.height / selectedAsset!.width) *
-      (shActual / selectedAsset!.height);
+      // Calculate asset-relative coordinates
+      const trans = selectedAsset!.transform;
+      const swActual =
+        selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100);
+      const shActual =
+        selectedAsset!.height * (1 - (trans.cropTop + trans.cropBottom) / 100);
+      const drawW =
+        1080 * (trans.scale / 100) * (swActual / selectedAsset!.width);
+      const drawH =
+        1080 *
+        (trans.scale / 100) *
+        (selectedAsset!.height / selectedAsset!.width) *
+        (shActual / selectedAsset!.height);
 
-    let dX,
-      dY,
-      fW = drawW,
-      fH = drawH;
+      let dX,
+        dY,
+        fW = drawW,
+        fH = drawH;
 
-    if (selectedAsset?.fullFrame) {
-      const aR = swActual / shActual;
-      const fR = 1080 / 1920;
-      if (aR > fR) {
-        fW = 1080;
-        fH = 1080 / aR;
+      if (selectedAsset?.fullFrame) {
+        const aR = swActual / shActual;
+        const fR = 1080 / 1920;
+        if (aR > fR) {
+          fW = 1080;
+          fH = 1080 / aR;
+        } else {
+          fH = 1920;
+          fW = 1920 * aR;
+        }
+        dX = (1080 - fW) / 2;
+        dY = (1920 - fH) / 2;
       } else {
-        fH = 1920;
-        fW = 1920 * aR;
+        dX = 1080 * (trans.x / 100) - drawW / 2;
+        dY = 1920 * (trans.y / 100) - drawH / 2;
       }
-      dX = (1080 - fW) / 2;
-      dY = (1920 - fH) / 2;
-    } else {
-      dX = 1080 * (trans.x / 100) - drawW / 2;
-      dY = 1920 * (trans.y / 100) - drawH / 2;
-    }
 
-    // Check if touch is inside asset bounds
-    if (
-      canvasX >= dX &&
-      canvasX <= dX + fW &&
-      canvasY >= dY &&
-      canvasY <= dY + fH
-    ) {
-      const rX = (canvasX - dX) / fW;
-      const rY = (canvasY - dY) / fH;
+      // Check if touch is inside asset bounds
+      if (
+        canvasX >= dX &&
+        canvasX <= dX + fW &&
+        canvasY >= dY &&
+        canvasY <= dY + fH
+      ) {
+        const rX = (canvasX - dX) / fW;
+        const rY = (canvasY - dY) / fH;
 
-      // Convert to normalized asset coordinates (0-1) considering crop
-      const normX =
-        trans.cropLeft / 100 +
-        rX * (1 - (trans.cropLeft + trans.cropRight) / 100);
-      const normY =
-        trans.cropTop / 100 +
-        rY * (1 - (trans.cropTop + trans.cropBottom) / 100);
+        // Convert to normalized asset coordinates (0-1) considering crop
+        const normX =
+          trans.cropLeft / 100 +
+          rX * (1 - (trans.cropLeft + trans.cropRight) / 100);
+        const normY =
+          trans.cropTop / 100 +
+          rY * (1 - (trans.cropTop + trans.cropBottom) / 100);
 
         setActivePath([{ x: normX, y: normY }]);
       } else {
         setActivePath([]);
+      }
+      return;
     }
-    return;
-  }
 
     if (isDrawingMode) {
       e.preventDefault();
@@ -2070,10 +2150,10 @@ useEffect(() => {
         setActivePath([
           {
             x:
-          trans.cropLeft / 100 +
+              trans.cropLeft / 100 +
               rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
             y:
-          trans.cropTop / 100 +
+              trans.cropTop / 100 +
               rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
           }
         ]);
@@ -2189,7 +2269,7 @@ useEffect(() => {
         clientY - initialTouchRef.current.y
       );
       if (dist > 5) {
-    isDraggingRef.current = true;
+        isDraggingRef.current = true;
       } else {
         return;
       }
@@ -2315,10 +2395,10 @@ useEffect(() => {
       const drawW =
           1080 * (trans.scale / 100) * (swActual / selectedAsset!.width),
         drawH =
-        1080 *
-        (trans.scale / 100) *
-        (selectedAsset!.height / selectedAsset!.width) *
-        (shActual / selectedAsset!.height);
+          1080 *
+          (trans.scale / 100) *
+          (selectedAsset!.height / selectedAsset!.width) *
+          (shActual / selectedAsset!.height);
       let dX,
         dY,
         fW = drawW,
@@ -2341,8 +2421,8 @@ useEffect(() => {
       }
 
       // Clamp coordinates to asset bounds for smooth edge drawing
-     const clampedX = Math.max(dX, Math.min(dX + fW, cX));
-const clampedY = Math.max(dY, Math.min(dY + fH, cY));
+      const clampedX = Math.max(dX, Math.min(dX + fW, cX));
+      const clampedY = Math.max(dY, Math.min(dY + fH, cY));
 
       const rX = (clampedX - dX) / fW,
         rY = (clampedY - dY) / fH;
@@ -2351,13 +2431,13 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
       if (activePath.length > 0) {
         const startPt = activePath[0];
         const currentPt = {
-        x:
-        trans.cropLeft / 100 +
-          rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
-        y:
-        trans.cropTop / 100 +
-          rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
-      };
+          x:
+            trans.cropLeft / 100 +
+            rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
+          y:
+            trans.cropTop / 100 +
+            rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
+        };
 
         // Create rectangle path: Start -> TopRight -> BottomRight -> BottomLeft -> Start
         // Actually, we just need 4 points to define the rect for rendering
@@ -2382,12 +2462,12 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
     if (isDrawingMode) {
       e.preventDefault();
       if (!selectedAssetId || activePath.length === 0) return;
-     const canvas = canvasRef.current!;
-     const scaleX = canvas.width / rect.width;
-     const scaleY = canvas.height / rect.height;
+      const canvas = canvasRef.current!;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
 
-     const cX = (clientX - rect.left) * scaleX;
-     const cY = (clientY - rect.top) * scaleY;
+      const cX = (clientX - rect.left) * scaleX;
+      const cY = (clientY - rect.top) * scaleY;
       const trans = selectedAsset!.transform,
         swActual =
           selectedAsset!.width * (1 - (trans.cropLeft + trans.cropRight) / 100),
@@ -2425,10 +2505,10 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         rY = (Math.max(dY, Math.min(dY + fH, cY)) - dY) / fH;
       const newPt = {
         x:
-        trans.cropLeft / 100 +
+          trans.cropLeft / 100 +
           rX * (1 - (trans.cropLeft + trans.cropRight) / 100),
         y:
-        trans.cropTop / 100 +
+          trans.cropTop / 100 +
           rY * (1 - (trans.cropTop + trans.cropBottom) / 100)
       };
       if (drawingShape === "free") {
@@ -2552,7 +2632,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
     if (
       e &&
       e.type === "mouseup" &&
-      Date.now() - lastTouchTimeRef.current < 20
+      Date.now() - lastTouchTimeRef.current < 500
     ) {
       return;
     }
@@ -2588,6 +2668,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
       !wasDragging &&
       !isPinching &&
       !isDrawingMode &&
+      !isTextMode &&
       selectedAssetId &&
       selectedAsset?.type === "video"
     ) {
@@ -2632,8 +2713,8 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         }
         if (cX > dX && cX < dX + fW && cY > dY && cY < dY + fH)
           handlePlaybackInteraction();
-        }
       }
+    }
     if (isDrawingMode && activePath.length > 0 && selectedAssetId) {
       setAssets((p) =>
         p.map((a) =>
@@ -2643,10 +2724,10 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                 drawings: [
                   ...a.drawings,
                   {
-        shape: drawingShape,
+                    shape: drawingShape,
                     points: [...activePath],
-        color: "#eaff00",
-        width: 8
+                    color: "#eaff00",
+                    width: 8
                   }
                 ]
               }
@@ -2762,30 +2843,30 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
       // Delay starting the recorder to ensure the next frame (without UI) is drawn
       setTimeout(() => {
         if (!canvasRef.current) return;
-      const stream = canvasRef.current.captureStream(30);
-      dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+        const stream = canvasRef.current.captureStream(30);
+        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
 
-      const mime =
-        ["video/mp4;codecs=h264,aac", "video/mp4", "video/webm"].find((m) =>
-          MediaRecorder.isTypeSupported(m)
-        ) || "video/webm";
-      const recorder = new MediaRecorder(stream, { mimeType: mime });
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-     recorder.onstop = () => {
-        setRecordedBlob(new Blob(chunks, { type: mime }));
-       setRecordingTime(0);
-       setIsFinalizing(false);
-       setIsReviewing(true);
-     };
-      recorder.start(1000);
-      mediaRecorderRef.current = recorder;
-      recordingIntervalRef.current = window.setInterval(
-        () => setRecordingTime((p) => p + 1),
-        1000
-      );
+        const mime =
+          ["video/mp4;codecs=h264,aac", "video/mp4", "video/webm"].find((m) =>
+            MediaRecorder.isTypeSupported(m)
+          ) || "video/webm";
+        const recorder = new MediaRecorder(stream, { mimeType: mime });
+        const chunks: Blob[] = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onstop = () => {
+          setRecordedBlob(new Blob(chunks, { type: mime }));
+          setRecordingTime(0);
+          setIsFinalizing(false);
+          setIsReviewing(true);
+        };
+        recorder.start(1000);
+        mediaRecorderRef.current = recorder;
+        recordingIntervalRef.current = window.setInterval(
+          () => setRecordingTime((p) => p + 1),
+          1000
+        );
       }, 100);
     } else {
       // Prompt for confirmation
@@ -3145,6 +3226,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                       );
                     }}
                     onClick={(e) => e.stopPropagation()}
+                    onFocus={(e) => e.target.select()}
                     className="absolute bg-transparent border-none text-center focus:outline-none p-0 m-0"
                     autoFocus
                     style={{
@@ -3187,6 +3269,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
         </button>
 
         <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
+          <div className="relative flex items-center">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -3200,8 +3283,26 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
             className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center transition-all ${isTextMode ? "bg-yellow-400 text-black shadow-[0_0_20px_#eaff0080]" : "bg-white text-black"} disabled:opacity-20`}
           >
             <TextIcon className="text-lg" />
-            <span className="text-[5px] font-black mt-0.5 uppercase">TEXT</span>
+              <span className="text-[5px] font-black mt-0.5 uppercase">
+                TEXT
+              </span>
           </button>
+            {isTextMode && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddText();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                className="absolute left-full ml-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-transform"
+              >
+                <PlusIcon className="text-sm" />
+              </button>
+            )}
+          </div>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -3652,7 +3753,7 @@ const clampedY = Math.max(dY, Math.min(dY + fH, cY));
                             video.currentTime >= end - 0.1 ||
                             video.currentTime < start
                           ) {
-                          video.currentTime = start;
+                            video.currentTime = start;
                           }
                           video.play();
                         } else {
