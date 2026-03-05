@@ -1931,7 +1931,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           const handleX = itemX + textWidth / 2 + 10;
           const handleY = itemY + textHeight / 2 + 10;
           const dist = Math.hypot(canvasX - handleX, canvasY - handleY);
-          if (dist < 40) {
+          if (dist < 80) {
             hitTextId = item.id;
             isResizeHandle = true;
             break;
@@ -1941,7 +1941,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           const deleteX = itemX - textWidth / 2 - 10;
           const deleteY = itemY - textHeight / 2 - 10;
           const distDelete = Math.hypot(canvasX - deleteX, canvasY - deleteY);
-          if (distDelete < 40) {
+          if (distDelete < 80) {
             hitTextId = item.id;
             isDeleteHandle = true;
             break;
