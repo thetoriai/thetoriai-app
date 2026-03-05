@@ -2890,6 +2890,11 @@ try {
   return (
     <div
       className={`flex h-[100dvh] bg-[#0a0f1d] text-white font-sans overflow-hidden layout-${layoutMode}`}
+      style={
+        window.innerWidth < 600
+          ? { transform: "scale(1.03)", transformOrigin: "top center" }
+          : {}
+      }
     >
       {layoutMode !== "phone" && session && (
         <Sidebar
