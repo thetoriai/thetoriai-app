@@ -1720,7 +1720,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     textItems.forEach((item) => {
       if (isEditingText && item.id === activeTextId) return;
       ctx.save();
-      const fontSize = 50 * (item.scale / 100);
+      const fontSize = 80 * (item.scale / 100);
       ctx.font = `bold ${fontSize}px Arial`;
       ctx.fillStyle = item.color;
       ctx.textAlign = "center";
