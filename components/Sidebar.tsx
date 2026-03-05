@@ -281,7 +281,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   if (isPhone) {
     return (
       <div className={containerClasses}>
-        <div className="p-4 flex items-center justify-between border-b border-white/5 bg-[#0a0f1d]/40 sticky top-0 z-[110]">
+        <div className="p-4 pt-6 flex items-center justify-between border-b border-white/5 bg-transparent z-[110]">
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-center">
               <div
