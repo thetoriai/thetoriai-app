@@ -1746,7 +1746,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         ctx.strokeStyle = "#eaff00";
         ctx.lineWidth = 4;
         ctx.setLineDash([10, 10]);
-        ctx.strokeRect(x - w / 2 - 10, y - h / 2 - 10, w + 20, h + 20);
+        ctx.strokeRect(x - w / 2 - 30, y - h / 2 - 30, w + 60, h + 60);
 
         // Resize Handle
         ctx.setLineDash([]);
@@ -1754,7 +1754,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         ctx.strokeStyle = "#eaff00";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(x + w / 2 + 10, y + h / 2 + 10, 25, 0, Math.PI * 2);
+        ctx.arc(x + w / 2 + 30, y + h / 2 + 30, 35, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
@@ -1763,7 +1763,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x - w / 2 - 10, y - h / 2 - 10, 25, 0, Math.PI * 2);
+        ctx.arc(x - w / 2 - 30, y - h / 2 - 30, 35, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
@@ -1771,9 +1771,9 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         ctx.beginPath();
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 3;
-        const dx = x - w / 2 - 10;
-        const dy = y - h / 2 - 10;
-        const r = 6;
+        const dx = x - w / 2 - 30;
+        const dy = y - h / 2 - 30;
+        const r = 10;
         ctx.moveTo(dx - r, dy - r);
         ctx.lineTo(dx + r, dy + r);
         ctx.moveTo(dx + r, dy - r);
@@ -1913,45 +1913,50 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       let isResizeHandle = false;
       let isDeleteHandle = false;
 
+      const ctx = canvas.getContext("2d");
       for (let i = textItems.length - 1; i >= 0; i--) {
         const item = textItems[i];
-        const fontSize = 50 * (item.scale / 100);
-        // Use canvas context to measure text width accurately if possible,
-        // but here we approximate or use the same logic as drawFrame if context is not available.
-        // In drawFrame we use ctx.measureText. Here we don't have ctx easily.
-        // Let's use the same approximation as before for hit testing, but maybe refine it?
-        // Actually, let's use a slightly more generous hit box.
-        const textWidth = item.text.length * fontSize * 0.6;
+        const fontSize = 80 * (item.scale / 100);
+        let textWidth = 0;
+        if (ctx) {
+          ctx.font = `bold ${fontSize}px Arial`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          textWidth = ctx.measureText(item.text).width;
+        } else {
+          textWidth = item.text.length * fontSize * 0.6;
+        }
         const textHeight = fontSize;
         const itemX = 1080 * item.x;
         const itemY = 1920 * item.y;
 
         // Check Handles (only for active item)
         if (activeTextId === item.id) {
-          const handleX = itemX + textWidth / 2 + 10;
-          const handleY = itemY + textHeight / 2 + 10;
+          const handleX = itemX + textWidth / 2 + 30;
+          const handleY = itemY + textHeight / 2 + 30;
           const dist = Math.hypot(canvasX - handleX, canvasY - handleY);
-          if (dist < 80) {
+          if (dist < 70) {
             hitTextId = item.id;
             isResizeHandle = true;
             break;
           }
 
           // Delete Handle (Top-Left)
-          const deleteX = itemX - textWidth / 2 - 10;
-          const deleteY = itemY - textHeight / 2 - 10;
+          const deleteX = itemX - textWidth / 2 - 30;
+          const deleteY = itemY - textHeight / 2 - 30;
           const distDelete = Math.hypot(canvasX - deleteX, canvasY - deleteY);
-          if (distDelete < 80) {
+          if (distDelete < 70) {
             hitTextId = item.id;
             isDeleteHandle = true;
             break;
           }
         }
 
-        const left = itemX - textWidth / 2;
-        const right = itemX + textWidth / 2;
-        const top = itemY - textHeight / 2;
-        const bottom = itemY + textHeight / 2;
+        const padding = 40;
+        const left = itemX - textWidth / 2 - padding;
+        const right = itemX + textWidth / 2 + padding;
+        const top = itemY - textHeight / 2 - padding;
+        const bottom = itemY + textHeight / 2 + padding;
 
         if (
           canvasX >= left &&
