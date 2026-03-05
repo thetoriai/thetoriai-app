@@ -3263,7 +3263,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           onTouchStart={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
           disabled={isFinalizing || isReviewing}
-          className="absolute top-4 left-2 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
+          className="absolute top-4 left-0 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
         >
           <XIcon className="text-xs" />
         </button>
@@ -3655,7 +3655,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
             onMouseUp={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
-            className="absolute bottom-14 right-1 z-50 w-10 h-10 flex items-center justify-center drop-shadow-lg active:scale-90 transition-transform"
+            className="absolute bottom-14 right-0 z-50 w-10 h-10 flex items-center justify-center drop-shadow-lg active:scale-90 transition-transform"
           >
             <WatermarkIcon
               className={`text-2xl ${showWatermark ? "text-white" : "text-red-500/50"}`}
@@ -3673,7 +3673,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
             onMouseUp={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
-            className="absolute bottom-1 right-1 z-50 w-10 h-10 bg-black/60 backdrop-blur-xl border-2 border-red-500/40 rounded-2xl flex flex-col items-center justify-center text-red-500"
+            className="absolute bottom-1 right-0 z-50 w-10 h-10 bg-black/60 backdrop-blur-xl border-2 border-red-500/40 rounded-2xl flex flex-col items-center justify-center text-red-500"
           >
             <TrashIcon className="text-xs" />
             <span className="text-[5px] font-black mt-0.5 uppercase">
