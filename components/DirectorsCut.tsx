@@ -1754,7 +1754,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         ctx.strokeStyle = "#eaff00";
         ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.arc(x + w / 2 + 10, y + h / 2 + 10, 15, 0, Math.PI * 2);
+        ctx.arc(x + w / 2 + 10, y + h / 2 + 10, 25, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
@@ -1763,7 +1763,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x - w / 2 - 10, y - h / 2 - 10, 15, 0, Math.PI * 2);
+        ctx.arc(x - w / 2 - 10, y - h / 2 - 10, 25, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
