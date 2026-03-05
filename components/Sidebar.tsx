@@ -281,10 +281,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   if (isPhone) {
     return (
       <div className={containerClasses}>
-        <div
-          className="px-4 pb-4 flex items-center justify-between border-b border-white/5 bg-[#0a0f1d]/40 z-[110]"
-          style={{ paddingTop: "calc(env(safe-area-inset-top) + 12px)" }}
-        >
+        <div className="p-4 flex items-center justify-between border-b border-white/5 bg-[#0a0f1d]/40 sticky top-0 z-[110]">
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-center">
               <div
@@ -356,10 +353,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Navigation area fits content naturally, scrolls only if viewport is too short */}
-        <div
-          className="flex-1 min-h-0 overflow-y-auto p-6 space-y-2 scrollbar-none"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)" }}
-        >
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-2 pb-32 scrollbar-none">
           <div className="flex flex-col gap-3 max-w-sm mx-auto">
             {/* Production tools */}
             {navItems
