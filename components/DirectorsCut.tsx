@@ -120,7 +120,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
   const [webcamActive, setWebcamActive] = useState(false);
-  const [webcamFlipped, setWebcamFlipped] = useState(false);
+  const [webcamFlipped, setWebcamFlipped] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   const [webcamMode, setWebcamMode] = useState<"fullscreen" | "floating">(
     "fullscreen"
