@@ -2889,7 +2889,7 @@ try {
 
   return (
     <div
-      className={`flex h-[100dvh] bg-gray-950 text-white font-sans overflow-hidden layout-${layoutMode}`}
+      className={`flex min-h-screen bg-[#0a0f1d] text-white font-sans overflow-hidden layout-${layoutMode}`}
     >
       {layoutMode !== "phone" && session && (
         <Sidebar
