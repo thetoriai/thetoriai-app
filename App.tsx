@@ -2860,7 +2860,7 @@ try {
     children: React.ReactNode;
     title: string;
   }> = ({ children, title }) => (
-    <div className="fixed inset-0 z-[100] bg-gray-950 flex flex-col animate-in slide-in-from-bottom duration-300">
+    <div className="fixed inset-0 z-[100] bg-[#0a0f1d] flex flex-col animate-in slide-in-from-bottom duration-300">
       <div className="p-4 border-b border-white/5 bg-[#0a0f1d] flex justify-between items-center shrink-0">
         <h2 className="text-[10px] font-bold text-gray-400  tracking-[0.3em] ml-2">
           {title}
