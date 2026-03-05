@@ -741,25 +741,11 @@ useEffect(() => {
     }
   }, [isLooping]);
 
-  const handlePlaybackInteraction = useCallback(() => {
-    if (isFinalizing || isReviewing) return;
-    const now = Date.now();
-    const timeSinceLastTap = now - lastTapRef.current;
-    if (timeSinceLastTap < 300) {
-      // Double tap detected: RESET
-      if (tapTimeoutRef.current) window.clearTimeout(tapTimeoutRef.current);
-      toggleAssetPlayback(true);
-      lastTapRef.current = 0;
-    } else {
-      // Single tap: PLAY/STOP
-      lastTapRef.current = now;
-      tapTimeoutRef.current = window.setTimeout(() => {
-        toggleAssetPlayback();
-        tapTimeoutRef.current = null;
-      }, 300);
-    }
-  }, [toggleAssetPlayback, isFinalizing, isReviewing]);
-
+ const handlePlaybackInteraction = useCallback(() => {
+   if (isFinalizing || isReviewing) return;
+   toggleAssetPlayback();
+ }, [toggleAssetPlayback, isFinalizing, isReviewing]);
+  
   const clearAllDrawings = useCallback(() => {
     setAssets((prev) => prev.map((a) => ({ ...a, drawings: [] })));
   }, []);
@@ -1774,6 +1760,15 @@ useEffect(() => {
     isDraggingRef.current = false;
     const clientX = e.touches[0].clientX,
       clientY = e.touches[0].clientY;
+
+    // Detect double tap early for mobile reliability
+    const now = Date.now();
+    if (now - lastTapRef.current < 280) {
+      lastTapRef.current = 0;
+      toggleAssetPlayback(true); // restart video
+      return;
+    }
+    lastTapRef.current = now;
 
     initialTouchRef.current = { x: clientX, y: clientY };
 
