@@ -2889,7 +2889,7 @@ try {
 
   return (
     <div
-      className={`flex min-h-screen bg-[#0a0f1d] text-white font-sans overflow-hidden layout-${layoutMode}`}
+      className={`flex h-[100dvh] bg-[#0a0f1d] text-white font-sans overflow-hidden layout-${layoutMode}`}
     >
       {layoutMode !== "phone" && session && (
         <Sidebar
@@ -2914,7 +2914,7 @@ try {
         />
       )}
 
-      <main className="flex-1 h-full overflow-hidden relative flex flex-col bg-gray-950">
+      <main className="flex-1 h-full overflow-hidden relative flex flex-col bg-[#0a0f1d]">
         {activeView === "welcome" && (
           <div className="absolute inset-0 z-0">
             <WelcomePage
