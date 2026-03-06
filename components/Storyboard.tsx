@@ -1,8 +1,9 @@
 import React, { useRef, useState, useEffect, useMemo } from "react";
+import { GoogleGenAI } from "@google/genai";
 import {
   SparklesIcon,
   PlusIcon,
-  
+  MicrophoneIcon,
   XIcon,
   ClapperboardIcon,
   BookOpenIcon,
@@ -131,6 +132,67 @@ export const Storyboard = React.memo(
     const [qfActiveSlotIdx, setQfActiveSlotIdx] = useState<number | null>(null);
     const [isConfirmingQF, setIsConfirmingQF] = useState(false);
     const [qfCreditError, setQfCreditError] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const [isCorrecting, setIsCorrecting] = useState(false);
+
+    const handleVoiceInput = async () => {
+      if (
+        !("webkitSpeechRecognition" in window) &&
+        !("SpeechRecognition" in window)
+      ) {
+        alert("Speech recognition is not supported in this browser.");
+        return;
+      }
+
+      setIsListening(true);
+      const SpeechRecognition =
+        (window as any).webkitSpeechRecognition ||
+        (window as any).SpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onresult = async (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setIsListening(false);
+        setIsCorrecting(true);
+
+        try {
+          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+          const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: `Correct and refine the following text for a video generation prompt. Keep it concise and descriptive. Return ONLY the corrected text: "${transcript}"`
+          });
+          const correctedText = response.text;
+          if (correctedText) {
+            setQfPrompt(correctedText.trim());
+            setQfCreditError(false);
+          }
+        } catch (error) {
+          console.error("Error correcting text:", error);
+          setQfPrompt(transcript);
+        } finally {
+          setIsCorrecting(false);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        setIsListening(false);
+        setIsCorrecting(false);
+      };
+
+      recognition.onend = () => {
+        // If we stopped listening and didn't get a result yet, we might want to reset listening state
+        // But onresult handles the success case.
+        if (!isCorrecting) {
+          setIsListening(false);
+        }
+      };
+
+      recognition.start();
+    };
 
     const isPhone = window.innerWidth <= 500;
 
@@ -219,77 +281,63 @@ export const Storyboard = React.memo(
         );
     }, [history, props.footageHistory]);
 
+     const qfCost =
+      qfMode === "image"
+        ? qfImageTier === "pro"
+          ? 2
+          : 1
+        : qfVideoTier === "veo31-quality"
+          ? videoLength === 8
+            ? 16
+            : 12
+          : videoLength === 8
+            ? 8
+            : 6;
+
   const handleQFProduce = async () => {
     if (!qfPrompt.trim() || props.isGenerating) return;
 
+    // FIRST CLICK → just confirm
     if (!isConfirmingQF) {
-      if (qfCreditError) return;
+     if (props.creditBalance < qfCost) {
+       setQfCreditError(true);
+
+       setTimeout(() => {
+         setQfCreditError(false);
+       }, 2000);
+
+       return;
+     }
       setQfCreditError(false);
       setIsConfirmingQF(true);
       return;
     }
 
-    const hasRefs = qfRefImages.some((img) => img !== null);
-    const isVideoMode = !hasRefs && qfMode === "video";
+    // SECOND CLICK → consume credit
+    setQfCreditError(false);
 
-    let action = "IMAGE_FAST";
+    const success = await props.consumeCredits("quick_footage");
 
-  if (hasRefs) {
-    action = qfImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
-  } else if (qfMode === "image") {
-    action = qfImageTier === "pro" ? "IMAGE_PRO" : "IMAGE_FAST";
-  } else if (qfMode === "video") {
-    if (qfVideoTier === "veo31-quality") {
-      action = videoLength === 8 ? "VIDEO_HQ_8S" : "VIDEO_HQ_6S";
-    } else {
-      action = videoLength === 8 ? "VIDEO_FAST_8S" : "VIDEO_FAST_6S";
-    }
-  }
-
-    try {
-      const ok = await props.consumeCredits(action);
-
-      if (!ok) {
-        setQfCreditError(true);
-        setIsConfirmingQF(false);
-        
-        return;
-      }
-    } catch {
+    if (!success) {
       setQfCreditError(true);
       setIsConfirmingQF(false);
-      
       return;
     }
 
-    setQfCreditError(false);
-
-    if (isVideoMode) {
-      props.onProduceQuickFootage?.(
-        qfPrompt,
-        "video",
-        undefined,
-        qfVideoTier,
-        qfImageTier,
-        undefined
-      );
-    } else {
-      const mode = hasRefs ? "i2i" : "image";
-
-      props.onProduceQuickFootage?.(
-        qfPrompt,
-        mode,
-        qfRefImages[0] || undefined,
-        qfVideoTier,
-        qfImageTier,
-        qfRefImages[1] || undefined
-      );
-    }
+    props.onProduceQuickFootage?.(
+      qfPrompt,
+      qfMode,
+      qfRefImages[0] || undefined,
+      qfVideoTier,
+      qfImageTier,
+      qfRefImages[1] || undefined
+    );
 
     setQfPrompt("");
     setQfRefImages([null, null]);
     setIsConfirmingQF(false);
   };
+    
     
     const handleQFFileUpload = async (
       e: React.ChangeEvent<HTMLInputElement>
@@ -487,18 +535,7 @@ export const Storyboard = React.memo(
       );
     };
 
-    const qfCost =
-      qfMode === "image"
-        ? qfImageTier === "pro"
-          ? 2
-          : 1
-        : qfVideoTier === "veo31-quality"
-          ? videoLength === 8
-            ? 16
-            : 12
-          : videoLength === 8
-            ? 8
-            : 6;
+   
 
     const qfShortTier =
       qfMode === "image"
@@ -565,6 +602,7 @@ export const Storyboard = React.memo(
               </div>
 
               <div className="bg-[#0f172a] rounded-3xl border border-white/10 shadow-2xl p-1 overflow-hidden themed-artline mb-12">
+                <div className="relative">
                 <textarea
                   value={qfPrompt}
                   onChange={(e) => {
@@ -573,8 +611,26 @@ export const Storyboard = React.memo(
                     setIsConfirmingQF(false);
                   }}
                   placeholder="Describe your emotion vision or motion process... results appear below."
-                  className="w-full h-24 bg-transparent border-none p-5 text-[15px] font-bold text-white placeholder-gray-700 resize-none focus:outline-none leading-relaxed italic scrollbar-none"
+                    className="w-full h-24 bg-transparent border-none p-5 text-[15px] font-bold text-white placeholder-gray-700 resize-none focus:outline-none leading-relaxed italic scrollbar-none pr-12"
                 />
+                  <button
+                    onClick={handleVoiceInput}
+                    disabled={isListening || isCorrecting}
+                    className={`absolute right-4 top-4 p-2 rounded-full transition-all ${
+                      isListening
+                        ? "bg-red-500/20 text-red-500 animate-pulse"
+                        : isCorrecting
+                          ? "bg-indigo-500/20 text-indigo-400 animate-pulse"
+                          : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {isCorrecting ? (
+                      <SparklesIcon className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <MicrophoneIcon className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
 
                 <div className="px-5 pb-5 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
@@ -584,6 +640,27 @@ export const Storyboard = React.memo(
                           onClick={() => {
                             setQfActiveSlotIdx(idx);
                             qfFileInputRef.current?.click();
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            try {
+                              const raw =
+                                e.dataTransfer.getData("application/json");
+                              if (!raw) return;
+                              const data = JSON.parse(raw);
+                              if (data.src) {
+                                const next = [...qfRefImages];
+                                next[idx] = data.src;
+                                setQfRefImages(next);
+                              }
+                            } catch (err) {
+                              console.error("Drop error:", err);
+                            }
                           }}
                           className={`w-16 h-12 rounded-xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex items-center justify-center relative ${img ? "border-indigo-500 bg-black" : "border-white/10 hover:border-white/20 bg-black/40"}`}
                         >

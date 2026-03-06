@@ -23,6 +23,7 @@ interface ActorRosterProps {
   onToggleHero?: (id: number) => void;
   onUpdateHeroData?: (id: number, data: Partial<Character["heroData"]>) => void;
   visualStyle?: string;
+  creditBalance: number;
 }
 
 const HeroStarIcon = ({
@@ -57,6 +58,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
   const [studioUploadKey, setStudioUploadKey] = useState<string | null>(null);
   const [showRefineId, setShowRefineId] = useState<number | null>(null);
   const [uploadTargetId, setUploadTargetId] = useState<number | null>(null);
+  const [creditErrorId, setCreditErrorId] = useState<number | null>(null);
 
   // CLICK ANYWHERE TO CLOSE REFINEMENT BOX
   useEffect(() => {
@@ -303,35 +305,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
           )}
         </div>
         <div className="p-2.5 bg-[#0a0f1d] border-t border-white/5 flex flex-col">
-          {isRefining && (
-            <div className="flex flex-col animate-in fade-in slide-in-from-top-1 duration-200">
-              <textarea
-                value={char.customInstruction || ""}
-                autoFocus
-                onChange={(e) =>
-                  props.updateCharacter(char.id, {
-                    customInstruction: e.target.value
-                  })
-                }
-                placeholder="Describe physical traits, clothing, age..."
-                className="w-full h-14 bg-black/40 border border-white/10 rounded-lg p-2 text-[12px] font-medium text-white placeholder-gray-400 focus:border-indigo-500 outline-none resize-none leading-tight mt-2"
-              />
-              <div className="flex gap-2 mt-2">
-                <button
-                  disabled={!hasName}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    props.handleBuildCharacterVisual(char.id);
-                    setShowRefineId(null);
-                  }}
-                  className={`flex-1 py-2 text-[8px] font-black  tracking-[0.2em] rounded-lg border transition-all active:scale-95 shadow-lg ${hasName ? "bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-400/20" : "bg-gray-800 text-gray-600 border-transparent cursor-not-allowed"}`}
-                >
-                  {hasName ? (hasImage ? `REFINE` : `CREATE`) : "NAME REQ"}
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="flex items-center gap-2 pt-2 mt-1 border-t border-white/5 px-1">
+          <div className="flex items-center gap-2 pb-2 mb-1 border-b border-white/5 px-1">
             <div className="flex-1 flex items-center justify-between">
               <input
                 value={char.name}
@@ -357,6 +331,51 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                 )}
             </div>
           </div>
+          {isRefining && (
+            <div className="flex flex-col animate-in fade-in slide-in-from-top-1 duration-200">
+              <textarea
+                value={char.customInstruction || ""}
+                autoFocus
+                onChange={(e) =>
+                  props.updateCharacter(char.id, {
+                    customInstruction: e.target.value
+                  })
+                }
+                placeholder="Describe physical traits, clothing, age..."
+                className="w-full h-14 bg-black/40 border border-white/10 rounded-lg p-2 text-[12px] font-medium text-white placeholder-gray-400 focus:border-indigo-500 outline-none resize-none leading-tight mt-2"
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  disabled={!hasName}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (props.creditBalance < 1) {
+                      setCreditErrorId(char.id);
+                      setTimeout(() => setCreditErrorId(null), 2000);
+                      return;
+                    }
+                    props.handleBuildCharacterVisual(char.id);
+                    setShowRefineId(null);
+                  }}
+                  className={`flex-1 py-2 text-[8px] font-black  tracking-[0.2em] rounded-lg border transition-all active:scale-95 shadow-lg ${
+                    creditErrorId === char.id
+                      ? "bg-red-600 text-white border-red-500 animate-pulse"
+                      : hasName
+                        ? "bg-indigo-600 hover:bg-indigo-500 text-white border-indigo-400/20"
+                        : "bg-gray-800 text-gray-600 border-transparent cursor-not-allowed"
+                  }`}
+                >
+                  {creditErrorId === char.id
+                    ? "INSUFFICIENT CREDITS"
+                    : hasName
+                      ? hasImage
+                        ? `REFINE`
+                        : `CREATE`
+                      : "NAME REQ"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

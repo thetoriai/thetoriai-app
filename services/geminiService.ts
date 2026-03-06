@@ -308,8 +308,67 @@ export const CAMERA_MOVEMENT_PROMPTS: { [key: string]: string } = {
     "The camera has a natural, handheld aesthetic with subtle organic shakes, adding a realistic and immersive documentary-style feel to the footage."
 };
 
+function enhanceCinematicPrompt(
+  prompt: string,
+  hasReference: boolean,
+  hasEndFrame: boolean
+): string {
+  const lighting = [
+    "golden hour cinematic lighting",
+    "soft dramatic side lighting",
+    "moody cinematic shadows",
+    "natural sunlight with film contrast"
+  ];
+
+  const lens = [
+    "shallow depth of field",
+    "cinematic 35mm film lens",
+    "cinematic 50mm portrait lens",
+    "soft background bokeh"
+  ];
+
+  const framing = [
+    "wide cinematic establishing shot",
+    "medium cinematic shot",
+    "dramatic low angle shot",
+    "intimate close cinematic shot"
+  ];
+
+  const movement = Object.keys(CAMERA_MOVEMENT_PROMPTS);
+
+  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+
+  if (hasReference && hasEndFrame) {
+    return `
+Create natural cinematic motion between the provided start frame and end frame.
+Preserve character identity and environment continuity.
+
+Scene concept:
+${prompt}
+`;
+  }
+
+  if (hasReference) {
+    return `
+Cinematic scene based on the provided reference image.
+Maintain the visual style and identity of the reference.
+
+Scene concept:
+${prompt}
+`;
+  }
+
+  return `
+${pick(framing)}, ${pick(movement)}, ${pick(lighting)}, ${pick(lens)}.
+
+Scene concept:
+${prompt}
+`;
+}
+
 const getAiClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+  return new GoogleGenAI({ apiKey: apiKey || "" });
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -620,13 +679,14 @@ export async function generateSingleImage(
   model: string = "gemini-3-pro-image-preview",
   referenceImage?: string | null,
   historyImage?: string | null,
+  secondaryReferenceImage?: string | null, // NEW: secondary reference image support
   signal?: AbortSignal
 ): Promise<{ src: string | null; error: string | null }> {
   const ai = getAiClient();
   const parts: Part[] = [];
 
   // VISUAL ANCHOR PROTOCOL: Inject Hero character image into part list
-  const hero = characters.find(c => c.isHero) || characters[0];
+  const hero = characters.find((c) => c.isHero) || characters[0];
   if (hero && hero.originalImageBase64) {
     parts.push({
       inlineData: {
@@ -636,13 +696,44 @@ export async function generateSingleImage(
     });
   }
 
-  if (referenceImage) parts.push({ inlineData: { data: stripBase64Prefix(referenceImage), mimeType: "image/png" } });
-  if (historyImage) parts.push({ inlineData: { data: stripBase64Prefix(historyImage), mimeType: "image/png" } });
+  if (referenceImage)
+    parts.push({
+      inlineData: {
+        data: stripBase64Prefix(referenceImage),
+        mimeType: "image/png"
+      }
+    });
+  if (historyImage)
+    parts.push({
+      inlineData: {
+        data: stripBase64Prefix(historyImage),
+        mimeType: "image/png"
+      }
+    });
+  if (secondaryReferenceImage)
+    parts.push({
+      inlineData: {
+        data: stripBase64Prefix(secondaryReferenceImage),
+        mimeType: "image/png"
+      }
+    });
 
   const castNotes = characters.map((c) => `${c.name}: ${c.description}`).join("; ");
-  const system = `${getStyleInstructions(visualStyle, characterStyle)} CAST DNA: ${castNotes}. LOCK MEDIUM TO [${visualStyle}]. USE SECOND PART AS PHYSICAL BLUEPRINT.`;
-  parts.push({ text: `STRICT VISUAL MEDIUM: [${visualStyle}]. NO STYLE DRIFT. USE CHARACTER IMAGE PROVIDED. ` + prompt });
+ const system = `${getStyleInstructions(visualStyle, characterStyle)} CAST DNA: ${castNotes}. LOCK MEDIUM TO [${visualStyle}]. USE SECOND PART AS PHYSICAL BLUEPRINT.`;
 
+ // CINEMATIC PROMPT ENHANCER
+ const enhancedPrompt = enhanceCinematicPrompt(
+   prompt,
+   !!referenceImage || !!historyImage,
+   !!secondaryReferenceImage
+ );
+
+ parts.push({
+   text:
+     `STRICT VISUAL MEDIUM: [${visualStyle}]. REPLICATE ATTACHED CHARACTER FACE EXACTLY. ` +
+     enhancedPrompt
+ });
+  
   try {
     const response: GenerateContentResponse = await withRetry(
       () =>
@@ -750,6 +841,7 @@ export async function generateCharacterVisual(
       "gemini-3-pro-image-preview",
       null,
       null,
+      null,
       signal
     );
   }
@@ -774,7 +866,7 @@ ${script}
   const dialogue = match[2].trim();
 
   const characterMatch = characters?.find(
-    c => c.name.toLowerCase() === speakerName.toLowerCase()
+    (c) => c.name.toLowerCase() === speakerName.toLowerCase()
   );
 
   const identity = characterMatch?.description || speakerName;
@@ -885,6 +977,13 @@ export async function generateVideoFromScene(
       }
     : undefined;
   
+  const enhancedVideoPrompt = enhanceCinematicPrompt(
+    prompt,
+    !!image,
+    !!endImage
+  );
+
+  
   const fullPrompt = `
 STRICT CINEMATIC VIDEO GENERATION PROTOCOL
 
@@ -898,7 +997,7 @@ IDENTITY DNA:
 ${identityDNA}
 
 ACTION PERFORMANCE:
-${perf.action || "Character holds natural presence."}
+${enhancedVideoPrompt}
 
 ${
   perf.dialogue
@@ -956,8 +1055,8 @@ Do not ignore dialogue if present.
        numberOfVideos: 1,
        resolution,
        aspectRatio: aspectRatio === "16:9" ? "16:9" : "9:16",
-
-       duration: scene.videoLength === 6 ? 6 : 8
+      lastFrame: endImagePart,
+       duration: scene?.videoLength === 6 ? 6 : 8
      } as any
    });
 
@@ -968,7 +1067,8 @@ Do not ignore dialogue if present.
 
    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
    if (downloadLink) {
-     const fetchUrl = `${downloadLink}&key=${process.env.API_KEY}`;
+      const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+      const fetchUrl = `${downloadLink}&key=${apiKey}`;
      return {
        videoUrl: fetchUrl,
        videoObject: operation.response?.generatedVideos?.[0]?.video
@@ -1372,7 +1472,7 @@ export async function getWritingSuggestions(
   allScenes: any[],
   characters: Character[]
 ): Promise<string[]> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAiClient();
   const cast = characters.map((c) => c.name).join(", ");
   const prompt = `You are a cinematic thought partner and director. Based on this scene script: "${lastScript}" 
     and the production cast: ${cast}, suggest 3 brief directorial insights or "what happens next" ideas (max 10 words each). 

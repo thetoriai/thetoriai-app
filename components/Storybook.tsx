@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
+import { GoogleGenAI } from "@google/genai";
 import {
   XIcon,
   BookOpenIcon,
   SparklesIcon,
+  MicrophoneIcon,
   LoaderIcon,
   CheckIcon,
   RefreshIcon,
@@ -135,6 +137,71 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const [storyError, setStoryError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState(false);
   const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [isCorrecting, setIsCorrecting] = useState(false);
+
+  const handleVoiceInput = async () => {
+    if (
+      !("webkitSpeechRecognition" in window) &&
+      !("SpeechRecognition" in window)
+    ) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    setIsListening(true);
+    const SpeechRecognition =
+      (window as any).webkitSpeechRecognition ||
+      (window as any).SpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onresult = async (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setIsListening(false);
+      setIsCorrecting(true);
+
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const response = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: `Correct and refine the following text for a story narrative. Keep it descriptive and engaging. Return ONLY the corrected text: "${transcript}"`
+        });
+        const correctedText = response.text;
+        if (correctedText) {
+          const newText = sharedStoryText
+            ? sharedStoryText + " " + correctedText.trim()
+            : correctedText.trim();
+          handleStoryTextChange(newText);
+        }
+      } catch (error) {
+        console.error("Error correcting text:", error);
+        const newText = sharedStoryText
+          ? sharedStoryText + " " + transcript
+          : transcript;
+        handleStoryTextChange(newText);
+      } finally {
+        setIsCorrecting(false);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(false);
+      setIsCorrecting(false);
+    };
+
+    recognition.onend = () => {
+      if (!isCorrecting) {
+        setIsListening(false);
+      }
+    };
+
+    recognition.start();
+  };
+
   const [isGeneratingScenes, setIsGeneratingScenes] = useState(false);
   const [confirmingBatch, setConfirmingBatch] = useState(false);
   const [confirmingExecuteIdx, setConfirmingExecuteIdx] = useState<
@@ -749,6 +816,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                 onChange={handleAudioUpload}
               />
             </div>
+            <div className="relative flex-1 flex flex-col min-h-0">
             <textarea
               value={sharedStoryText}
               onChange={(e) => handleStoryTextChange(e.target.value)}
@@ -757,8 +825,26 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                   ? "Describe the mood, lighting, or setting of the music video..."
                   : "Type narrative vision..."
               }
-              className={`w-full ${isMusicVideoMode ? "h-32" : "min-h-[140px] lg:flex-1"} bg-black/40 border border-white/5 rounded-2xl p-5 text-[15px] font-extrabold text-white resize-none outline-none focus:border-indigo-500/50 transition-all placeholder-gray-600 leading-[1.7] shadow-inner scrollbar-none`}
+                className={`w-full ${isMusicVideoMode ? "h-32" : "min-h-[140px] lg:flex-1"} bg-black/40 border border-white/5 rounded-2xl p-5 text-[15px] font-extrabold text-white resize-none outline-none focus:border-indigo-500/50 transition-all placeholder-gray-600 leading-[1.7] shadow-inner scrollbar-none pr-12`}
             />
+              <button
+                onClick={handleVoiceInput}
+                disabled={isListening || isCorrecting}
+                className={`absolute right-4 top-4 p-2 rounded-full transition-all ${
+                  isListening
+                    ? "bg-red-500/20 text-red-500 animate-pulse"
+                    : isCorrecting
+                      ? "bg-indigo-500/20 text-indigo-400 animate-pulse"
+                      : "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                {isCorrecting ? (
+                  <SparklesIcon className="w-4 h-4 animate-spin" />
+                ) : (
+                  <MicrophoneIcon className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-3 shrink-0 mt-auto pt-2 border-t border-white/5">
@@ -1275,4 +1361,4 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
       )}
     </div>
   );
-};;;
+};

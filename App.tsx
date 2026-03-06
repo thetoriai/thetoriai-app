@@ -823,7 +823,7 @@ useEffect(() => {
     } finally {
       setIsGenerating(false);
     }
-  };;
+  };
   
   // === Directors Cut Image Generator ===
   const handleGenerateImage = async (prompt: string): Promise<string> => {
@@ -1148,14 +1148,14 @@ useEffect(() => {
     const startFrame = footageRefImages?.[0] || refImage || null;
     const endFrame = endImage || footageRefImages?.[1] || null;
 
-    // Check if this is a manual upload identified by the prompt "Manual upload"
-    const isManualUpload =
-      prompt === "Manual upload" && mode === "image" && !!refImage;
+    const isVideoMode = mode === "video";
+    // Treat "i2i" as image mode for compatibility, but logic depends on refs
+    const isImageMode = !isVideoMode;
 
-    
-
-    if (mode === "image") {
-      if (refImage) {
+    // 1. IMAGE MODE LOGIC
+    if (isImageMode) {
+      // If manual upload (legacy check, might not be needed but keeping it safe)
+      if (prompt === "Manual upload" && !!refImage) {
         setFootageHistory((prev) =>
           prev.map((item) =>
             item.sceneId === tempId
@@ -1205,16 +1205,31 @@ useEffect(() => {
         )
       );
 
-      // generation continues here
-      const src = await handleGenerate(
-        [finalPrompt],
-        "footage",
-        undefined,
+      let action = imageTier === "pro" ? "IMAGE_PRO" : "IMAGE_NORMAL";
+      let creditsConsumed = false;
+
+      try {
+        await consumeCredits(action as any);
+        creditsConsumed = true;
+
+        // Call generateSingleImage directly to handle multiple refs
+        const { src, error } = await generateSingleImage(
+          finalPrompt,
+          aspectRatio,
+          selectedCountry,
+          visualStyle,
+          "General",
+          characters,
         modelToUse,
-        true
+          startFrame, // Slot 1
+          null,
+          endFrame // Slot 2 (Secondary Ref)
       );
 
-      if (src) {
+        if (!src || error) {
+          throw new Error(error || "GENERATION_FAILED");
+        }
+
         setFootageHistory((prev) =>
           prev.map((item) =>
             item.sceneId === tempId
@@ -1222,8 +1237,22 @@ useEffect(() => {
               : item
           )
         );
+      } catch (e: any) {
+        console.error(e);
+        if (creditsConsumed) {
+          await supabase.rpc("refund_credits", {
+            p_user_id: session?.user?.id,
+            p_action_type: action
+          });
+        }
+        setFootageHistory((prev) =>
+          prev.map((item) =>
+            item.sceneId === tempId
+              ? { ...item, status: "error", error: e.message }
+              : item
+          )
+        );
       }
-
       return;
     }
 
@@ -1235,7 +1264,7 @@ useEffect(() => {
     const videoPlaceholder = {
       sceneId: tempId,
       prompt,
-      src: startFrame || null,
+      src: startFrame || null, // If start frame exists, show it. If not, it's hidden until video is done.
       image: startFrame || null,
       status: "deducting",
       type: "video",
@@ -1275,9 +1304,11 @@ try {
 
   // 2️⃣ If I2I but NO input image, generate one first
   let activeInputImage = startFrame;
+      let activeEndImage = endFrame;
 
-  if (mode === "i2i" && !activeInputImage) {
-    const modelToUse = "gemini-2.5-flash-image";
+      // CASE: No Refs + Video Mode -> Secretly generate base image
+      if (!activeInputImage) {
+        const modelToUse = "gemini-2.5-flash-image"; // Use fast model for base image
     const ethnicityContext =
       characterStyle === "Afro-toon"
         ? "Subject: African/Black person."
@@ -1285,41 +1316,41 @@ try {
 
     const finalImgPrompt = `Visual Medium: [${visualStyle}]. ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
 
-    activeInputImage = (await handleGenerate(
-      [finalImgPrompt],
-      "footage",
-      undefined,
-      modelToUse,
-      true
-    )) as string;
+        // Generate base image secretly
+        const { src, error } = await generateSingleImage(
+          finalImgPrompt,
+          aspectRatio,
+          selectedCountry,
+          visualStyle,
+          "General",
+          characters,
+          modelToUse
+        );
 
-    if (!activeInputImage) {
+        if (!src || error) {
       throw new Error("START_FRAME_FAILED");
     }
-  }
+        activeInputImage = src;
 
-  // 3️⃣ Generate Video
-  const ethnicityContext =
-    characterStyle === "Afro-toon"
-      ? "Subject: African person."
-      : `Subject: Person from ${selectedCountry}.`;
+        // Do NOT update UI with this image as per requirement ("The system must not display this image in the UI")
+      }
 
-  const styleContext = `Visual Style: ${visualStyle}.`;
-  const finalVidPrompt = `${styleContext} ${ethnicityContext} Action: ${prompt}`;
+      // CASE: 1 Ref + Video Mode -> Animate from image (handled by generateVideoFromScene using activeInputImage)
+      // CASE: 2 Refs + Video Mode -> Transition (handled by generateVideoFromScene using activeInputImage and activeEndImage)
 
   const { videoUrl, videoObject } = await generateVideoFromScene(
-    { src: activeInputImage, prompt: prompt },
+        { src: activeInputImage, prompt },
     aspectRatio,
-    finalVidPrompt,
+        prompt,
     activeInputImage,
-    endFrame,
+        activeEndImage,
     visualStyle,
     selectedCountry,
     videoTier === "veo31-quality"
       ? "veo-3.1-generate-preview"
       : "veo-3.1-fast-generate-preview",
-    videoResolution as "720p" | "1080p",
-    "Zoom In (Focus In)",
+        videoResolution as any,
+        "Zoom In (Focus In)", // Default camera movement
     () => {},
     characters
   );
@@ -1333,16 +1364,28 @@ try {
       item.sceneId === tempId
         ? {
             ...item,
+                status: "complete",
             videoUrl,
-            status: "complete",
             videoObject,
-            type: "video"
+                // If we secretly generated an image, we might want to use it as the thumbnail now?
+                // Or just let the video player handle it.
+                // If startFrame was null, src is null.
+                src: startFrame ? startFrame : activeInputImage // Use the generated image as thumbnail for the history item
           }
         : item
     )
   );
+
+      onAddTimelineClip(
+        videoUrl,
+        "video",
+        Number(videoLength),
+        undefined,
+        0,
+        videoObject
+      );
 } catch (e: any) {
-  // 4️⃣ REFUND IF VIDEO FAILED
+      console.error(e);
   if (creditsConsumed) {
     await supabase.rpc("refund_credits", {
       p_user_id: session?.user?.id,
@@ -2395,6 +2438,7 @@ try {
           }
           onUpdateHeroData={onUpdateHeroData}
           visualStyle={visualStyle}
+          creditBalance={creditSettings.creditBalance}
         />
       </div>
     </div>

@@ -1054,6 +1054,7 @@ export const Modals: React.FC<ModalsProps> = ({
             <ActorRoster
               characters={characters}
               setCharacters={setCharacters || (() => {})}
+              creditBalance={creditBalance || 0}
               handleBuildCharacterVisual={
                 handleBuildCharacterVisual || (() => {})
               }
@@ -1098,4 +1099,4 @@ export const Modals: React.FC<ModalsProps> = ({
  
 
   return null;
-};;
+};
