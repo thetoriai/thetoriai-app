@@ -781,23 +781,11 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                     return;
                   }
 
-                  const action =
-                    props.videoModel === "veo-3.1-fast-generate-preview"
-                      ? "VIDEO_FAST_6S"
-                      : "VIDEO_HQ_6S";
-
-                  let success = false;
-
-                  try {
-                    success = await props.consumeCredits(action);
-                  } catch {
-                    success = false;
-                  }
-
-                  if (!success) {
-                    setCreditError(true);
-                    return;
-                  }
+                 props.onGenerateVideo(
+                   props.draftScript,
+                   props.draftMovement,
+                   withAudio
+                 );
 
                   setCreditError(false);
 
