@@ -212,6 +212,35 @@ useEffect(() => {
       });
     }
   }, [activeView]);
+// --------------------------------
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const channel = supabase
+      .channel("credits-sync")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${session.user.id}`
+        },
+        (payload) => {
+          const newCredits = payload.new.credits;
+
+          setCreditSettings((prev) => ({
+            ...prev,
+            creditBalance: newCredits
+          }));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session]);
 
   // Responsive layout effect
   useEffect(() => {
