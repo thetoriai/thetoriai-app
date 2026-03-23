@@ -33,6 +33,8 @@ import {
 } from "../services/geminiService";
 import { PAYPAL_LINK } from "../utils/constants";
 
+
+
 interface SceneProgressOverlayProps {
   onStop: () => void;
   label?: string;
@@ -96,8 +98,6 @@ export const SceneProgressOverlay: React.FC<SceneProgressOverlayProps> = ({
 };
 
 export interface SceneCardProps {
-  consumeCredits: (action: string) => Promise<boolean>;
-
   scene: any;
   index: number;
   genId: number;
@@ -180,9 +180,6 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
   const [withAudio, setWithAudio] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Detect if this card already contains a generated video clip
-  const isViewingVideo =
-    typeof displayMode === "number" && videoState?.clips?.[displayMode];
 
   // AUTOMATIC ASPECT DETECTION: Card morphs based on content, not just session settings.
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -586,9 +583,6 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                 <button
                   onClick={async () => {
                     // DO add comment: Fixed Credit Key. Changed "IMAGE_REGEN" to "IMAGE_NORMAL" to enable the regeneration functionality.
-                    const ok = await props.consumeCredits("IMAGE_NORMAL");
-                    if (!ok) return;
-
                     props.onRegenerate(props.genId, scene.sceneId);
                   }}
                   className="p-1.5 text-gray-100 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
@@ -621,21 +615,18 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
             {isAddedToTimeline ? "Added to Timeline" : "Add to Timeline"}
           </button>
-          {!isViewingVideo && (
             <button
               onClick={props.onToggleVideoCreator}
               className="flex-1 flex items-center justify-center gap-2 py-3.5 text-[10px] font-black tracking-widest transition-all bg-gray-800 text-gray-200 hover:bg-indigo-600 hover:text-white border border-white/5 shadow-inner rounded-xl group"
             >
               <VideoIcon className="w-4 h-4" /> Motion
             </button>
-          )}
         </div>
       </div>
 
       {(status === "complete" || (status === "error" && scene.src)) &&
         !isAnySafetyBlock &&
-        isActive &&
-        !isViewingVideo && (
+        isActive && (
           <div className="p-4 bg-gray-900/50 space-y-4 animate-in slide-in-from-top-4 relative z-50 border-t border-white/5 rounded-b-[1rem] flex-1 flex flex-col justify-start overflow-y-auto scrollbar-none">
             {props.videoError && (
               <div className="p-2 bg-red-900/30 border border-red-800 rounded flex items-start gap-2 animate-in shake duration-300">
@@ -699,15 +690,27 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
                     The Narrative
                   </label>
 
-                  {props.hasScriptToImport && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        props.onImportScript();
-                      }}
-                      className="px-2 py-1 text-[8px] font-black bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow transition-all"
-                    >
-                      Import Narrative
+                 {props.hasScriptToImport && (
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      props.onImportScript();
+    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${props.hasScriptToImport ? "bg-indigo-600 hover:bg-indigo-700 text-white" : isEnriching ? "bg-indigo-600/40 animate-pulse" : "bg-gray-800 border-gray-700 text-gray-400 hover:text-white"}`}
+                    title={
+                      props.hasScriptToImport
+                        ? "Import Narrative from Storyboard"
+                        : "Enrich Narrative with AI"
+                    }
+                  >
+                    {props.hasScriptToImport ? (
+                      <DownloadIcon className="w-3.5 h-3.5 text-white" />
+                    ) : (
+                      <SparklesIcon className="w-3.5 h-3.5 text-indigo-400" />
+                    )}
+                    {props.hasScriptToImport && (
+                      <span className="text-[9px] font-bold">Import</span>
+                    )}
                     </button>
                   )}
                 </div>
@@ -775,25 +778,30 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
 
                   if (isVideoLoading) return;
 
-                  if (!isConfirming) {
-                    setCreditError(false);
-                    setIsConfirming(true);
-                    return;
-                  }
+                 if (!isConfirming) {
+                   if (props.creditBalance < totalCompoundCost) {
+                     setCreditError(true);
 
-                 props.onGenerateVideo(
-                   props.draftScript,
-                   props.draftMovement,
-                   withAudio
-                 );
+                     setTimeout(() => {
+                       setCreditError(false);
+                     }, 2000);
 
-                  setCreditError(false);
+                     return;
+                   }
 
-                  props.onGenerateVideo(
-                    props.draftScript,
-                    props.draftMovement,
-                    withAudio
-                  );
+                   setCreditError(false);
+                   setIsConfirming(true);
+                   return;
+                 }
+
+                props.onGenerateVideo(
+                  props.draftScript,
+                  props.draftMovement,
+                  withAudio
+                );
+
+                setCreditError(false);
+                setIsConfirming(false);
 
                   setIsConfirming(false);
                 }}
@@ -859,4 +867,4 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
         )}
     </div>
   );
-};;;
+};

@@ -22,7 +22,7 @@ import { fileToBase64 } from "../utils/fileUtils";
 
 interface StoryboardProps {
   videoLength: number;
-  
+
   generationItem: any;
   savedItems: any[];
   history: any[];
@@ -31,7 +31,6 @@ interface StoryboardProps {
   footageHistory: any[];
 
   // REQUIRED: credit handler used by SceneCard
-  consumeCredits: (actionType: string) => Promise<boolean>;
   onSaveScene: (genId: number, sceneId: string) => void;
   onEditScene: (genId: number, sceneId: string) => void;
   onRegenerateScene: (genId: number, sceneId: string) => void;
@@ -76,7 +75,8 @@ interface StoryboardProps {
   onNewSessionFromAsset?: (src: string) => void;
   onUpdateVideoDraft: (genId: number, sceneId: string, updates: any) => void;
   creditBalance: number;
- 
+  consumeCredits: (action: string) => Promise<any>;
+
   onStopScene?: (genId: number, sceneId: string) => void;
   onUndoEdit?: (genId: number, sceneId: string) => void;
   onSceneVariantChange?: (
@@ -316,14 +316,6 @@ export const Storyboard = React.memo(
     // SECOND CLICK → consume credit
     setQfCreditError(false);
 
-    const success = await props.consumeCredits("quick_footage");
-
-    if (!success) {
-      setQfCreditError(true);
-      setIsConfirmingQF(false);
-      return;
-    }
-
     props.onProduceQuickFootage?.(
       qfPrompt,
       qfMode,
@@ -337,7 +329,6 @@ export const Storyboard = React.memo(
     setQfRefImages([null, null]);
     setIsConfirmingQF(false);
   };
-    
     
     const handleQFFileUpload = async (
       e: React.ChangeEvent<HTMLInputElement>
@@ -402,7 +393,6 @@ export const Storyboard = React.memo(
                       <SceneCard
                         scene={scene}
                         index={idx}
-                        consumeCredits={props.consumeCredits}
                         genId={
                           scene.genId ||
                           scene.originSessionId ||
@@ -535,8 +525,6 @@ export const Storyboard = React.memo(
       );
     };
 
-   
-
     const qfShortTier =
       qfMode === "image"
         ? qfImageTier === "pro"
@@ -603,16 +591,16 @@ export const Storyboard = React.memo(
 
               <div className="bg-[#0f172a] rounded-3xl border border-white/10 shadow-2xl p-1 overflow-hidden themed-artline mb-12">
                 <div className="relative">
-                <textarea
-                  value={qfPrompt}
-                  onChange={(e) => {
-                    setQfPrompt(e.target.value);
-                    setQfCreditError(false);
-                    setIsConfirmingQF(false);
-                  }}
-                  placeholder="Describe your emotion vision or motion process... results appear below."
+                  <textarea
+                    value={qfPrompt}
+                    onChange={(e) => {
+                      setQfPrompt(e.target.value);
+                      setQfCreditError(false);
+                      setIsConfirmingQF(false);
+                    }}
+                    placeholder="Describe your emotion vision or motion process... results appear below."
                     className="w-full h-24 bg-transparent border-none p-5 text-[15px] font-bold text-white placeholder-gray-700 resize-none focus:outline-none leading-relaxed italic scrollbar-none pr-12"
-                />
+                  />
                   <button
                     onClick={handleVoiceInput}
                     disabled={isListening || isCorrecting}
@@ -776,7 +764,7 @@ export const Storyboard = React.memo(
 
               {renderAssetGrid(
                 producedFootage,
-                "QUICK FOOTAGE RESULTS",
+                "Quick Video Results",
                 <SparklesIcon className="w-4 h-4 text-indigo-400" />
               )}
 
@@ -788,7 +776,7 @@ export const Storyboard = React.memo(
 
               {renderAssetGrid(
                 capturedFootage,
-                "TIMELINE IMAGE RESULTS",
+                "Clips From Timeline",
                 <FilmIcon className="w-4 h-4 text-rose-400" />
               )}
 

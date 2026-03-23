@@ -34,7 +34,6 @@ interface FootageProps {
   videoLength: number;
   characterStyle: string;
   selectedCountry: string;
-  consumeCredits: (action: string) => Promise<boolean>;
   onProduce: (
     prompt: string,
     mode: "image" | "video" | "i2i",
@@ -48,7 +47,7 @@ interface FootageProps {
   creditBalance: number;
 
   onUpdateCountry: (val: string) => void;
- 
+
   footagePrompt: string;
   setFootagePrompt: (v: string) => void;
   footageMode: "image" | "video";
@@ -292,11 +291,10 @@ export const Footage: React.FC<FootageProps> = ({
   videoLength,
   characterStyle,
   selectedCountry,
-  consumeCredits,
   onProduce,
   isGenerating = false,
   creditBalance,
-  
+
   onUpdateCountry,
   footagePrompt,
   setFootagePrompt,
@@ -344,57 +342,57 @@ export const Footage: React.FC<FootageProps> = ({
 
       // FIX: Do NOT cancel confirmation immediately.
       // Only cancel if clicking completely outside and NOT the generate button
-     if (
-       isConfirming &&
-       !creditError &&
-       buttonRef.current &&
-       target instanceof Element &&
-       !buttonRef.current.contains(target)
-     ) {
-       setTimeout(() => {
-         setIsConfirming(false);
-       }, 150);
-     }
+      if (
+        isConfirming &&
+        !creditError &&
+        buttonRef.current &&
+        target instanceof Element &&
+        !buttonRef.current.contains(target)
+      ) {
+        setTimeout(() => {
+          setIsConfirming(false);
+        }, 150);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isConfirming, creditError]);
 
- useEffect(() => {
-   // Safety: never allow history picker to stay open during generation only
-   if (isGenerating) {
-     setShowHistoryPicker(false);
-     setActiveSlotIdx(null);
-   }
- }, [isGenerating]);
-  
-const handleProduceClick = async () => {
-  if (!footagePrompt.trim() || isGenerating) return;
+  useEffect(() => {
+    // Safety: never allow history picker to stay open during generation only
+    if (isGenerating) {
+      setShowHistoryPicker(false);
+      setActiveSlotIdx(null);
+    }
+  }, [isGenerating]);
 
-  // First click = confirmation only
-  if (!isConfirming) {
-    if (creditError) return;
+  const handleProduceClick = async () => {
+    if (!footagePrompt.trim() || isGenerating) return;
+
+    // First click = confirmation only
+    if (!isConfirming) {
+      if (creditError) return;
+      setCreditError(false);
+      setIsConfirming(true);
+      return;
+    }
+
+    // Second click = trigger production (App will deduct credits)
     setCreditError(false);
-    setIsConfirming(true);
-    return;
-  }
 
-  // Second click = trigger production (App will deduct credits)
-  setCreditError(false);
+    onProduce(
+      footagePrompt,
+      hasRefImages ? "i2i" : footageMode,
+      footageRefImages[0] || undefined,
+      footageVideoTier,
+      footageImageTier,
+      footageRefImages[1] || undefined
+    );
 
-  onProduce(
-    footagePrompt,
-    hasRefImages ? "i2i" : footageMode,
-    footageRefImages[0] || undefined,
-    footageVideoTier,
-    footageImageTier,
-    footageRefImages[1] || undefined
-  );
+    setIsConfirming(false);
+  };
 
-  setIsConfirming(false);
-};
-  
   const toggleTier = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsConfirming(false); // Reset confirmation if they change the tier
@@ -437,22 +435,14 @@ const handleProduceClick = async () => {
   let shortTier = footageImageTier === "pro" ? "PRO" : "FAST";
 
   if (footageMode === "video") {
-
-  if (footageVideoTier === "veo31-quality") {
-
-    cost = videoLength === 8 ? 16 : 12;
-    shortTier = "HD";
-
+    if (footageVideoTier === "veo31-quality") {
+      cost = videoLength === 8 ? 16 : 12;
+      shortTier = "HD";
+    } else {
+      cost = videoLength === 8 ? 8 : 6;
+      shortTier = "FAST";
+    }
   }
-
-  else {
-
-    cost = videoLength === 8 ? 8 : 6;
-    shortTier = "FAST";
-
-  }
-
-}
   // Filter for items originating from this section or specifically marked as footage
   const recentResults = footageHistory.filter(
     (h) =>
@@ -618,7 +608,7 @@ const handleProduceClick = async () => {
               ))}
             </div>
 
-            <div className="border-t border-white/5 bg-white/[0.01] p-3 flex flex-col sm:flex-row gap-3 items-center">
+            <div className="border-t border-white/5 bg-white/[0.01] p-3 flex flex-wrap items-center gap-3">
               <div className="flex bg-black/50 rounded-xl p-1 items-center gap-1 shadow-inner shrink-0">
                 <button
                   onClick={() => {
@@ -645,7 +635,7 @@ const handleProduceClick = async () => {
                 )}
               </div>
 
-              <div className="relative flex-1 w-full flex justify-end">
+              <div className="relative flex items-center w-full sm:w-auto sm:ml-auto">
                 {creditError && (
                   <div className="absolute -top-8 right-0 text-red-500 text-xs font-bold">
                     Insufficient credits
@@ -655,7 +645,7 @@ const handleProduceClick = async () => {
                   ref={buttonRef}
                   onClick={handleProduceClick}
                   disabled={isGenerating || !footagePrompt.trim()}
-                  className={`w-full sm:w-52 h-12 font-black tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center border shadow-xl overflow-hidden disabled:opacity-40 disabled:bg-gray-800 disabled:text-gray-600 disabled:border-white/5 disabled:cursor-not-allowed ${
+                  className={`h-12 w-full sm:w-auto px-6 shrink-0 font-black  font-black tracking-widest rounded-xl transition-all active:scale-95 flex items-center justify-center border shadow-xl overflow-hidden disabled:opacity-40 disabled:bg-gray-800 disabled:text-gray-600 disabled:border-white/5 disabled:cursor-not-allowed ${
                     creditError
                       ? "bg-red-600 text-white border-red-500 animate-pulse"
                       : isConfirming

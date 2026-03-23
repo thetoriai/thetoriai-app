@@ -40,15 +40,11 @@ export const CameraAngleEditor: React.FC<CameraAngleEditorProps> = ({
 
   const handleApply = async () => {
     // prevent spam click while locked
-    if (isCreditLocked) return;
-
-    // first click → enter confirm mode
-    if (!isConfirming) {
-      setCreditError(false);
-      setIsConfirming(true);
-      return;
-    }
-
+if (!isConfirming) {
+  setCreditError(false);
+  setIsConfirming(true);
+  return;
+}
     // second click → attempt credit deduction
     setIsCreditLocked(true);
 
@@ -61,21 +57,20 @@ export const CameraAngleEditor: React.FC<CameraAngleEditorProps> = ({
     }
 
     // CREDIT FAILED → show red button and DO NOT close modal
-    if (!success) {
-      setCreditError(true);
+  if (!success) {
+    setCreditError(true);
 
-      // stay in confirm mode so button stays visible and red
-      // DO NOT call onApply
-      // DO NOT call onClose
+    // stay locked so user cannot trigger generation again
+    setIsCreditLocked(true);
 
-      setTimeout(() => {
-        setCreditError(false);
-        setIsConfirming(false);
-        setIsCreditLocked(false);
-      }, 5000);
+    setTimeout(() => {
+      setCreditError(false);
+      setIsConfirming(false);
+      setIsCreditLocked(false);
+    }, 3000);
 
-      return;
-    }
+    return;
+  }
 
     // CREDIT SUCCESS → apply angle normally
     setCreditError(false);

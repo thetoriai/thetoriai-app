@@ -14,6 +14,7 @@ import {
   FilmIcon,
   ClapperboardIcon
 } from "./Icons";
+import { GraduationCapIcon } from "./Icons";
 import {
   HELLO_EMAIL,
   AFRICAN_COUNTRIES,
@@ -21,6 +22,7 @@ import {
 } from "../utils/constants";
 
 interface SidebarProps {
+  layoutMode: "phone" | "tablet" | "desktop";
   activeView: string;
   setActiveView: (view: string) => void;
   visualStyle: string;
@@ -52,6 +54,7 @@ export const VIEW_COLORS: Record<string, string> = {
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  layoutMode,
   activeView,
   setActiveView,
   visualStyle,
@@ -71,8 +74,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const windowWidth = window.innerWidth;
   // UPDATED BREAKPOINTS: 500px and below is Phone. 501px-1023px is Standing Tablet. 1024px+ is Desktop/Rotating.
-  const isPhone = windowWidth <= 500;
-  const isTablet = windowWidth >= 501 && windowWidth < 1024;
+  const isPhone = layoutMode === "phone";
+  const isTablet = layoutMode === "tablet";
 
   const [showDirectivesDropdown, setShowDirectivesDropdown] = useState(false);
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
@@ -249,27 +252,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: "roster",
       icon: <UserPlusIcon className="w-5 h-5" />,
-      label: "Roster"
+      label: "My Characters"
     },
     {
       id: "storybook",
       icon: <BookOpenIcon className="w-5 h-5" />,
-      label: "Storybook"
+      label: "Write Your Story"
     },
     {
       id: "storyboard",
       icon: <VideoIcon className="w-5 h-5" />,
-      label: "Storyboard"
+      label: "Create Scenes"
     },
     {
       id: "timeline",
       icon: <TimelineIcon className="w-5 h-5" />,
-      label: "Timeline"
+      label: "Edit Your Video"
     },
     {
       id: "history",
       icon: <HistoryIcon className="w-5 h-5" />,
-      label: "History"
+      label: "My Projects"
     },
     {
       id: "buy-credits",
@@ -399,6 +402,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Divider */}
             <div className="my-2 h-px bg-white/10"></div>
 
+            {/* ✅ Tutorial (FULL BUTTON ON MOBILE) */}
+            <button
+              onClick={() => handleNavClick("tutorial")}
+              className={`w-full flex items-center gap-6 p-5 rounded-2xl border transition-all ${
+                activeView === "tutorial"
+                  ? "bg-indigo-600 border-indigo-500 text-white shadow-xl"
+                  : "bg-white/5 border-white/5 text-gray-400 active:bg-indigo-600 active:text-white"
+              }`}
+            >
+              <GraduationCapIcon className="w-5 h-5 text-indigo-400" />
+              <span className="text-[15px] font-black tracking-[0.15em]">
+                Tutorial Guide
+              </span>
+            </button>
+
             {/* Credits */}
             {navItems
               .filter((item) => item.id === "buy-credits")
@@ -486,6 +504,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))}
         </nav>
         <div className="mt-auto pb-4 flex flex-col gap-4 items-center">
+          {/* ✅ Tutorial ABOVE credits */}
+          <button
+            onClick={() => handleNavClick("tutorial")}
+            className="w-12 h-12 rounded-xl flex items-center justify-center text-gray-500 hover:text-indigo-400 hover:bg-white/5 transition-all active:scale-95"
+            title="Tutorial"
+          >
+            <GraduationCapIcon className="w-5 h-5" />
+          </button>
+
+          {/* ✅ Credits */}
           <button
             onClick={() => handleNavClick("buy-credits")}
             className="w-12 h-12 rounded-xl bg-indigo-600/10 border border-indigo-500/20 flex flex-col items-center justify-center hover:bg-indigo-600/20 transition-all active:scale-95"
@@ -500,6 +528,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
           </button>
 
+          {/* ✅ Logout */}
           <button
             onClick={onLogout}
             className="p-3 text-gray-500 hover:text-red-400 transition-colors"
@@ -621,6 +650,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))}
         </nav>
 
+        <button
+          onClick={() => handleNavClick("tutorial")}
+          className="w-full py-3 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded-xl text-[10px] font-black tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+        >
+          <GraduationCapIcon className="w-4 h-4" />
+          Tutorial Guide
+        </button>
+
         <div className="mt-auto pt-6 border-t border-white/5 flex flex-col items-center gap-3 shrink-0">
           <button
             onClick={onLogout}
@@ -628,7 +665,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             Sign Out Session
           </button>
-          <p className="text-[7px] font-black text-center text-gray-500 tracking-[0.15em] italic">
+          <p className="text-[10px] font-black text-center text-gray-500 tracking-[0.15em] italic">
             Contact: {HELLO_EMAIL}
           </p>
           <p className="text-[8px] font-black text-center text-gray-700 tracking-[0.4em] ">

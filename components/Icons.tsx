@@ -1010,3 +1010,16 @@ export const WatermarkIcon: React.FC<IconProps> = ({ className }) => (
 export const TextIcon: React.FC<IconProps> = ({ className }) => (
   <i className={`fa-solid fa-font ${className}`}></i>
 );
+
+export const GraduationCapIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    viewBox="0 0 24 24"
+  >
+    <path d="M22 10L12 5 2 10l10 5 10-5z" />
+    <path d="M6 12v5c0 1 3 3 6 3s6-2 6-3v-5" />
+  </svg>
+);

@@ -454,8 +454,8 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
       )}
       <div className="space-y-8 pt-4">
         <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black text-gray-400  tracking-[0.4em]">
-            Supporting Roster
+          <span className="text-[12px] font-black text-gray-400  tracking-[0.4em]">
+            Supporting Characters
           </span>
           <div className="h-px bg-white/5 flex-1"></div>
         </div>

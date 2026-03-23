@@ -39,7 +39,9 @@ interface ModalsProps {
   onConfirm?: () => void;
   storybookContent: Storybook;
   setStorybookContent: (data: Storybook) => void;
-  onGenerateFromStorybook: (scenes: string[]) => void;
+  onGenerateFromStorybook: (
+    scenes: (string | { prompt: string; script: string })[]
+  ) => void;
   history: any[];
   masterHistory: any[];
   onLoadHistory: (index: number, sceneId?: string, restore?: boolean) => void;

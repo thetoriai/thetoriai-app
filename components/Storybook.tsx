@@ -206,17 +206,18 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const [confirmingBatch, setConfirmingBatch] = useState(false);
   const [confirmingExecuteIdx, setConfirmingExecuteIdx] = useState<
     number | null
-    >(null);
+  >(null);
   const [sceneCreditErrorIdx, setSceneCreditErrorIdx] = useState<number | null>(
     null
   );
- const [sceneImageTiers, setSceneImageTiers] = useState<
-   Record<number, "fast" | "pro">
-   >({});
-  
+  const [sceneImageTiers, setSceneImageTiers] = useState<
+    Record<number, "fast" | "pro">
+  >({});
+
   const [batchCreditError, setBatchCreditError] = useState(false);
 
   const [isConfirmingSpeak, setIsConfirmingSpeak] = useState(false);
+  const [speakCreditError, setSpeakCreditError] = useState(false);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const speakButtonRef = useRef<HTMLButtonElement>(null);
   const batchButtonRef = useRef<HTMLButtonElement>(null);
@@ -236,6 +237,16 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const [shouldScroll, setShouldScroll] = useState(false);
 
   const [generatingSceneAudioIdx, setGeneratingSceneAudioIdx] = useState<
+    number | null
+  >(null);
+
+  const [sceneAudioAddedIdx, setSceneAudioAddedIdx] = useState<number | null>(
+    null
+  );
+  const [confirmingSceneAudioIdx, setConfirmingSceneAudioIdx] = useState<
+    number | null
+  >(null);
+  const [sceneAudioCreditErrorIdx, setSceneAudioCreditErrorIdx] = useState<
     number | null
   >(null);
 
@@ -399,18 +410,40 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
 
   const handleGenerateSpeechMaster = async () => {
     if (!sharedStoryText.trim()) return;
+
+    // FIRST check credit balance locally
+    if (creditBalance < 1) {
+      setSpeakCreditError(true);
+
+      setTimeout(() => {
+        setSpeakCreditError(false);
+      }, 2000);
+
+      return;
+    }
+
+    // THEN ask confirmation
     if (!isConfirmingSpeak && !isGeneratingSpeech) {
       setIsConfirmingSpeak(true);
       return;
     }
+
+    // Deduct credit after confirmation
     if (onDeductAudioCredit) {
       const success = await onDeductAudioCredit();
+
       if (!success) {
-        setStoryError("Insufficient credits.");
+        setSpeakCreditError(true);
+
+        setTimeout(() => {
+          setSpeakCreditError(false);
+        }, 2000);
+
         setIsConfirmingSpeak(false);
         return;
       }
     }
+
     setIsConfirmingSpeak(false);
     setIsGeneratingSpeech(true);
     try {
@@ -435,32 +468,55 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
   const handleGenerateSceneAudio = async (index: number) => {
     const scene = storybookContent.scenes[index];
     if (!scene.script.trim()) return;
-    if (creditBalance < 1) {
-      setStoryError("Insufficient credits.");
+
+    const cost = 1;
+
+    // FIRST check credit
+    if (creditBalance < cost) {
+      setSceneAudioCreditErrorIdx(index);
+      setConfirmingSceneAudioIdx(null);
+      setTimeout(() => setSceneAudioCreditErrorIdx(null), 2000);
       return;
     }
+
+    // THEN confirmation
+    if (confirmingSceneAudioIdx !== index) {
+      setConfirmingSceneAudioIdx(index);
+      return;
+    }
+
+    setConfirmingSceneAudioIdx(null);
+
     setGeneratingSceneAudioIdx(index);
+
     try {
       if (onDeductAudioCredit) {
         const success = await onDeductAudioCredit();
         if (!success) {
-          setStoryError("Insufficient credits.");
+          setSceneAudioCreditErrorIdx(index);
           setGeneratingSceneAudioIdx(null);
           return;
         }
       }
+
       const base64 = await generateSpeech(
         scene.script,
         selectedCountry,
         selectedVoice,
         "Storytelling"
       );
+
       const bytes = base64ToBytes(base64);
       const blob = pcmToWavBlob(bytes, 24000);
       const url = URL.createObjectURL(blob);
+
       const newScenes = [...storybookContent.scenes];
       newScenes[index] = { ...newScenes[index], audioSrc: url };
-      setStorybookContent({ ...storybookContent, scenes: newScenes });
+
+      setStorybookContent({
+        ...storybookContent,
+        scenes: newScenes
+      });
     } catch (e) {
       setStoryError("Failed to generate scene audio.");
     } finally {
@@ -654,8 +710,6 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     }, 0);
   };
 
-  
-
   return (
     <div className="w-full h-full flex flex-col bg-gray-950 overflow-y-auto lg:overflow-hidden font-sans scroll-smooth">
       {/* DO add comment: Reduced Header height and Reset Story button size for PC for better layout proportionality. */}
@@ -789,7 +843,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)]"></div>
                 <label className="text-[18px] font-black text-gray-600 tracking-[0.2em] ">
-                  {isMusicVideoMode ? "Visualizer Concept" : "Concept"}
+                  {isMusicVideoMode ? "Visualizer Concept" : "Story "}
                 </label>
                 <CopyButton text={sharedStoryText} />
               </div>
@@ -817,16 +871,16 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
               />
             </div>
             <div className="relative flex-1 flex flex-col min-h-0">
-            <textarea
-              value={sharedStoryText}
-              onChange={(e) => handleStoryTextChange(e.target.value)}
-              placeholder={
-                isMusicVideoMode
-                  ? "Describe the mood, lighting, or setting of the music video..."
-                  : "Type narrative vision..."
-              }
+              <textarea
+                value={sharedStoryText}
+                onChange={(e) => handleStoryTextChange(e.target.value)}
+                placeholder={
+                  isMusicVideoMode
+                    ? "Describe the mood, lighting, or setting of the music video..."
+                    : "Type narrative vision..."
+                }
                 className={`w-full ${isMusicVideoMode ? "h-32" : "min-h-[140px] lg:flex-1"} bg-black/40 border border-white/5 rounded-2xl p-5 text-[15px] font-extrabold text-white resize-none outline-none focus:border-indigo-500/50 transition-all placeholder-gray-600 leading-[1.7] shadow-inner scrollbar-none pr-12`}
-            />
+              />
               <button
                 onClick={handleVoiceInput}
                 disabled={isListening || isCorrecting}
@@ -914,10 +968,20 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                     !sharedStoryText.trim() ||
                     isMusicVideoMode
                   }
-                  className={`w-full py-3 rounded-xl text-[9px] font-black tracking-widest transition-all active:scale-[0.98] border ${isMusicVideoMode ? "bg-gray-800/20 text-gray-600 border-white/5 opacity-50 cursor-not-allowed" : isConfirmingSpeak ? "bg-emerald-600 text-white border-emerald-500/10" : "bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border-emerald-500/10"}`}
+                  className={`w-full py-3 rounded-xl text-[9px] font-black tracking-widest transition-all active:scale-[0.98] border ${
+                    speakCreditError
+                      ? "bg-red-600 text-white border-red-500 animate-pulse"
+                      : isMusicVideoMode
+                        ? "bg-gray-800/20 text-gray-600 border-white/5 opacity-50 cursor-not-allowed"
+                        : isConfirmingSpeak
+                          ? "bg-emerald-600 text-white border-emerald-500/10"
+                          : "bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white border-emerald-500/10"
+                  }`}
                 >
                   {isGeneratingSpeech ? (
                     <LoaderIcon className="w-3 h-3 animate-spin mx-auto" />
+                  ) : speakCreditError ? (
+                    "Insufficient"
                   ) : isConfirmingSpeak ? (
                     "1C"
                   ) : (
@@ -1184,7 +1248,7 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                         <div className="space-y-2">
                           <div className="flex items-center gap-3 mb-0.5 ml-1">
                             <label className="text-[8px] lg:text-[12px] font-black text-gray-500 tracking-[0.2em] ">
-                              Visual Direction
+                              Image Prompt
                             </label>
                             <CopyButton text={scene.imageDescription} />
                           </div>
@@ -1206,9 +1270,15 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                           <div className="flex justify-between items-center mt-2 mb-1 lg:mt-0">
                             <div className="flex items-center gap-2 ml-1 mt-1 lg:mt-0">
                               <label className="text-[12px] font-black text-gray-500 tracking-[0.2em] ">
-                                {isMusicVideoMode
-                                  ? "Lyrics / Action"
-                                  : "Narrative / Dialogue"}
+                                {isMusicVideoMode ? (
+                                  "Lyrics / Action"
+                                ) : (
+                                  <>
+                                    Narrative
+                                    <br />
+                                    Dialogue
+                                  </>
+                                )}
                               </label>
                               <CopyButton text={scene.script} />
                             </div>
@@ -1238,32 +1308,55 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                                     <DownloadIcon className="w-3.5 h-3.5" />
                                   </button>
                                   <button
-                                    onClick={() =>
-                                      handleAddSceneAudioToTimeline(index)
-                                    }
-                                    className="flex items-center gap-2 px-3 py-1 bg-indigo-600 text-white rounded-lg text-[8px] font-black tracking-widest shadow-lg hover:bg-indigo-500 active:scale-95"
+                                    onClick={() => {
+                                      handleAddSceneAudioToTimeline(index);
+                                      setSceneAudioAddedIdx(index);
+                                    }}
+                                    disabled={sceneAudioAddedIdx === index}
+                                    className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[8px] font-black tracking-widest shadow-lg active:scale-95 ${
+                                      sceneAudioAddedIdx === index
+                                        ? "bg-green-600 text-white"
+                                        : "bg-indigo-600 text-white hover:bg-indigo-500"
+                                    }`}
                                   >
-                                    + DECK
+                                    {sceneAudioAddedIdx === index
+                                      ? "Added"
+                                      : "+ DECK"}
                                   </button>
                                 </div>
                               ) : (
-                                <button
-                                  onClick={() =>
-                                    handleGenerateSceneAudio(index)
-                                  }
-                                  disabled={
-                                    generatingSceneAudioIdx === index ||
-                                    !scene.script.trim()
-                                  }
-                                  className="flex items-center gap-2 px-3 py-1 bg-white/5 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-white/10 rounded-lg text-[8px] font-black tracking-widest transition-all"
-                                >
-                                  {generatingSceneAudioIdx === index ? (
-                                    <LoaderIcon className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <SpeakerWaveIcon className="w-3 h-3" />
-                                  )}{" "}
-                                  Narrate (1C)
-                                </button>
+                                <div className="relative">
+                                  {sceneAudioCreditErrorIdx === index && (
+                                    <div className="absolute -top-7 right-0 text-red-500 text-[9px] font-bold">
+                                      Insufficient credits
+                                    </div>
+                                  )}
+
+                                  <button
+                                    onClick={() =>
+                                      handleGenerateSceneAudio(index)
+                                    }
+                                    disabled={!scene.script.trim()}
+                                    className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[8px] font-black tracking-widest transition-all ${
+                                      sceneAudioCreditErrorIdx === index
+                                        ? "bg-red-600 text-white border-red-500 animate-pulse"
+                                        : confirmingSceneAudioIdx === index
+                                          ? "bg-green-600 text-white border-green-500"
+                                          : "bg-white/5 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-white/10"
+                                    }`}
+                                  >
+                                    {generatingSceneAudioIdx === index ? (
+                                      <LoaderIcon className="w-3 h-3 animate-spin" />
+                                    ) : confirmingSceneAudioIdx === index ? (
+                                      "Confirm 1C"
+                                    ) : (
+                                      <>
+                                        <SpeakerWaveIcon className="w-3 h-3" />
+                                        Narrate (1C)
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>

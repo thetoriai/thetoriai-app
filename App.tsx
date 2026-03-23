@@ -66,30 +66,12 @@ declare global {
   }
 }
 
-// Labels for production tracking. Costs are managed entirely on Supabase.
-const CREDIT_ACTIONS = {
-  IMAGE_NORMAL: "IMAGE_NORMAL",
-  IMAGE_PRO: "IMAGE_PRO",
-  IMAGE_EDIT_PRO: "IMAGE_EDIT_PRO",
-  IMAGE_CAMERA_ANGLE_PRO: "IMAGE_CAMERA_ANGLE_PRO",
+import { useCredits } from "./hooks/useCredits";
 
-  STORYBOOK_SCENE: "STORYBOOK_SCENE",
+// ... (imports remain the same)
 
-  CHARACTER_IMAGE: "CHARACTER_IMAGE",
-
-  VIDEO_FAST: "VIDEO_FAST",
-  VIDEO_HQ: "VIDEO_HQ",
-
-  VIDEO_FAST_6S: "VIDEO_FAST_6S",
-  VIDEO_FAST_8S: "VIDEO_FAST_8S",
-
-  VIDEO_HQ_6S: "VIDEO_HQ_6S",
-  VIDEO_HQ_8S: "VIDEO_HQ_8S",
-
-  VIDEO_ADD_AUDIO: "VIDEO_ADD_AUDIO",
-
-  AUDIO_GENERIC: "AUDIO_GENERIC"
-};
+// Remove local CREDIT_ACTIONS definition since it's now imported from useCredits
+// const CREDIT_ACTIONS = { ... };
 
 type LayoutMode = "phone" | "tablet" | "desktop";
 
@@ -99,7 +81,7 @@ const ViewHeader: React.FC<{
   layout: LayoutMode;
 }> = ({ title, onBack, layout }) => (
   <div className="flex items-center justify-between p-4 border-b border-white/5 bg-[#0a0f1d] shrink-0 z-50">
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       <div className="w-8 h-8 bg-indigo-600/10 border border-indigo-500/20 rounded-full flex items-center justify-center p-1.5 shadow-lg">
         <Logo className="w-full h-full" />
       </div>
@@ -123,13 +105,45 @@ const App: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [session, setSession] = useState<any>(null);
+
+  const {
+    creditBalance,
+    creditSettings,
+    consumeCredits: consumeCreditsBase,
+    CREDIT_ACTIONS
+  } = useCredits(session, supabase);
+
+  // Wrapper to handle UI side effects of credit consumption
+  const consumeCredits = async (actionType: keyof typeof CREDIT_ACTIONS) => {
+    if (!session?.user?.id) {
+      setCreditWarning("Please login first.");
+      setActiveModal("credit-warning");
+      throw new Error("Not authenticated");
+    }
+
+    try {
+      await consumeCreditsBase(actionType);
+      return true;
+    } catch (err: any) {
+      console.error("Credit error:", err);
+      // Show warning modal if it's an insufficient credits error
+      if (
+        err.message === "INSUFFICIENT_CREDITS" ||
+        err.message.includes("Insufficient")
+      ) {
+        setCreditWarning("Insufficient credits. Please upgrade your plan.");
+        setActiveModal("credit-warning");
+      }
+      throw err;
+    }
+  };
+
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [activeView, setActiveView] = useState("welcome");
   const [storyboardTab, setStoryboardTab] = useState<
     "quickFootage" | "storybook"
   >("quickFootage");
   const [layoutMode, setLayoutMode] = useState<LayoutMode | null>(null);
-  
 
   // --- BROWSER NAVIGATION LOGIC ---
   const isInternalNavRef = useRef(false);
@@ -156,7 +170,7 @@ const App: React.FC = () => {
 
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
-// --------------------------------
+  // --------------------------------
   useEffect(() => {
     // If the view changed because of an internal click (not browser back/forward)
     // we push the new state to history.
@@ -165,36 +179,35 @@ const App: React.FC = () => {
       const path = activeView === "welcome" ? "/" : `/${activeView}`;
 
       navigate(path, { replace: false });
-
     }
     isInternalNavRef.current = false;
   }, [activeView]);
   // --------------------------------
   // DO add comment: Separate route for Director's Cut to bypass the main app layout and ensure a clean workspace for video editing.
-useEffect(() => {
-  if (!layoutMode) return;
+  useEffect(() => {
+    if (!layoutMode) return;
 
-  const path = location.pathname.replace("/", "");
+    const path = location.pathname.replace("/", "");
 
-  if (!path) return;
+    if (!path) return;
 
-  if (path === "directors-cut") {
-    if (layoutMode === "phone") {
-      isInternalNavRef.current = true;
-      setActiveView("directors-cut");
-    } else {
-      isInternalNavRef.current = true;
-      setActiveView("welcome");
-      navigate("/", { replace: true });
+    if (path === "directors-cut") {
+      if (layoutMode === "phone") {
+        isInternalNavRef.current = true;
+        setActiveView("directors-cut");
+      } else {
+        isInternalNavRef.current = true;
+        setActiveView("welcome");
+        navigate("/", { replace: true });
+      }
+      return;
     }
-    return;
-  }
 
-  if (path !== activeView) {
-    isInternalNavRef.current = true;
-    setActiveView(path);
-  }
-}, [location.pathname, layoutMode, navigate]);
+    if (path !== activeView) {
+      isInternalNavRef.current = true;
+      setActiveView(path);
+    }
+  }, [location.pathname, layoutMode, navigate]);
   // --------------------------------
   useEffect(() => {
     if (activeView === "directors-cut") {
@@ -212,51 +225,20 @@ useEffect(() => {
       });
     }
   }, [activeView]);
-// --------------------------------
-  useEffect(() => {
-    if (!session?.user?.id) return;
-
-    const channel = supabase
-      .channel("credits-sync")
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "profiles",
-          filter: `id=eq.${session.user.id}`
-        },
-        (payload) => {
-          const newCredits = payload.new.credits;
-
-          setCreditSettings((prev) => ({
-            ...prev,
-            creditBalance: newCredits
-          }));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session]);
-
+  // --------------------------------
+  // --------------------------------
   // Responsive layout effect
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
       const height = window.innerHeight;
-      const isPortrait = height > width;
 
-      if (width <= 500) {
+      if (width <= 640) {
         setLayoutMode("phone");
-      } else if (width < 1024 && isPortrait) {
-        // STANDING IPAD: Compact sidebar logic.
+      } else if (width <= 1500) {
         setLayoutMode("tablet");
         if (activeView === "menu") setActiveView("welcome");
       } else {
-        // ROTATING IPAD / DESKTOP: Full sidebar workspace.
         setLayoutMode("desktop");
         if (activeView === "menu") setActiveView("welcome");
       }
@@ -290,36 +272,9 @@ useEffect(() => {
   const [savedScenes, setSavedScenes] = useState<any[]>([]);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-  const [creditSettings, setCreditSettings] = useState({
-    creditBalance: 0,
-    currency: "EUR"
-  });
-
   // Gift States
   const [isGiftMode, setIsGiftMode] = useState(false);
   const [giftRecipientEmail, setGiftRecipientEmail] = useState("");
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!session?.user?.id) return;
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("credits, currency")
-        .eq("id", session.user.id)
-        .single();
-
-      if (!error && data) {
-        setCreditSettings((prev) => ({
-          ...prev,
-          creditBalance: data.credits,
-          currency: data.currency || "EUR"
-        }));
-      }
-    };
-
-    fetchProfile();
-  }, [session]);
 
   const [storybook, setStorybook] = useState<Storybook>(() => {
     try {
@@ -549,63 +504,9 @@ useEffect(() => {
   );
 
   // MASTER CREDIT DEDUCTION: Must run and succeed BEFORE any API generation occurs.
- 
-  const consumeCredits = async (actionType: keyof typeof CREDIT_ACTIONS) => {
-    if (!session?.user?.id) {
-      setCreditWarning("Please login first.");
-      setActiveModal("credit-warning");
-      throw new Error("Not authenticated");
-    }
-
-    let committed = false;
-
-    try {
-      const { data, error } = await supabase.rpc("consume_credits", {
-        p_user_id: session.user.id,
-        p_action_type: actionType
-      });
-
-      if (error) throw error;
-
-      if (data !== true) {
-        throw new Error("INSUFFICIENT_CREDITS");
-      }
-
-      committed = true;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("credits")
-        .eq("id", session.user.id)
-        .single();
-
-      if (profile) {
-        setCreditSettings((p) => ({
-          ...p,
-          creditBalance: profile.credits
-        }));
-      }
-
-      return true;
-    } catch (err: any) {
-      console.error("Credit error:", err);
-
-      if (committed) {
-        await supabase.rpc("refund_credits", {
-          p_user_id: session.user.id,
-          p_action_type: actionType
-        });
-      }
-
-      throw err;
-    }
-  };
-
-  
-  
+  // Note: consumeCredits is now defined via the useCredits hook wrapper above.
 
   const ensureApiKey = async () => {
-    
     if (
       typeof window.aistudio !== "undefined" &&
       typeof window.aistudio.hasSelectedApiKey === "function"
@@ -747,56 +648,56 @@ useEffect(() => {
               ? "IMAGE_PRO"
               : "IMAGE_NORMAL";
 
-       let creditsConsumed = false;
-       let editCreditsConsumed = false;
+        let creditsConsumed = false;
+        let editCreditsConsumed = false;
 
-       try {
-         const ok = await consumeCredits(action as any);
-         if (!ok) throw new Error("INSUFFICIENT_CREDITS");
-         creditsConsumed = true;
+        try {
+          const ok = await consumeCredits(action as any);
+          if (!ok) throw new Error("INSUFFICIENT_CREDITS");
+          creditsConsumed = true;
 
-         if (referenceImage) {
-           await consumeCredits("IMAGE_EDIT_PRO");
-           editCreditsConsumed = true;
-         }
+          if (referenceImage) {
+            await consumeCredits("IMAGE_EDIT_PRO");
+            editCreditsConsumed = true;
+          }
 
-         const activeRef =
-           source === "storybook" && i > 0
-             ? currentSequentialRef
-             : referenceImage;
+          const activeRef =
+            source === "storybook" && i > 0
+              ? currentSequentialRef
+              : referenceImage;
 
-         var { src, error } = await generateSingleImage(
-           promptText,
-           aspectRatio,
-           selectedCountry,
-           visualStyle,
-           "General",
-           characters,
-           activeImageModel,
-           activeRef
-         );
+          var { src, error } = await generateSingleImage(
+            promptText,
+            aspectRatio,
+            selectedCountry,
+            visualStyle,
+            "General",
+            characters,
+            activeImageModel,
+            activeRef
+          );
 
-         if (!src || error) {
-           throw new Error("GENERATION_FAILED");
-         }
-       } catch (generationError) {
-         if (creditsConsumed) {
-           await supabase.rpc("refund_credits", {
-             p_user_id: session.user.id,
-             p_action_type: action
-           });
-         }
+          if (!src || error) {
+            throw new Error("GENERATION_FAILED");
+          }
+        } catch (generationError) {
+          if (creditsConsumed) {
+            await supabase.rpc("refund_credits", {
+              p_user_id: session.user.id,
+              p_action_type: action
+            });
+          }
 
-         if (editCreditsConsumed) {
-           await supabase.rpc("refund_credits", {
-             p_user_id: session.user.id,
-             p_action_type: "IMAGE_EDIT_PRO"
-           });
-         }
+          if (editCreditsConsumed) {
+            await supabase.rpc("refund_credits", {
+              p_user_id: session.user.id,
+              p_action_type: "IMAGE_EDIT_PRO"
+            });
+          }
 
-         throw generationError;
-       }
-        
+          throw generationError;
+        }
+
         if (src) currentSequentialRef = src;
 
         const updatedScene = {
@@ -853,7 +754,7 @@ useEffect(() => {
       setIsGenerating(false);
     }
   };
-  
+
   // === Directors Cut Image Generator ===
   const handleGenerateImage = async (prompt: string): Promise<string> => {
     const base64 = await handleGenerate(
@@ -869,187 +770,185 @@ useEffect(() => {
 
   // === Directors Cut Video Generator ===
   // === Directors Cut Video Generator ===
- const handleGenerateDirectVideo = async (prompt: string, tier: string) => {
-   await ensureApiKey();
-   setIsGenerating(true);
-   setActiveView("storyboard");
+  const handleGenerateDirectVideo = async (prompt: string, tier: string) => {
+    await ensureApiKey();
+    setIsGenerating(true);
+    setActiveView("storyboard");
 
-   const sessionId = Date.now();
+    const sessionId = Date.now();
 
-   const selectedLength = Number(videoLength);
+    const selectedLength = Number(videoLength);
 
-   let action;
-   if (tier === "veo31-quality") {
-     action = selectedLength === 8 ? "VIDEO_HQ_8S" : "VIDEO_HQ_6S";
-   } else {
-     action = selectedLength === 8 ? "VIDEO_FAST_8S" : "VIDEO_FAST_6S";
-   }
+    let action;
+    if (tier === "veo31-quality") {
+      action = selectedLength === 8 ? "VIDEO_HQ_8S" : "VIDEO_HQ_6S";
+    } else {
+      action = selectedLength === 8 ? "VIDEO_FAST_8S" : "VIDEO_FAST_6S";
+    }
 
-   const ethnicityContext =
-     characterStyle === "Afro-toon"
-       ? "Subject: African person."
-       : `Subject: Person from ${selectedCountry}.`;
+    const ethnicityContext =
+      characterStyle === "Afro-toon"
+        ? "Subject: African person."
+        : `Subject: Person from ${selectedCountry}.`;
 
-   const finalPrompt = `Visual Style: ${visualStyle}. ${ethnicityContext} Action: ${prompt}`;
+    const finalPrompt = `Visual Style: ${visualStyle}. ${ethnicityContext} Action: ${prompt}`;
 
-   const newItem = {
-     id: sessionId,
-     type: "footage",
-     prompt: "Direct Video Production",
-     imageSet: [
-       {
-         sceneId: `scene-${sessionId}-0`,
-         prompt: prompt,
-         src: null,
-         status: "generating",
-         originSessionId: sessionId,
-         originSection: "FootageFrontSection"
-       }
-     ],
-     videoStates: [
-       {
-         status: "loading",
-         clips: [],
-         draftScript: prompt,
-         draftCameraMovement: "Zoom In (Focus In)",
-         loadingMessage: "Deducting Credits..."
-       }
-     ],
-     aspectRatio,
-     characterStyle: selectedCountry,
-     visualStyle,
-     isClosed: false
-   };
+    const newItem = {
+      id: sessionId,
+      type: "footage",
+      prompt: "Direct Video Production",
+      imageSet: [
+        {
+          sceneId: `scene-${sessionId}-0`,
+          prompt: prompt,
+          src: null,
+          status: "generating",
+          originSessionId: sessionId,
+          originSection: "FootageFrontSection"
+        }
+      ],
+      videoStates: [
+        {
+          status: "loading",
+          clips: [],
+          draftScript: prompt,
+          draftCameraMovement: "Zoom In (Focus In)",
+          loadingMessage: "Deducting Credits..."
+        }
+      ],
+      aspectRatio,
+      characterStyle: selectedCountry,
+      visualStyle,
+      isClosed: false
+    };
 
-   setHistory((prev) => {
-     const next = [...prev, newItem];
-     setActiveHistoryIndex(next.length - 1);
-     return next;
-   });
+    setHistory((prev) => {
+      const next = [...prev, newItem];
+      setActiveHistoryIndex(next.length - 1);
+      return next;
+    });
 
-   let creditsConsumed = false;
+    let creditsConsumed = false;
 
-   try {
-     // 1️⃣ DEDUCT FIRST
-     await consumeCredits(action as any);
-     creditsConsumed = true;
+    try {
+      // 1️⃣ DEDUCT FIRST
+      await consumeCredits(action as any);
+      creditsConsumed = true;
 
-     // 2️⃣ Now generate start frame
-     const result = await generateSingleImage(
-       finalPrompt,
-       aspectRatio,
-       selectedCountry,
-       visualStyle,
-       "General",
-       characters,
-       imageModel
-     );
+      // 2️⃣ Now generate start frame
+      const result = await generateSingleImage(
+        finalPrompt,
+        aspectRatio,
+        selectedCountry,
+        visualStyle,
+        "General",
+        characters,
+        imageModel
+      );
 
-     const startFrame = result?.src;
+      const startFrame = result?.src;
 
-     if (!startFrame) {
-       throw new Error("START_FRAME_FAILED");
-     }
+      if (!startFrame) {
+        throw new Error("START_FRAME_FAILED");
+      }
 
-     // Update image preview
-     setHistory((prev) =>
-       prev.map((h) =>
-         h.id === sessionId
-           ? {
-               ...h,
-               imageSet: h.imageSet.map((s: any) => ({
-                 ...s,
-                 src: startFrame,
-                 status: "complete"
-               })),
-               videoStates: h.videoStates.map((vs: any) => ({
-                 ...vs,
-                 loadingMessage: "Rendering clip..."
-               }))
-             }
-           : h
-       )
-     );
+      // Update image preview
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === sessionId
+            ? {
+                ...h,
+                imageSet: h.imageSet.map((s: any) => ({
+                  ...s,
+                  src: startFrame,
+                  status: "complete"
+                })),
+                videoStates: h.videoStates.map((vs: any) => ({
+                  ...vs,
+                  loadingMessage: "Rendering clip..."
+                }))
+              }
+            : h
+        )
+      );
 
-     // 3️⃣ Generate video
-     const { videoUrl, videoObject } = await generateVideoFromScene(
-       { src: startFrame, prompt },
-       aspectRatio,
-       finalPrompt,
-       startFrame,
-       null,
-       visualStyle,
-       selectedCountry,
-       tier === "veo31-quality"
-         ? "veo-3.1-generate-preview"
-         : "veo-3.1-fast-generate-preview",
-       videoResolution as any,
-       "Zoom In (Focus In)",
-       () => {},
-       characters
-     );
+      // 3️⃣ Generate video
+      const { videoUrl, videoObject } = await generateVideoFromScene(
+        { src: startFrame, prompt },
+        aspectRatio,
+        finalPrompt,
+        startFrame,
+        null,
+        visualStyle,
+        selectedCountry,
+        tier === "veo31-quality"
+          ? "veo-3.1-generate-preview"
+          : "veo-3.1-fast-generate-preview",
+        videoResolution as any,
+        "Zoom In (Focus In)",
+        () => {},
+        characters
+      );
 
-     if (!videoUrl) {
-       throw new Error("VIDEO_GENERATION_FAILED");
-     }
+      if (!videoUrl) {
+        throw new Error("VIDEO_GENERATION_FAILED");
+      }
 
-     // 4️⃣ Success update
-     setHistory((prev) =>
-       prev.map((h) =>
-         h.id === sessionId
-           ? {
-               ...h,
-               videoStates: h.videoStates.map((vs: any) => ({
-                 ...vs,
-                 status: "complete",
-                 clips: [...(vs.clips || []), { videoUrl, videoObject }]
-               }))
-             }
-           : h
-       )
-     );
+      // 4️⃣ Success update
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === sessionId
+            ? {
+                ...h,
+                videoStates: h.videoStates.map((vs: any) => ({
+                  ...vs,
+                  status: "complete",
+                  clips: [...(vs.clips || []), { videoUrl, videoObject }]
+                }))
+              }
+            : h
+        )
+      );
 
-     onAddTimelineClip(
-       videoUrl,
-       "video",
-       selectedLength,
-       undefined,
-       0,
-       videoObject
-     );
-   } catch (e: any) {
-     console.error(e);
+      onAddTimelineClip(
+        videoUrl,
+        "video",
+        selectedLength,
+        undefined,
+        0,
+        videoObject
+      );
+    } catch (e: any) {
+      console.error(e);
 
-     // 5️⃣ Refund if needed
-     if (creditsConsumed) {
-       await supabase.rpc("refund_credits", {
-         p_user_id: session?.user?.id,
-         p_action_type: action
-       });
-     }
+      // 5️⃣ Refund if needed
+      if (creditsConsumed) {
+        await supabase.rpc("refund_credits", {
+          p_user_id: session?.user?.id,
+          p_action_type: action
+        });
+      }
 
-     const userMessage = parseErrorMessage(e);
+      const userMessage = parseErrorMessage(e);
 
-     setHistory((prev) =>
-       prev.map((h) =>
-         h.id === sessionId
-           ? {
-               ...h,
-               videoStates: h.videoStates.map((vs: any) => ({
-                 ...vs,
-                 status: "error",
-                 error: userMessage
-               }))
-             }
-           : h
-       )
-     );
-   } finally {
-     setIsGenerating(false);
-   }
- };
-
-  
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === sessionId
+            ? {
+                ...h,
+                videoStates: h.videoStates.map((vs: any) => ({
+                  ...vs,
+                  status: "error",
+                  error: userMessage
+                }))
+              }
+            : h
+        )
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const handleRegenerateScene = async (genId: number, sceneId: string) => {
     const sessionId = genId;
@@ -1060,8 +959,8 @@ useEffect(() => {
 
     if (session) {
       sceneIndex = session.imageSet.findIndex(
-      (s: any) => s.sceneId === sceneId
-    );
+        (s: any) => s.sceneId === sceneId
+      );
       currentScene = session.imageSet[sceneIndex];
     } else {
       currentScene = footageHistory.find((f) => f.sceneId === sceneId);
@@ -1092,76 +991,75 @@ useEffect(() => {
       )
     );
 
-   let creditsConsumed = false;
+    let creditsConsumed = false;
 
-   try {
-     // 1️⃣ Deduct first
-     await consumeCredits("IMAGE_NORMAL");
-     creditsConsumed = true;
+    try {
+      // 1️⃣ Deduct first
+      await consumeCredits("IMAGE_NORMAL");
+      creditsConsumed = true;
 
-     // 2️⃣ Generate
-     const { src, error } = await generateSingleImage(
-       prompt,
-       aspectRatio,
-       selectedCountry,
-       visualStyle,
-       "General",
-       characters,
-       imageModel,
-       refImage
-     );
+      // 2️⃣ Generate
+      const { src, error } = await generateSingleImage(
+        prompt,
+        aspectRatio,
+        selectedCountry,
+        visualStyle,
+        "General",
+        characters,
+        imageModel,
+        refImage
+      );
 
-     if (!src || error) {
-       throw new Error("GENERATION_FAILED");
-     }
+      if (!src || error) {
+        throw new Error("GENERATION_FAILED");
+      }
 
-     const updateFn = (s: any) => {
-       if (s.sceneId === sceneId) {
-         return {
-           ...s,
-           src,
-           error: null,
-           status: "complete",
-           variants: [
-             ...(s.variants || []),
-             { src, prompt, angleName: "Regenerated" }
-           ],
-           selectedVariantIndex: s.variants?.length || 0
-         };
-       }
-       return s;
-     };
+      const updateFn = (s: any) => {
+        if (s.sceneId === sceneId) {
+          return {
+            ...s,
+            src,
+            error: null,
+            status: "complete",
+            variants: [
+              ...(s.variants || []),
+              { src, prompt, angleName: "Regenerated" }
+            ],
+            selectedVariantIndex: s.variants?.length || 0
+          };
+        }
+        return s;
+      };
 
-     setHistory((prev) =>
-       prev.map((h) =>
-         h.id === genId ? { ...h, imageSet: h.imageSet.map(updateFn) } : h
-       )
-     );
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === genId ? { ...h, imageSet: h.imageSet.map(updateFn) } : h
+        )
+      );
 
-     setFootageHistory((prev) => prev.map(updateFn));
-   } catch (e: any) {
-     // 3️⃣ Refund if generation failed
-     if (creditsConsumed) {
-       await supabase.rpc("refund_credits", {
-         p_user_id: session?.user?.id,
-         p_action_type: "IMAGE_NORMAL"
-       });
-     }
+      setFootageHistory((prev) => prev.map(updateFn));
+    } catch (e: any) {
+      // 3️⃣ Refund if generation failed
+      if (creditsConsumed) {
+        await supabase.rpc("refund_credits", {
+          p_user_id: session?.user?.id,
+          p_action_type: "IMAGE_NORMAL"
+        });
+      }
 
-     const errFn = (s: any) =>
-       s.sceneId === sceneId
-         ? { ...s, status: "error", error: "Regeneration failed" }
-         : s;
+      const errFn = (s: any) =>
+        s.sceneId === sceneId
+          ? { ...s, status: "error", error: "Regeneration failed" }
+          : s;
 
-     setHistory((prev) =>
-       prev.map((h) =>
-         h.id === genId ? { ...h, imageSet: h.imageSet.map(errFn) } : h
-       )
-     );
+      setHistory((prev) =>
+        prev.map((h) =>
+          h.id === genId ? { ...h, imageSet: h.imageSet.map(errFn) } : h
+        )
+      );
 
-     setFootageHistory((prev) => prev.map(errFn));
-   }
-
+      setFootageHistory((prev) => prev.map(errFn));
+    }
   };
 
   const handleFootageProduce = async (
@@ -1249,11 +1147,11 @@ useEffect(() => {
           visualStyle,
           "General",
           characters,
-        modelToUse,
+          modelToUse,
           startFrame, // Slot 1
           null,
           endFrame // Slot 2 (Secondary Ref)
-      );
+        );
 
         if (!src || error) {
           throw new Error(error || "GENERATION_FAILED");
@@ -1307,11 +1205,11 @@ useEffect(() => {
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Update to generating
-       setFootageHistory((prev) =>
-         prev.map((item) =>
+    setFootageHistory((prev) =>
+      prev.map((item) =>
         item.sceneId === tempId ? { ...item, status: "generating" } : item
-         )
-       );
+      )
+    );
 
     let action;
 
@@ -1323,27 +1221,27 @@ useEffect(() => {
 
     let creditsConsumed = false;
 
-try {
-  // 1️⃣ DEDUCT FIRST
-  await consumeCredits(action as any);
-  creditsConsumed = true;
+    try {
+      // 1️⃣ DEDUCT FIRST
+      await consumeCredits(action as any);
+      creditsConsumed = true;
 
-  // Small UI delay
-  await new Promise((resolve) => setTimeout(resolve, 800));
+      // Small UI delay
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-  // 2️⃣ If I2I but NO input image, generate one first
-  let activeInputImage = startFrame;
+      // 2️⃣ If I2I but NO input image, generate one first
+      let activeInputImage = startFrame;
       let activeEndImage = endFrame;
 
       // CASE: No Refs + Video Mode -> Secretly generate base image
       if (!activeInputImage) {
         const modelToUse = "gemini-2.5-flash-image"; // Use fast model for base image
-    const ethnicityContext =
-      characterStyle === "Afro-toon"
-        ? "Subject: African/Black person."
-        : `Subject: Person from ${selectedCountry}.`;
+        const ethnicityContext =
+          characterStyle === "Afro-toon"
+            ? "Subject: African/Black person."
+            : `Subject: Person from ${selectedCountry}.`;
 
-    const finalImgPrompt = `Visual Medium: [${visualStyle}]. ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
+        const finalImgPrompt = `Visual Medium: [${visualStyle}]. ${ethnicityContext} Location: ${selectedCountry}. Scene Description: ${prompt}`;
 
         // Generate base image secretly
         const { src, error } = await generateSingleImage(
@@ -1357,8 +1255,8 @@ try {
         );
 
         if (!src || error) {
-      throw new Error("START_FRAME_FAILED");
-    }
+          throw new Error("START_FRAME_FAILED");
+        }
         activeInputImage = src;
 
         // Do NOT update UI with this image as per requirement ("The system must not display this image in the UI")
@@ -1367,43 +1265,43 @@ try {
       // CASE: 1 Ref + Video Mode -> Animate from image (handled by generateVideoFromScene using activeInputImage)
       // CASE: 2 Refs + Video Mode -> Transition (handled by generateVideoFromScene using activeInputImage and activeEndImage)
 
-  const { videoUrl, videoObject } = await generateVideoFromScene(
+      const { videoUrl, videoObject } = await generateVideoFromScene(
         { src: activeInputImage, prompt },
-    aspectRatio,
+        aspectRatio,
         prompt,
-    activeInputImage,
+        activeInputImage,
         activeEndImage,
-    visualStyle,
-    selectedCountry,
-    videoTier === "veo31-quality"
-      ? "veo-3.1-generate-preview"
-      : "veo-3.1-fast-generate-preview",
+        visualStyle,
+        selectedCountry,
+        videoTier === "veo31-quality"
+          ? "veo-3.1-generate-preview"
+          : "veo-3.1-fast-generate-preview",
         videoResolution as any,
         "Zoom In (Focus In)", // Default camera movement
-    () => {},
-    characters
-  );
+        () => {},
+        characters
+      );
 
-  if (!videoUrl) {
-    throw new Error("VIDEO_GENERATION_FAILED");
-  }
+      if (!videoUrl) {
+        throw new Error("VIDEO_GENERATION_FAILED");
+      }
 
-  setFootageHistory((prev) =>
-    prev.map((item) =>
-      item.sceneId === tempId
-        ? {
-            ...item,
+      setFootageHistory((prev) =>
+        prev.map((item) =>
+          item.sceneId === tempId
+            ? {
+                ...item,
                 status: "complete",
-            videoUrl,
-            videoObject,
+                videoUrl,
+                videoObject,
                 // If we secretly generated an image, we might want to use it as the thumbnail now?
                 // Or just let the video player handle it.
                 // If startFrame was null, src is null.
                 src: startFrame ? startFrame : activeInputImage // Use the generated image as thumbnail for the history item
-          }
-        : item
-    )
-  );
+              }
+            : item
+        )
+      );
 
       onAddTimelineClip(
         videoUrl,
@@ -1413,25 +1311,25 @@ try {
         0,
         videoObject
       );
-} catch (e: any) {
+    } catch (e: any) {
       console.error(e);
-  if (creditsConsumed) {
-    await supabase.rpc("refund_credits", {
-      p_user_id: session?.user?.id,
-      p_action_type: action
-    });
-  }
+      if (creditsConsumed) {
+        await supabase.rpc("refund_credits", {
+          p_user_id: session?.user?.id,
+          p_action_type: action
+        });
+      }
 
-  setFootageHistory((prev) =>
-    prev.map((item) =>
-      item.sceneId === tempId
-        ? { ...item, status: "error", error: parseErrorMessage(e) }
-        : item
-    )
-  );
-} finally {
-  setIsGenerating(false);
-}
+      setFootageHistory((prev) =>
+        prev.map((item) =>
+          item.sceneId === tempId
+            ? { ...item, status: "error", error: parseErrorMessage(e) }
+            : item
+        )
+      );
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleAnimateFootage = async (item: any) => {
@@ -1498,7 +1396,6 @@ try {
     }
   };
 
-  
   const handleApplyCameraAngle = async (angle: string, subject?: string) => {
     if (!modalData.genId || !modalData.sceneId) return;
 
@@ -1903,13 +1800,13 @@ try {
     angleName: string
   ) => {
     const updateFn = (s: any) =>
-                s.sceneId === sceneId
-                  ? {
-                      ...s,
-                      src: src,
+      s.sceneId === sceneId
+        ? {
+            ...s,
+            src: src,
             variants: [...(s.variants || []), { src, prompt, angleName }],
-                      selectedVariantIndex: s.variants?.length || 0
-                    }
+            selectedVariantIndex: s.variants?.length || 0
+          }
         : s;
 
     setHistory((prev) =>
@@ -1927,12 +1824,12 @@ try {
     variantIndex: number
   ) => {
     const updateFn = (s: any) =>
-                s.sceneId === sceneId
-                  ? {
-                      ...s,
-                      src: s.variants[variantIndex].src,
-                      selectedVariantIndex: variantIndex
-                    }
+      s.sceneId === sceneId
+        ? {
+            ...s,
+            src: s.variants[variantIndex].src,
+            selectedVariantIndex: variantIndex
+          }
         : s;
 
     setHistory((prev) =>
@@ -1949,12 +1846,12 @@ try {
     base64: string
   ) => {
     const updateFn = (s: any) => {
-                if (s.sceneId !== sceneId) return s;
+      if (s.sceneId !== sceneId) return s;
       const vIdx = s.variants?.findIndex((v: any) => v.src === base64);
-                if (vIdx !== -1 && vIdx !== undefined) {
-                  return { ...s, src: base64, selectedVariantIndex: vIdx };
-                }
-                return { ...s, src: base64 };
+      if (vIdx !== -1 && vIdx !== undefined) {
+        return { ...s, src: base64, selectedVariantIndex: vIdx };
+      }
+      return { ...s, src: base64 };
     };
 
     setHistory((prev) =>
@@ -2498,6 +2395,10 @@ try {
       onAddAudioToTimeline={onAddAudioClip}
       onAddAudioClip={onAddAudioClip}
       onDeductAudioCredit={async () => {
+        if (creditSettings.creditBalance < 1) {
+          return false;
+        }
+
         try {
           await consumeCredits("AUDIO_GENERIC");
           return true;
@@ -2515,13 +2416,13 @@ try {
       generationItem={
         activeHistoryIndex !== -1 ? history[activeHistoryIndex] : null
       }
-      consumeCredits={consumeCredits}
       videoLength={videoLength}
       videoModel={videoModel}
       videoResolution={videoResolution}
       savedItems={savedScenes}
       history={history}
       historyIndex={activeHistoryIndex}
+      consumeCredits={consumeCredits}
       onSaveScene={(gid, sid) => {
         let img;
         const sess = history.find((h) => h.id === gid);
@@ -2677,7 +2578,6 @@ try {
       aspectRatio={aspectRatio}
       characterStyle={characterStyle}
       selectedCountry={selectedCountry}
-      consumeCredits={consumeCredits}
       onProduce={handleFootageProduce}
       isGenerating={isGenerating}
       creditBalance={creditSettings.creditBalance}
@@ -2966,6 +2866,7 @@ try {
     >
       {layoutMode !== "phone" && session && (
         <Sidebar
+          layoutMode={layoutMode}
           activeView={activeView}
           setActiveView={setActiveView}
           visualStyle={visualStyle}
@@ -2987,7 +2888,13 @@ try {
         />
       )}
 
-      <main className="flex-1 h-full overflow-hidden relative flex flex-col bg-gray-950">
+      <main
+        className={`flex-1 h-full relative flex flex-col bg-gray-950 ${
+          layoutMode === "desktop"
+            ? "overflow-x-auto overflow-y-hidden"
+            : "overflow-hidden"
+        }`}
+      >
         {activeView === "welcome" && (
           <div className="absolute inset-0 z-0">
             <WelcomePage
@@ -3003,14 +2910,16 @@ try {
         {(activeView !== "welcome" ||
           (activeView === "welcome" && session)) && (
           <div
-            className="flex-1 flex flex-col h-full workspace-artline neon-active-frame relative z-10"
-            style={{ "--glow-color": currentGlowColor } as React.CSSProperties}
+            className={`flex-1 flex flex-col h-full ${
+              layoutMode === "desktop" ? "min-w-[1100px]" : "min-w-0"
+            } workspace-artline neon-active-frame relative z-10`}
           >
             {layoutMode === "phone" ? (
               <div className="flex-1 h-full overflow-hidden flex flex-col">
                 {(activeView === "menu" ||
                   (activeView === "welcome" && session)) && (
                   <Sidebar
+                    layoutMode={layoutMode!}
                     activeView={activeView}
                     setActiveView={setActiveView}
                     visualStyle={visualStyle}
