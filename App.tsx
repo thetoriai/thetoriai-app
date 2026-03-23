@@ -212,7 +212,9 @@ const App: React.FC = () => {
   useEffect(() => {
     if (activeView === "directors-cut") {
       const anonymousId =
-        localStorage.getItem("anonymous_id") || crypto.randomUUID();
+        localStorage.getItem("anonymous_id") ||
+        crypto.randomUUID?.() ||
+        Date.now().toString();
 
       localStorage.setItem("anonymous_id", anonymousId);
 
@@ -2862,7 +2864,7 @@ const App: React.FC = () => {
 
   return (
     <div
-      className={`flex h-[100dvh] bg-gray-950 text-white font-sans overflow-hidden layout-${layoutMode}`}
+      className={`flex h-screen bg-gray-950 text-white font-sans overflow-hidden layout-${layoutMode}`}
     >
       {layoutMode !== "phone" && session && (
         <Sidebar
@@ -3042,299 +3044,309 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
-
-      <Modals
-        activeModal={activeModal}
-        setActiveModal={setActiveModal}
-        creditWarning={creditWarning}
-        modalData={modalData}
-        onClose={() => setActiveModal(null)}
-        storybookContent={storybook}
-        setStorybookContent={setStorybook}
-        onGenerateFromStorybook={(s) => handleGenerate(s, "storybook")}
-        history={history}
-        masterHistory={masterHistory}
-        onLoadHistory={handleLoadHistory}
-        onClearHistory={handleClearHistory}
-        characters={characters}
-        creditBalance={creditSettings.creditBalance}
-        onEditImage={() => setActiveModal("edit-image")}
-        onApplyCameraAngle={handleApplyCameraAngle}
-        onUpdateImage={() => {}}
-        onResetStorybook={() =>
-          setStorybook({
-            title: "",
-            characters: [],
-            storyNarrative: "",
-            scenes: [],
-            includeDialogue: true
-          })
-        }
-        storySeed={storySeed}
-        setStorySeed={setStorySeed}
-        savedItems={savedScenes}
-        characterStyle={selectedCountry}
-        selectedCountry={selectedCountry}
-        currencySymbol="€"
-        exchangeRate={1}
-        costPerImage={1}
-        onToggleSave={handleToggleSave}
-        timelineClips={timelineClips}
-        audioClips={audioClips}
-        textClips={textClips}
-        onUpdateClips={setTimelineClips}
-        onUpdateAudioClips={setAudioClips}
-        onUpdateTextClips={setTextClips}
-        onUpdateTimelineClip={(id, u) =>
-          setTimelineClips((p) =>
-            p.map((c) => (c.id === id ? { ...c, ...u } : c))
-          )
-        }
-        onDeleteTimelineClip={(id) =>
-          setTimelineClips((p) => p.filter((c) => c.id !== id))
-        }
-        onDeleteAudio={(id) =>
-          setAudioClips((p) => p.filter((ac) => ac.id !== id))
-        }
-        onAddTimelineClip={onAddTimelineClip}
-        onAddAudioClip={onAddAudioClip}
-        onAddTextClip={onAddTextClip}
-        onCaptureFrameFromTimeline={handleCaptureFrame}
-        onExportTimeline={() => {
-          setModalData({ clips: timelineClips });
-          setActiveModal("export-video");
-        }}
-        generationItem={
-          activeHistoryIndex !== -1 ? history[activeHistoryIndex] : null
-        }
-        historyIndex={activeHistoryIndex}
-        activeVideoIndices={activeVideoIndices}
-        onOpenVideoCreator={(idx) =>
-          setActiveVideoIndices((prev) =>
-            prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
-          )
-        }
-        onGenerateVideo={handleGenerateVideo}
-        onAddToTimeline={(url, type, duration, obj) =>
-          onAddTimelineClip(
-            url,
-            type || "image",
-            duration || 5,
-            undefined,
-            0,
-            obj
-          )
-        }
-        videoModel={videoModel}
-        setVideoModel={setVideoModel}
-        setVideoResolution={setVideoResolution}
-        onSwitchSession={handleLoadHistory}
-        onNewSession={() => setActiveHistoryIndex(-1)}
-        onUpdateVideoDraft={(gid, sid, updates) =>
-          setHistory((prev) =>
-            prev.map((h) =>
-              h.id === gid
-                ? {
-                    ...h,
-                    videoStates: h.videoStates.map((vs, idx) =>
-                      h.imageSet[idx].sceneId === sid
-                        ? { ...vs, ...updates }
-                        : vs
-                    )
-                  }
-                : h
+      {activeModal && (
+        <Modals
+          activeModal={activeModal}
+          setActiveModal={setActiveModal}
+          creditWarning={creditWarning}
+          modalData={modalData}
+          onClose={() => setActiveModal(null)}
+          storybookContent={storybook}
+          setStorybookContent={setStorybook}
+          onGenerateFromStorybook={(s) => handleGenerate(s, "storybook")}
+          history={history}
+          masterHistory={masterHistory}
+          onLoadHistory={handleLoadHistory}
+          onClearHistory={handleClearHistory}
+          characters={characters}
+          creditBalance={creditSettings.creditBalance}
+          onEditImage={() => setActiveModal("edit-image")}
+          onApplyCameraAngle={handleApplyCameraAngle}
+          onUpdateImage={() => {}}
+          onResetStorybook={() =>
+            setStorybook({
+              title: "",
+              characters: [],
+              storyNarrative: "",
+              scenes: [],
+              includeDialogue: true
+            })
+          }
+          storySeed={storySeed}
+          setStorySeed={setStorySeed}
+          savedItems={savedScenes}
+          characterStyle={selectedCountry}
+          selectedCountry={selectedCountry}
+          currencySymbol="€"
+          exchangeRate={1}
+          costPerImage={1}
+          onToggleSave={handleToggleSave}
+          timelineClips={timelineClips}
+          audioClips={audioClips}
+          textClips={textClips}
+          onUpdateClips={setTimelineClips}
+          onUpdateAudioClips={setAudioClips}
+          onUpdateTextClips={setTextClips}
+          onUpdateTimelineClip={(id, u) =>
+            setTimelineClips((p) =>
+              p.map((c) => (c.id === id ? { ...c, ...u } : c))
             )
-          )
-        }
-        activeI2ISlot={activeI2ISlot}
-        setActiveI2ISlot={setActiveI2ISlot}
-        onUploadStartImage={handleUploadStartImage}
-        onUploadToSession={handleUploadToSession}
-        onDeleteScene={handleDeleteScene}
-        onUndoEdit={handleUndoEdit}
-        setCharacters={setCharacters}
-        handleBuildCharacterVisual={async (id) => {
-          const char = characters.find((c) => c.id === id);
-          if (!char) return;
-          setCharacters((prev) =>
-            prev.map((c) => (c.id === id ? { ...c, isDescribing: true } : c))
-          );
-          try {
-            // DEDUCTION FIRST: Identity generation.
-            await consumeCredits("CHARACTER_IMAGE");
-
-            const { src, error } = await generateCharacterVisual(
-              char,
-              visualStyle,
-              characterStyle,
-              selectedCountry
+          }
+          onDeleteTimelineClip={(id) =>
+            setTimelineClips((p) => p.filter((c) => c.id !== id))
+          }
+          onDeleteAudio={(id) =>
+            setAudioClips((p) => p.filter((ac) => ac.id !== id))
+          }
+          onAddTimelineClip={onAddTimelineClip}
+          onAddAudioClip={onAddAudioClip}
+          onAddTextClip={onAddTextClip}
+          onCaptureFrameFromTimeline={handleCaptureFrame}
+          onExportTimeline={() => {
+            setModalData({ clips: timelineClips });
+            setActiveModal("export-video");
+          }}
+          generationItem={
+            activeHistoryIndex !== -1 ? history[activeHistoryIndex] : null
+          }
+          historyIndex={activeHistoryIndex}
+          activeVideoIndices={activeVideoIndices}
+          onOpenVideoCreator={(idx) =>
+            setActiveVideoIndices((prev) =>
+              prev.includes(idx)
+                ? prev.filter((i) => i !== idx)
+                : [...prev, idx]
+            )
+          }
+          onGenerateVideo={handleGenerateVideo}
+          onAddToTimeline={(url, type, duration, obj) =>
+            onAddTimelineClip(
+              url,
+              type || "image",
+              duration || 5,
+              undefined,
+              0,
+              obj
+            )
+          }
+          videoModel={videoModel}
+          setVideoModel={setVideoModel}
+          setVideoResolution={setVideoResolution}
+          onSwitchSession={handleLoadHistory}
+          onNewSession={() => setActiveHistoryIndex(-1)}
+          onUpdateVideoDraft={(gid, sid, updates) =>
+            setHistory((prev) =>
+              prev.map((h) =>
+                h.id === gid
+                  ? {
+                      ...h,
+                      videoStates: h.videoStates.map((vs, idx) =>
+                        h.imageSet[idx].sceneId === sid
+                          ? { ...vs, ...updates }
+                          : vs
+                      )
+                    }
+                  : h
+              )
+            )
+          }
+          activeI2ISlot={activeI2ISlot}
+          setActiveI2ISlot={setActiveI2ISlot}
+          onUploadStartImage={handleUploadStartImage}
+          onUploadToSession={handleUploadToSession}
+          onDeleteScene={handleDeleteScene}
+          onUndoEdit={handleUndoEdit}
+          setCharacters={setCharacters}
+          handleBuildCharacterVisual={async (id) => {
+            const char = characters.find((c) => c.id === id);
+            if (!char) return;
+            setCharacters((prev) =>
+              prev.map((c) => (c.id === id ? { ...c, isDescribing: true } : c))
             );
-            if (src) {
-              const { description } = await generateCharacterDescription(
-                src,
-                "image/png"
+            try {
+              // DEDUCTION FIRST: Identity generation.
+              await consumeCredits("CHARACTER_IMAGE");
+
+              const { src, error } = await generateCharacterVisual(
+                char,
+                visualStyle,
+                characterStyle,
+                selectedCountry
               );
+              if (src) {
+                const { description } = await generateCharacterDescription(
+                  src,
+                  "image/png"
+                );
+                setCharacters((prev) =>
+                  prev.map((c) =>
+                    c.id === id
+                      ? {
+                          ...c,
+                          imagePreview: `data:image/png;base64,${src}`,
+                          description,
+                          // DO add comment: Fixed property name mismatch: changed detectedStyle to detectedImageStyle.
+                          detectedImageStyle: null
+                        }
+                      : c
+                  )
+                );
+              }
+            } catch (e) {
+              console.error(e);
+            } finally {
+              setCharacters((prev) =>
+                prev.map((c) =>
+                  c.id === id ? { ...c, isDescribing: false } : c
+                )
+              );
+            }
+          }}
+          handleUploadNewCharacterImage={async (f) => {
+            const base64 = await fileToBase64(f);
+            const tempId = Date.now();
+            // DO add comment above each fix. Fix undeclared variable: Added missing const declaration for newChar.
+            const newChar: Character = {
+              id: tempId,
+              name: "Scanning Identity...",
+              imagePreview: `data:${f.type};base64,${base64}`,
+              originalImageBase64: base64,
+              originalImageMimeType: f.type,
+              description: null,
+              // DO add comment: Fixed property name mismatch: changed detectedStyle to detectedImageStyle to match Character type.
+              detectedImageStyle: null,
+              isDescribing: false,
+              isAnalyzing: true,
+              isHero: false
+            };
+            setCharacters((prev) => [...prev, newChar]);
+            try {
+              // DEDUCTION FIRST: Identity production.
+              await consumeCredits("CHARACTER_IMAGE");
+
+              const { description, detectedStyle } =
+                await generateCharacterDescription(base64, f.type);
+              setCharacters((prev) =>
+                prev.map((c) =>
+                  c.id === tempId
+                    ? {
+                        ...c,
+
+                        description,
+                        // DO add comment: Map detectedStyle to detectedImageStyle for Character state update.
+                        detectedImageStyle: detectedStyle,
+                        isAnalyzing: false
+                      }
+                    : c
+                )
+              );
+            } catch {
+              setCharacters((prev) =>
+                prev.map((c) =>
+                  c.id === tempId
+                    ? { ...c, name: "Actor Entry", isAnalyzing: false }
+                    : c
+                )
+              );
+            }
+          }}
+          handleCharacterImageUpload={async (f, id) => {
+            const base64 = await fileToBase64(f);
+            setCharacters((prev) =>
+              prev.map((c) => (c.id === id ? { ...c, isAnalyzing: true } : c))
+            );
+            try {
+              // DEDUCTION FIRST: Identity replacement.
+              await consumeCredits("CHARACTER_IMAGE");
+
+              const { description, detectedStyle } =
+                await generateCharacterDescription(base64, f.type);
               setCharacters((prev) =>
                 prev.map((c) =>
                   c.id === id
                     ? {
                         ...c,
-                        imagePreview: `data:image/png;base64,${src}`,
+                        imagePreview: `data:${f.type};base64,${base64}`,
+                        originalImageBase64: base64,
+                        originalImageMimeType: f.type,
                         description,
-                        // DO add comment: Fixed property name mismatch: changed detectedStyle to detectedImageStyle.
-                        detectedImageStyle: null
+                        // DO add comment: Map detectedStyle to detectedImageStyle for character replacement.
+                        detectedImageStyle: detectedStyle,
+                        isAnalyzing: false
                       }
                     : c
                 )
               );
+            } catch {
+              setCharacters((prev) =>
+                prev.map((c) =>
+                  c.id === id ? { ...c, isAnalyzing: false } : c
+                )
+              );
             }
-          } catch (e) {
-            console.error(e);
-          } finally {
+          }}
+          updateCharacter={(id, p) =>
             setCharacters((prev) =>
-              prev.map((c) => (c.id === id ? { ...c, isDescribing: false } : c))
-            );
+              prev.map((c) => (c.id === id ? { ...c, ...p } : c))
+            )
           }
-        }}
-        handleUploadNewCharacterImage={async (f) => {
-          const base64 = await fileToBase64(f);
-          const tempId = Date.now();
-          // DO add comment above each fix. Fix undeclared variable: Added missing const declaration for newChar.
-          const newChar: Character = {
-            id: tempId,
-            name: "Scanning Identity...",
-            imagePreview: `data:${f.type};base64,${base64}`,
-            originalImageBase64: base64,
-            originalImageMimeType: f.type,
-            description: null,
-            // DO add comment: Fixed property name mismatch: changed detectedStyle to detectedImageStyle to match Character type.
-            detectedImageStyle: null,
-            isDescribing: false,
-            isAnalyzing: true,
-            isHero: false
-          };
-          setCharacters((prev) => [...prev, newChar]);
-          try {
-            // DEDUCTION FIRST: Identity production.
-            await consumeCredits("CHARACTER_IMAGE");
-
-            const { description, detectedStyle } =
-              await generateCharacterDescription(base64, f.type);
+          removeCharacter={(id) =>
+            setCharacters((prev) => prev.filter((c) => c.id !== id))
+          }
+          onToggleHero={(id) =>
             setCharacters((prev) =>
-              prev.map((c) =>
-                c.id === tempId
-                  ? {
-                      ...c,
-
-                      description,
-                      // DO add comment: Map detectedStyle to detectedImageStyle for Character state update.
-                      detectedImageStyle: detectedStyle,
-                      isAnalyzing: false
-                    }
-                  : c
-              )
-            );
-          } catch {
-            setCharacters((prev) =>
-              prev.map((c) =>
-                c.id === tempId
-                  ? { ...c, name: "Actor Entry", isAnalyzing: false }
-                  : c
-              )
-            );
+              prev.map((c) => ({
+                ...c,
+                isHero: c.id === id ? !c.isHero : false
+              }))
+            )
           }
-        }}
-        handleCharacterImageUpload={async (f, id) => {
-          const base64 = await fileToBase64(f);
-          setCharacters((prev) =>
-            prev.map((c) => (c.id === id ? { ...c, isAnalyzing: true } : c))
-          );
-          try {
-            // DEDUCTION FIRST: Identity replacement.
-            await consumeCredits("CHARACTER_IMAGE");
-
-            const { description, detectedStyle } =
-              await generateCharacterDescription(base64, f.type);
-            setCharacters((prev) =>
-              prev.map((c) =>
-                c.id === id
-                  ? {
-                      ...c,
-                      imagePreview: `data:${f.type};base64,${base64}`,
-                      originalImageBase64: base64,
-                      originalImageMimeType: f.type,
-                      description,
-                      // DO add comment: Map detectedStyle to detectedImageStyle for character replacement.
-                      detectedImageStyle: detectedStyle,
-                      isAnalyzing: false
-                    }
-                  : c
-              )
+          onUpdateHeroData={onUpdateHeroData}
+          onGenerateSingleStorybookScene={handleGenerateSingleStorybookScene}
+          onAddSceneVariant={handleAddSceneVariant}
+          onSelectSceneVariant={handleSelectSceneVariant}
+          onSceneVariantChange={(gid, sid, dir) => {
+            const hIdx = history.findIndex((h) => h.id === gid);
+            if (hIdx === -1) return;
+            const scene = history[hIdx].imageSet.find(
+              (s: any) => s.sceneId === sid
             );
-          } catch {
-            setCharacters((prev) =>
-              prev.map((c) => (c.id === id ? { ...c, isAnalyzing: false } : c))
-            );
+            if (!scene || !scene.variants) return;
+            const cur = scene.selectedVariantIndex || 0;
+            let nIdx = dir === "next" ? cur + 1 : cur - 1;
+            if (nIdx < 0) nIdx = scene.variants.length - 1;
+            if (nIdx >= scene.variants.length) nIdx = 0;
+            // DO add comment: Fix usage of handleSelectSceneVariant by passing gid as first argument.
+            handleSelectSceneVariant(gid, sid, nIdx);
+          }}
+          onUpdateSceneImage={handleUpdateSceneImage}
+          onRegenerateScene={handleRegenerateScene}
+          onAngleSelect={(gid, sid) => {
+            let img;
+            const sess = history.find((h) => h.id === gid);
+            if (sess) {
+              img = sess.imageSet.find((s: any) => s.sceneId === sid);
+            } else {
+              img = footageHistory.find((f) => f.sceneId === sid);
+            }
+            if (img) {
+              setModalData({ genId: gid, sceneId: sid, src: img.src });
+              setActiveModal("camera-angles");
+            }
+          }}
+          visualStyle={visualStyle}
+          onUpdateAudioClip={(id, updates) =>
+            setAudioClips((p) =>
+              p.map((c) => (c.id === id ? { ...c, ...updates } : c))
+            )
           }
-        }}
-        updateCharacter={(id, p) =>
-          setCharacters((prev) =>
-            prev.map((c) => (c.id === id ? { ...c, ...p } : c))
-          )
-        }
-        removeCharacter={(id) =>
-          setCharacters((prev) => prev.filter((c) => c.id !== id))
-        }
-        onToggleHero={(id) =>
-          setCharacters((prev) =>
-            prev.map((c) => ({ ...c, isHero: c.id === id ? !c.isHero : false }))
-          )
-        }
-        onUpdateHeroData={onUpdateHeroData}
-        onGenerateSingleStorybookScene={handleGenerateSingleStorybookScene}
-        onAddSceneVariant={handleAddSceneVariant}
-        onSelectSceneVariant={handleSelectSceneVariant}
-        onSceneVariantChange={(gid, sid, dir) => {
-          const hIdx = history.findIndex((h) => h.id === gid);
-          if (hIdx === -1) return;
-          const scene = history[hIdx].imageSet.find(
-            (s: any) => s.sceneId === sid
-          );
-          if (!scene || !scene.variants) return;
-          const cur = scene.selectedVariantIndex || 0;
-          let nIdx = dir === "next" ? cur + 1 : cur - 1;
-          if (nIdx < 0) nIdx = scene.variants.length - 1;
-          if (nIdx >= scene.variants.length) nIdx = 0;
-          // DO add comment: Fix usage of handleSelectSceneVariant by passing gid as first argument.
-          handleSelectSceneVariant(gid, sid, nIdx);
-        }}
-        onUpdateSceneImage={handleUpdateSceneImage}
-        onRegenerateScene={handleRegenerateScene}
-        onAngleSelect={(gid, sid) => {
-          let img;
-          const sess = history.find((h) => h.id === gid);
-          if (sess) {
-            img = sess.imageSet.find((s: any) => s.sceneId === sid);
-          } else {
-            img = footageHistory.find((f) => f.sceneId === sid);
-          }
-          if (img) {
-            setModalData({ genId: gid, sceneId: sid, src: img.src });
-            setActiveModal("camera-angles");
-          }
-        }}
-        visualStyle={visualStyle}
-        onUpdateAudioClip={(id, updates) =>
-          setAudioClips((p) =>
-            p.map((c) => (c.id === id ? { ...c, ...updates } : c))
-          )
-        }
-        onUndo={handleTimelineUndo}
-        timelinePlaybackTime={timelinePlaybackTime}
-        onProduceQuickFootage={handleFootageProduce}
-        footageHistory={footageHistory}
-        consumeCredits={consumeCredits}
-      />
+          onUndo={handleTimelineUndo}
+          timelinePlaybackTime={timelinePlaybackTime}
+          onProduceQuickFootage={handleFootageProduce}
+          footageHistory={footageHistory}
+          consumeCredits={consumeCredits}
+        />
+      )}
     </div>
   );
 };
