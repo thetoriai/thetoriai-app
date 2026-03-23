@@ -29,6 +29,7 @@ import {
   WatermarkIcon,
   TextIcon
 } from "./Icons";
+import { Logo } from "../components/Icons";
 
 import { supabase } from "../services/supabaseClient";
 
@@ -3164,7 +3165,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleTouchEnd}
       >
-        <div className="relative aspect-[9/16] h-full max-h-full overflow-hidden bg-[#050505] shadow-2xl rounded-b-[2.5rem] border-x border-b border-white/10">
+        <div className="relative aspect-[9/16] h-full max-h-full overflow-hidden bg-[#050505] shadow-2xl rounded-none border-x border-b border-white/10">
           {magicError && (
             <div
               className="absolute inset-0 z-[999] bg-black/85 flex items-center justify-center"
@@ -3270,28 +3271,28 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           disabled={isFinalizing || isReviewing}
           className="absolute top-4 left-0 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
         >
-          <XIcon className="text-xs" />
+          <Logo className="w-6 h-6" />
         </button>
 
         <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
           <div className="relative flex items-center">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleTextInteraction();
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onTouchStart={(e) => e.stopPropagation()}
-            onTouchEnd={(e) => e.stopPropagation()}
-            disabled={isFinalizing || isReviewing}
-            className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center transition-all ${isTextMode ? "bg-yellow-400 text-black shadow-[0_0_20px_#eaff0080]" : "bg-white text-black"} disabled:opacity-20`}
-          >
-            <TextIcon className="text-lg" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleTextInteraction();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              disabled={isFinalizing || isReviewing}
+              className={`w-11 h-11 rounded-lg flex flex-col items-center justify-center transition-all ${isTextMode ? "bg-yellow-400 text-black shadow-[0_0_20px_#eaff0080]" : "bg-white text-black"} disabled:opacity-20`}
+            >
+              <TextIcon className="text-lg" />
               <span className="text-[5px] font-black mt-0.5 uppercase">
                 TEXT
               </span>
-          </button>
+            </button>
             {isTextMode && (
               <button
                 onClick={(e) => {
