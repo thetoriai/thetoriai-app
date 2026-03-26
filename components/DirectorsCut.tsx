@@ -282,6 +282,34 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   }, [isTracking?.assetId]); // Depend on assetId to restart if needed, but mainly just running when isTracking exists
 
   useEffect(() => {
+    const trackUser = async () => {
+      let anonId = localStorage.getItem("anon_id");
+
+      if (!anonId) {
+        anonId = crypto.randomUUID();
+        localStorage.setItem("anon_id", anonId);
+      }
+
+      const { error } = await supabase.from("directors_cut_sessions").insert([
+        {
+          anonymous_id: anonId,
+          device: navigator.userAgent,
+          screen_width: window.innerWidth,
+          screen_height: window.innerHeight
+        }
+      ]);
+
+      if (error) {
+        console.error("TRACKING ERROR:", error);
+      } else {
+        console.log("User tracked");
+      }
+    };
+
+    trackUser();
+  }, []);
+
+  useEffect(() => {
     if (isTracking && isTracking.progress >= 100) {
       // Apply Effect
       const { assetId, type, rect } = isTracking;

@@ -27,6 +27,7 @@ export const CREDIT_ACTIONS = {
 
 export const useCredits = (session: any, supabase: SupabaseClient) => {
   const [creditBalance, setCreditBalance] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [creditSettings, setCreditSettings] = useState({
     creditBalance: 0,
     currency: "EUR" as "EUR",
@@ -86,33 +87,38 @@ export const useCredits = (session: any, supabase: SupabaseClient) => {
     };
   }, [session, supabase]);
 
- const consumeCredits = useCallback(
-   async (actionType: keyof typeof CREDIT_ACTIONS) => {
-     if (!session?.user?.id) return false;
+  
+    
+const consumeCredits = useCallback(
+  async (actionType: keyof typeof CREDIT_ACTIONS) => {
+    if (!session?.user?.id) return false;
 
-     const { data, error } = await supabase.rpc("consume_credits", {
-       p_user_id: session.user.id,
-       p_action_type: actionType
-     });
+    if (isProcessing) return false;
 
-     // If the database returns an error
-     if (error) {
-       console.error("Credit consumption failed:", error);
-       throw new Error("INSUFFICIENT_CREDITS");
-     }
+    setIsProcessing(true);
 
-     // If the function returns false (meaning not enough credits)
-     if (!data) {
-       throw new Error("INSUFFICIENT_CREDITS");
-     }
+    try {
+      const { data, error } = await supabase.rpc("consume_credits", {
+        p_user_id: session.user.id,
+        p_action_type: actionType
+      });
 
-     return true;
-   },
-   [session, supabase]
- );
+      if (error || !data) {
+        throw new Error("FAILED");
+      }
+
+      return true;
+    } finally {
+      setIsProcessing(false);
+    }
+  },
+  [session, supabase, isProcessing]
+);
+   
 
   return {
     creditBalance,
+    setCreditBalance,
     creditSettings,
     consumeCredits,
     CREDIT_ACTIONS
