@@ -122,6 +122,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
   const [webcamActive, setWebcamActive] = useState(false);
+  const [isWebcamCropping, setIsWebcamCropping] = useState(false);
   const [webcamFlipped, setWebcamFlipped] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   const [webcamMode, setWebcamMode] = useState<"fullscreen" | "floating">(
@@ -205,6 +206,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const dragStartTransformRef = useRef<Transform>(DEFAULT_TRANSFORM);
   const isDraggingRef = useRef(false);
   const isDraggingWebcamRef = useRef(false);
+  const isLongPressRef = useRef(false);
   const isResizingTextRef = useRef(false);
   const lastTapRef = useRef<number>(0);
   const tapCountRef = useRef<number>(0);
@@ -1246,17 +1248,76 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           ctx.strokeStyle = "#fff";
           ctx.lineWidth = 2;
 
+          // Calculate crop
+          const sx = v.videoWidth * (trans.cropLeft / 100);
+          const sy = v.videoHeight * (trans.cropTop / 100);
+          const sw = Math.max(
+            1,
+            v.videoWidth * (1 - (trans.cropLeft + trans.cropRight) / 100)
+          );
+          const sh = Math.max(
+            1,
+            v.videoHeight * (1 - (trans.cropTop + trans.cropBottom) / 100)
+          );
+
           if (webcamFlipped) {
+            ctx.save();
             ctx.translate(drawX + baseDrawW, drawY);
             ctx.scale(-1, 1);
-            ctx.drawImage(v, 0, 0, baseDrawW, baseDrawH);
+            ctx.drawImage(v, sx, sy, sw, sh, 0, 0, baseDrawW, baseDrawH);
+            ctx.restore();
           } else {
-            ctx.drawImage(v, drawX, drawY, baseDrawW, baseDrawH);
+            ctx.drawImage(
+              v,
+              sx,
+              sy,
+              sw,
+              sh,
+              drawX,
+              drawY,
+              baseDrawW,
+              baseDrawH
+            );
           }
 
           // Reset transform for border
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.strokeRect(drawX, drawY, baseDrawW, baseDrawH);
+
+          // Draw crop handles
+          if (!isRecordingRef.current) {
+            const hSize = 50,
+              hThick = 15;
+            ctx.fillStyle = isWebcamCropping ? "#10b981" : "#fff";
+            // Top handle
+            ctx.fillRect(
+              drawX + baseDrawW / 2 - hSize / 2,
+              drawY - hThick / 2,
+              hSize,
+              hThick
+            );
+            // Bottom handle
+            ctx.fillRect(
+              drawX + baseDrawW / 2 - hSize / 2,
+              drawY + baseDrawH - hThick / 2,
+              hSize,
+              hThick
+            );
+            // Left handle
+            ctx.fillRect(
+              drawX - hThick / 2,
+              drawY + baseDrawH / 2 - hSize / 2,
+              hThick,
+              hSize
+            );
+            // Right handle
+            ctx.fillRect(
+              drawX + baseDrawW - hThick / 2,
+              drawY + baseDrawH / 2 - hSize / 2,
+              hThick,
+              hSize
+            );
+          }
         } else {
           // Fullscreen Mode (Background)
           const targetRatio = w / h;
@@ -1873,7 +1934,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     showWatermark,
     textItems,
     activeTextId,
-    isTextMode
+    isTextMode,
+    isWebcamCropping
   ]);
 
   useEffect(() => {
@@ -1919,12 +1981,26 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       const dY = 1920 * (trans.y / 100) - baseDrawH / 2;
 
       if (
-        canvasX >= dX &&
-        canvasX <= dX + baseDrawW &&
-        canvasY >= dY &&
-        canvasY <= dY + baseDrawH
+        canvasX >= dX - 50 &&
+        canvasX <= dX + baseDrawW + 50 &&
+        canvasY >= dY - 50 &&
+        canvasY <= dY + baseDrawH + 50
       ) {
         e.preventDefault();
+
+        // Check if touching a handle
+        if (isWebcamCropping) {
+          const handleSize = 50;
+          if (canvasY < dY + handleSize) setGrabbedPart("top");
+          else if (canvasY > dY + baseDrawH - handleSize)
+            setGrabbedPart("bottom");
+          else if (canvasX < dX + handleSize) setGrabbedPart("left");
+          else if (canvasX > dX + baseDrawW - handleSize)
+            setGrabbedPart("right");
+          else setGrabbedPart("move");
+        } else {
+          setGrabbedPart("move");
+        }
 
         // Triple Tap Detection for Webcam Flip
         const now = Date.now();
@@ -2579,6 +2655,69 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       }
       return;
     }
+    // Webcam Interaction
+    if (isDraggingWebcamRef.current && grabbedPart && e.touches.length === 1) {
+      const dx = (clientX - startTouchRef.current.x) * scaleX,
+        dy = (clientY - startTouchRef.current.y) * scaleY;
+      const trans = { ...dragStartTransformRef.current };
+
+      if (grabbedPart === "move") {
+        if (!isWebcamCropping) {
+          setWebcamTransform({
+            ...trans,
+            x: Math.max(5, Math.min(95, trans.x + (dx / 1080) * 100)),
+            y: Math.max(5, Math.min(95, trans.y + (dy / 1920) * 100))
+          });
+        }
+      } else {
+        // Webcam cropping logic
+        const v = webcamRef.current;
+        const vRatio = v ? v.videoWidth / v.videoHeight : 16 / 9;
+        const baseDrawH = (1080 * (trans.scale / 100)) / vRatio;
+
+        if (grabbedPart === "top") {
+          setWebcamTransform({
+            ...trans,
+            cropTop: Math.max(
+              0,
+              Math.min(90, trans.cropTop + (dy / baseDrawH) * 100)
+            )
+          });
+        } else if (grabbedPart === "bottom") {
+          setWebcamTransform({
+            ...trans,
+            cropBottom: Math.max(
+              0,
+              Math.min(90, trans.cropBottom - (dy / baseDrawH) * 100)
+            )
+          });
+        } else if (grabbedPart === "left") {
+          setWebcamTransform({
+            ...trans,
+            cropLeft: Math.max(
+              0,
+              Math.min(
+                90,
+                trans.cropLeft + (dx / (1080 * (trans.scale / 100))) * 100
+              )
+            )
+          });
+        } else if (grabbedPart === "right") {
+          setWebcamTransform({
+            ...trans,
+            cropRight: Math.max(
+              0,
+              Math.min(
+                90,
+                trans.cropRight - (dx / (1080 * (trans.scale / 100))) * 100
+              )
+            )
+          });
+        }
+      }
+      return;
+    }
+
     if (isLocked || selectedAsset?.fullFrame || !selectedAssetId) return;
     if (grabbedPart && e.touches.length === 1) {
       const dx = (clientX - startTouchRef.current.x) * scaleX,
@@ -2590,8 +2729,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
       if (grabbedPart === "move") {
         updateAssetTransform(selectedAssetId, {
-          x: trans.x + (dx / 1080) * 100,
-          y: trans.y + (dy / 1920) * 100
+          x: Math.max(5, Math.min(95, trans.x + (dx / 1080) * 100)),
+          y: Math.max(5, Math.min(95, trans.y + (dy / 1920) * 100))
         });
       } else {
         const swAct =
@@ -2862,6 +3001,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       setIsRecordConfirming(false);
       isRecordingRef.current = true;
       setIsRecording(true);
+      setIsWebcamCropping(false);
 
       if ("wakeLock" in navigator) {
         try {
@@ -2984,24 +3124,24 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           navigator.canShare({ files: [file] })
         ) {
           try {
-          await navigator.share({
-            files: [file],
-            title: "My Reaction",
-            text: "Made with Director's Cut"
-          });
-          return;
+            await navigator.share({
+              files: [file],
+              title: "My Reaction",
+              text: "Made with DirectCut"
+            });
+            return;
           } catch (err) {}
         } else {
-        const url = URL.createObjectURL(validBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-    };
+          const url = URL.createObjectURL(validBlob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      };
 
       if (
         reviewPlaybackRate === 1 &&
@@ -4125,6 +4265,10 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (isLongPressRef.current) {
+                    isLongPressRef.current = false;
+                    return;
+                  }
                   if (!isFinalizing && !isReviewing) {
                     if (!webcamActive) {
                       setWebcamActive(true);
@@ -4137,10 +4281,36 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                     }
                   }
                 }}
-                onMouseDown={(e) => e.stopPropagation()}
-                onMouseUp={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-                onTouchEnd={(e) => e.stopPropagation()}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  isLongPressRef.current = false;
+                  if (webcamActive && webcamMode === "floating") {
+                    (e.currentTarget as any)._pressTimer = setTimeout(() => {
+                      isLongPressRef.current = true;
+                      setIsWebcamCropping(true);
+                    }, 500);
+                  }
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation();
+                  clearTimeout((e.currentTarget as any)._pressTimer);
+                  setIsWebcamCropping(false);
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  isLongPressRef.current = false;
+                  if (webcamActive && webcamMode === "floating") {
+                    (e.currentTarget as any)._pressTimer = setTimeout(() => {
+                      isLongPressRef.current = true;
+                      setIsWebcamCropping(true);
+                    }, 500);
+                  }
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                  clearTimeout((e.currentTarget as any)._pressTimer);
+                  setIsWebcamCropping(false);
+                }}
                 disabled={isFinalizing || isReviewing}
                 className={`w-full h-full rounded-2xl flex flex-col items-center justify-center transition-all duration-300 active:scale-95 border ${
                   webcamActive
