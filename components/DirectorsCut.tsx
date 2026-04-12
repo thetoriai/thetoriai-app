@@ -122,7 +122,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
   const [webcamActive, setWebcamActive] = useState(false);
-  const [webcamFlipped, setWebcamFlipped] = useState(false);
+  const [webcamFlipped, setWebcamFlipped] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   const [webcamMode, setWebcamMode] = useState<"fullscreen" | "floating">(
     "fullscreen"
@@ -2830,6 +2830,13 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       isRecordingRef.current = false;
       setIsRecording(false);
 
+      // Disable camera and other streams
+      if (activeStreamRef.current) {
+        activeStreamRef.current.getTracks().forEach((t) => t.stop());
+        activeStreamRef.current = null;
+        if (webcamRef.current) webcamRef.current.srcObject = null;
+      }
+
       // Web Fallback
       mediaRecorderRef.current?.stop();
 
@@ -2954,6 +2961,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     // 2. Web Fallback (If not using ReplayKit)
     if (!recordedBlob) return;
     setIsFinalizing(true);
+    setIsAssetPlaying(false);
 
     try {
       // Helper function to safely trigger the iOS Share Sheet
@@ -3843,6 +3851,24 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                         }
                       }}
                     />
+                    {/* Play/Pause Overlay */}
+                    <div
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                      onClick={() => {
+                        const video = reviewVideoRef.current;
+                        if (!video) return;
+                        if (video.paused) video.play();
+                        else video.pause();
+                      }}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center pointer-events-auto active:scale-95 transition-transform">
+                        {isReviewPlaying ? (
+                          <PauseIcon className="text-white w-6 h-6" />
+                        ) : (
+                          <PlayIcon className="text-white w-6 h-6 ml-1" />
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -4013,7 +4039,11 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
                   {/* Export Button */}
                   <button
-                    onClick={handleFinalSave}
+                    onClick={() => {
+                      if (reviewVideoRef.current)
+                        reviewVideoRef.current.pause();
+                      handleFinalSave();
+                    }}
                     disabled={isFinalizing}
                     className="flex-[2] bg-emerald-400 text-white py-3 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all hover:bg-emerald-300 flex items-center justify-center gap-2"
                   >
