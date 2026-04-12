@@ -2958,7 +2958,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     try {
       // Helper function to safely trigger the iOS Share Sheet
     const saveOrShareBlob = async (targetBlob: Blob, isEdited = false) => {
-      try {
+        // FORCE the correct video MIME type so iOS accepts it!
         const mimeType =
           targetBlob.type && targetBlob.type !== "application/octet-stream"
             ? targetBlob.type
@@ -2975,16 +2975,15 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           navigator.canShare &&
           navigator.canShare({ files: [file] })
         ) {
+          try {
           await navigator.share({
             files: [file],
             title: "My Reaction",
             text: "Made with Director's Cut"
           });
-
-          setIsFinalizing(false);
           return;
-        }
-
+          } catch (err) {}
+        } else {
         const url = URL.createObjectURL(validBlob);
         const a = document.createElement("a");
         a.href = url;
@@ -2993,11 +2992,6 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
-        setIsFinalizing(false);
-      } catch (err) {
-        console.error(err);
-        setIsFinalizing(false);
       }
     };
 
@@ -3058,17 +3052,31 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       };
 
       recorder.onstop = async () => {
+        try {
         const finalEditedBlob = new Blob(chunks, { type: mimeType });
         await saveOrShareBlob(finalEditedBlob, true);
+        } catch (err) {
+          console.error("Error in recorder.onstop:", err);
+        } finally {
         audioCtx.close();
         setIsFinalizing(false);
+        }
       };
 
       recorder.start();
       await video.play();
 
+      // Safety timeout: 60 seconds
+      const safetyTimeout = setTimeout(() => {
+        if (recorder.state !== "inactive") {
+          console.error("Export timed out, forcing stop.");
+          recorder.stop();
+        }
+      }, 60000);
+
       const draw = () => {
         if (video.paused || video.ended || video.currentTime >= end) {
+          clearTimeout(safetyTimeout);
           recorder.stop();
           video.pause();
           return;
