@@ -93,26 +93,29 @@ const consumeCredits = useCallback(
   async (actionType: keyof typeof CREDIT_ACTIONS) => {
     if (!session?.user?.id) return false;
 
-    if (isProcessing) return false;
-
     setIsProcessing(true);
 
     try {
-      const { data, error } = await supabase.rpc("consume_credits", {
+      console.log("Charging action:", actionType);
+
+      const { error } = await supabase.rpc("consume_credits", {
         p_user_id: session.user.id,
         p_action_type: actionType
       });
 
-      if (error || !data) {
-        throw new Error("FAILED");
+      if (error) {
+        throw new Error(error.message || "FAILED");
       }
 
       return true;
+    } catch (err) {
+      console.error("Credit deduction failed:", err);
+      return false;
     } finally {
       setIsProcessing(false);
     }
   },
-  [session, supabase, isProcessing]
+  [session, supabase]
 );
    
 

@@ -400,18 +400,55 @@ const App: React.FC = () => {
     });
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event: string, session: any) => {
-      setSession(session);
-      if (_event === "SIGNED_OUT") {
-        setCharacters([]);
-        setHistory([]);
-        setFootageHistory([]);
-        setTimelineClips([]);
-        setAudioClips([]);
-        setTextClips([]);
-        setActiveHistoryIndex(-1);
+    } = supabase.auth.onAuthStateChange(
+      async (_event: string, session: any) => {
+        setSession(session);
+
+        if (_event === "SIGNED_IN" && session?.user?.id) {
+          try {
+            // 1. Get IP address
+            const res = await fetch("https://api.ipify.org?format=json");
+            const data = await res.json();
+            const ip = data.ip;
+
+            // 2. Get or create device ID
+            let deviceId = localStorage.getItem("device_id");
+            if (!deviceId) {
+              deviceId = crypto.randomUUID();
+              localStorage.setItem("device_id", deviceId);
+            }
+
+            // 3. Call Supabase RPC
+            const { data: reward, error } = await supabase.rpc(
+              "handle_new_user_reward",
+              {
+                p_user_id: session.user.id,
+                p_ip: ip,
+                p_device: deviceId
+              }
+            );
+
+            if (error) {
+              console.error("Signup reward error:", error);
+            } else {
+              console.log("User received credits:", reward);
+            }
+          } catch (err) {
+            console.error("Signup tracking failed:", err);
+          }
+        }
+
+        if (_event === "SIGNED_OUT") {
+          setCharacters([]);
+          setHistory([]);
+          setFootageHistory([]);
+          setTimelineClips([]);
+          setAudioClips([]);
+          setTextClips([]);
+          setActiveHistoryIndex(-1);
+        }
       }
-    });
+    );
     return () => subscription.unsubscribe();
   }, []);
 
@@ -641,6 +678,7 @@ const App: React.FC = () => {
       for (let i = 0; i < prompts.length; i++) {
         const pItem = prompts[i];
         const promptText = typeof pItem === "string" ? pItem : pItem.prompt;
+        const script = typeof pItem === "string" ? undefined : pItem.script;
 
         // DEDUCTION FIRST: Image generating label. Logic avoids double-charging by assigning source-specific label.
         let action: any =
@@ -713,7 +751,8 @@ const App: React.FC = () => {
           selectedVariantIndex: 0,
           originSessionId: sessionId,
           originSection:
-            source === "storybook" ? "StorybookSection" : "FootageFrontSection"
+            source === "storybook" ? "StorybookSection" : "FootageFrontSection",
+          storyScript: script
         };
 
         if (source !== "footage") {
@@ -724,7 +763,14 @@ const App: React.FC = () => {
                     ...h,
                     imageSet: h.imageSet.map((s: any) =>
                       s.sceneId === updatedScene.sceneId ? updatedScene : s
-                    )
+                    ),
+                    videoStates: script
+                      ? h.videoStates.map((vs, idx) =>
+                          h.imageSet[idx].sceneId === updatedScene.sceneId
+                            ? { ...vs, draftScript: script }
+                            : vs
+                        )
+                      : h.videoStates
                   }
                 : h
             )
@@ -1035,7 +1081,19 @@ const App: React.FC = () => {
 
       setHistory((prev) =>
         prev.map((h) =>
-          h.id === genId ? { ...h, imageSet: h.imageSet.map(updateFn) } : h
+          h.id === genId
+            ? {
+                ...h,
+                imageSet: h.imageSet.map(updateFn),
+                videoStates: h.videoStates.map((vs, idx) => {
+                  const scene = h.imageSet[idx];
+                  if (scene.sceneId === sceneId && scene.storyScript) {
+                    return { ...vs, draftScript: scene.storyScript };
+                  }
+                  return vs;
+                })
+              }
+            : h
         )
       );
 
@@ -1138,8 +1196,13 @@ const App: React.FC = () => {
       let creditsConsumed = false;
 
       try {
-        await consumeCredits(action as any);
-        creditsConsumed = true;
+       const ok = await consumeCredits(action as any);
+
+if (!ok) {
+  throw new Error("INSUFFICIENT_CREDITS");
+}
+
+creditsConsumed = true;
 
         // Call generateSingleImage directly to handle multiple refs
         const { src, error } = await generateSingleImage(

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { GoogleGenAI } from "@google/genai";
+// // import { Capacitor } from "@capacitor/core";
 import {
   XIcon,
   PauseIcon,
@@ -29,9 +31,9 @@ import {
   WatermarkIcon,
   TextIcon
 } from "./Icons";
-import { Logo } from "../components/Icons";
+// import ScreenRecorder from "./plugins/ScreenRecorder";
 
-import { supabase } from "../services/supabaseClient";
+// import { supabase } from "../services/supabaseClient";
 
 // --- Types ---
 export interface Transform {
@@ -112,16 +114,15 @@ interface DirectorsCutProps {
 
 const DirectorsCut: React.FC<DirectorsCutProps> = ({
   onClose: externalClose,
-  consumeCredits,
-  onGenerateImage,
-  onGenerateVideo
+  consumeCredits
 }) => {
+  const navigate = useNavigate();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [visibleAssetIds, setVisibleAssetIds] = useState<string[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
 
   const [webcamActive, setWebcamActive] = useState(false);
-  const [webcamFlipped, setWebcamFlipped] = useState(true);
+  const [webcamFlipped, setWebcamFlipped] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [webcamMode, setWebcamMode] = useState<"fullscreen" | "floating">(
     "fullscreen"
@@ -157,7 +158,13 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
+  const [isSimulatedRecording, setIsSimulatedRecording] = useState(false);
+
+  // NEW: Store the native path to bypass fetch() crashes!
+  const [nativeVideoPath, setNativeVideoPath] = useState<string | null>(null);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+
+  const [currentTime, setCurrentTime] = useState(0);
   const [reviewPlaybackRate, setReviewPlaybackRate] = useState(1);
   const [reviewVideoUrl, setReviewVideoUrl] = useState<string | null>(null);
   const [isReviewPlaying, setIsReviewPlaying] = useState(true);
@@ -229,20 +236,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   const reviewVideoRef = useRef<HTMLVideoElement>(null);
 
   const trackingCanvasRef = useRef<HTMLCanvasElement>(null);
-  const trackingState = useRef<
-    Map<
-      string,
-      {
-        template: Uint8ClampedArray;
-        tWidth: number;
-        tHeight: number;
-        lastX: number;
-        lastY: number;
-        assetWidth: number;
-        assetHeight: number;
-      }
-    >
-  >(new Map());
+  const trackingState = useRef<Map<string, any>>(new Map());
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) || null;
 
@@ -280,34 +274,6 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
     return () => clearInterval(interval);
   }, [isTracking?.assetId]); // Depend on assetId to restart if needed, but mainly just running when isTracking exists
-
-  useEffect(() => {
-    const trackUser = async () => {
-      let anonId = localStorage.getItem("anon_id");
-
-      if (!anonId) {
-        anonId = crypto.randomUUID();
-        localStorage.setItem("anon_id", anonId);
-      }
-
-      const { error } = await supabase.from("directors_cut_sessions").insert([
-        {
-          anonymous_id: anonId,
-          device: navigator.userAgent,
-          screen_width: window.innerWidth,
-          screen_height: window.innerHeight
-        }
-      ]);
-
-      if (error) {
-        console.error("TRACKING ERROR:", error);
-      } else {
-        console.log("User tracked");
-      }
-    };
-
-    trackUser();
-  }, []);
 
   useEffect(() => {
     if (isTracking && isTracking.progress >= 100) {
@@ -377,6 +343,16 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       setIsTracking(null);
     }
   }, [isTracking?.progress]);
+
+  // Auto-play and reset video when entering review mode
+  useEffect(() => {
+    if (isReviewing && reviewVideoRef.current && reviewVideoUrl) {
+      reviewVideoRef.current.currentTime = 0;
+      reviewVideoRef.current.play().catch(() => {
+        // Suppress auto-play policy errors if they occur
+      });
+    }
+  }, [isReviewing, reviewVideoUrl]);
 
   // --- Visibility Logic ---
   useEffect(() => {
@@ -462,11 +438,19 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     const video = reviewVideoRef.current;
     if (!video) return;
 
-    const duration = video.duration;
-    if (!duration) return;
+    // 1. Safely handle the Chrome WebM Infinity duration bug
+    let safeDuration = video.duration;
+    if (!safeDuration || safeDuration === Infinity || isNaN(safeDuration)) {
+      // Fallback to the buffered end if duration is broken
+      safeDuration =
+        video.buffered.length > 0
+          ? video.buffered.end(video.buffered.length - 1)
+          : 100;
+    }
 
-    const start = trimRange[0] * duration;
-    const end = trimRange[1] * duration;
+    // 2. Explicitly protect against 0 * Infinity = NaN
+    const start = trimRange[0] === 0 ? 0 : trimRange[0] * safeDuration;
+    const end = trimRange[1] === 1 ? safeDuration : trimRange[1] * safeDuration;
 
     if (video.currentTime < start) {
       video.currentTime = start;
@@ -692,6 +676,48 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
     );
   };
 
+  const handleExternalRecordingToggle = async (isStarting: boolean) => {
+    if (isStarting) {
+      // Start ReplayKit and show the red STOP screen
+      // try {
+      //   const result = await ScreenRecorder.startRecording();
+      //   if (result.success) {
+      //     setIsSimulatedRecording(true);
+      //   }
+      // } catch (err) {
+      //   console.error("Failed to start external recording", err);
+      // }
+      console.warn("ScreenRecorder plugin not implemented");
+    } else {
+      // Stop ReplayKit, convert the file path, and import it to the studio
+      setIsSimulatedRecording(false);
+      // try {
+      //   const result = await ScreenRecorder.stopRecording();
+      //   if (result.success && result.videoPath) {
+      //     // Convert the file:// path so the WebView can read it
+      //     const webPath = Capacitor.convertFileSrc(result.videoPath);
+      //
+      //     const newAsset: Asset = {
+      //       id: `imported-${Date.now()}`,
+      //       type: "video",
+      //       url: webPath,
+      //       name: "Screen Recording",
+      //       width: 1080, // Allow your renderer to constrain it natively
+      //       height: 1920,
+      //       transform: DEFAULT_TRANSFORM,
+      //       drawings: []
+      //     };
+      //
+      //     setAssets((prev) => [...prev, newAsset]);
+      //     selectAndShowAsset(newAsset.id, "video", [...assets, newAsset]);
+      //   }
+      // } catch (err) {
+      //   console.error("Failed to stop external recording", err);
+      // }
+      console.warn("ScreenRecorder plugin not implemented");
+    }
+  };
+
   const toggleAssetPlayback = useCallback(
     async (forceReset = false) => {
       if (isFinalizing || isReviewing) return;
@@ -787,7 +813,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       lastTapRef.current = now;
       // Debounce single tap to wait for potential double tap
       tapTimeoutRef.current = window.setTimeout(() => {
-      toggleAssetPlayback();
+        toggleAssetPlayback();
         tapTimeoutRef.current = null;
       }, 250);
     }
@@ -848,18 +874,18 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           setActiveTextId(lastActiveTextIdRef.current);
         } else {
           // Create new text item if none exists
-        const newId = Date.now().toString();
-        const newItem: TextItem = {
-          id: newId,
-          text: "Double tap to edit",
-          x: 0.5,
-          y: 0.5,
-          scale: 100,
-          color: "#ffffff",
-          rotation: 0
-        };
-        setTextItems((prevItems) => [...prevItems, newItem]);
-        setActiveTextId(newId);
+          const newId = Date.now().toString();
+          const newItem: TextItem = {
+            id: newId,
+            text: "Double tap to edit",
+            x: 0.5,
+            y: 0.5,
+            scale: 100,
+            color: "#ffffff",
+            rotation: 0
+          };
+          setTextItems((prevItems) => [...prevItems, newItem]);
+          setActiveTextId(newId);
           lastActiveTextIdRef.current = newId;
         }
       } else {
@@ -1013,7 +1039,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
       });
 
       let rawResultUrl = "";
-      for (const part of response.candidates[0].content.parts) {
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
           rawResultUrl = `data:image/png;base64,${part.inlineData.data}`;
           break;
@@ -1198,8 +1224,9 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
     // Helper to draw webcam
     const drawWebcam = (isFloating: boolean) => {
-      if (webcamActive && webcamRef.current?.readyState >= 2) {
+      if (webcamActive && (webcamRef.current?.readyState ?? 0) >= 2) {
         const v = webcamRef.current;
+        if (!v) return;
         const vRatio = v.videoWidth / v.videoHeight;
 
         ctx.save();
@@ -2798,251 +2825,262 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
 
   const toggleRecording = async () => {
     if (isRecording) {
-      // Stop recording
+      // 1. STOPPING RECORDING
       setIsFinalizing(true);
       isRecordingRef.current = false;
       setIsRecording(false);
+
+      // Web Fallback
       mediaRecorderRef.current?.stop();
-      setIsRecording(false);
+
       if (recordingIntervalRef.current)
         clearInterval(recordingIntervalRef.current);
-
-      // Stop all playback immediately
       if (videoRef.current) {
         videoRef.current.pause();
         setIsAssetPlaying(false);
       }
-      if (wakeLockRef.current)
+      if (wakeLockRef.current) {
         try {
           await wakeLockRef.current.release();
           wakeLockRef.current = null;
         } catch (err) {}
+      }
       if (micOnlyStreamRef.current) {
         micOnlyStreamRef.current.getTracks().forEach((t) => t.stop());
         micOnlyStreamRef.current = null;
       }
     } else if (isRecordConfirming) {
-      // Actually start recording
+      // 2. STARTING RECORDING
       if (!canvasRef.current) return;
       setIsRecordConfirming(false);
       isRecordingRef.current = true;
       setIsRecording(true);
 
-      if ("wakeLock" in navigator)
+      if ("wakeLock" in navigator) {
         try {
           wakeLockRef.current = await (navigator as any).wakeLock.request(
             "screen"
           );
         } catch (err) {}
+      }
+
+      // Web Fallback Logic...
+      // 1. Ensure audio context exists
       if (!audioContextRef.current)
         audioContextRef.current = new (
           window.AudioContext || (window as any).webkitAudioContext
         )();
+
       const audioCtx = audioContextRef.current;
       if (audioCtx.state === "suspended") await audioCtx.resume();
 
-      const dest = audioCtx.createMediaStreamDestination();
-      audioDestinationRef.current = dest;
+      // 2. Start with canvas stream ONLY
+      let stream = canvasRef.current.captureStream(30);
 
-      // Use existing mic stream if available (controlled by Mic button)
-      let commentary: MediaStream | null = micOnlyStreamRef.current;
+      // 3. Detect available audio sources
+      const audioSource = micOnlyStreamRef.current;
+      const hasMic =
+        audioSource &&
+        audioSource.getAudioTracks().length > 0 &&
+        audioSource.getAudioTracks()[0].enabled;
 
-      // If micOnlyStreamRef is set, it means the user enabled the mic.
+      const hasVideoAudio = videoRef.current?.src;
 
-      // Apply mute state immediately (though it should already be handled by the toggleMute)
-      if (commentary) {
-        commentary.getAudioTracks().forEach((track) => {
-          track.enabled = !isMuted;
-        });
-      }
+      // 4. ONLY create audio pipeline if needed
+      if (hasMic || hasVideoAudio) {
+        const dest = audioCtx.createMediaStreamDestination();
 
-      if (commentary && commentary.getAudioTracks().length > 0) {
-        const source = audioCtx.createMediaStreamSource(commentary);
-        source.connect(dest);
-        micSourceNodeRef.current = source;
-      }
-
-      if (videoRef.current?.src) {
-        if (!videoSourceNodeRef.current) {
-          videoSourceNodeRef.current = audioCtx.createMediaElementSource(
-            videoRef.current
-          );
-          gainNodeRef.current = audioCtx.createGain();
-          videoSourceNodeRef.current.connect(gainNodeRef.current);
-          gainNodeRef.current.connect(audioCtx.destination);
+        // Mic audio
+        if (hasMic) {
+          const source = audioCtx.createMediaStreamSource(audioSource!);
+          source.connect(dest);
+          micSourceNodeRef.current = source;
         }
-        gainNodeRef.current.connect(dest);
+
+        // Video audio
+        if (hasVideoAudio) {
+          if (!videoSourceNodeRef.current) {
+            videoSourceNodeRef.current = audioCtx.createMediaElementSource(
+              videoRef.current!
+            );
+            gainNodeRef.current = audioCtx.createGain();
+            videoSourceNodeRef.current.connect(gainNodeRef.current);
+            gainNodeRef.current.connect(audioCtx.destination);
+          }
+          gainNodeRef.current!.connect(dest);
+        }
+
+        // Attach audio tracks only if they exist
+        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
       }
 
-      // Delay starting the recorder to ensure the next frame (without UI) is drawn
-      setTimeout(() => {
-        if (!canvasRef.current) return;
-        const stream = canvasRef.current.captureStream(30);
-        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+      // 5. Keep your codec logic
+      const mime =
+        ["video/mp4;codecs=h264,aac", "video/mp4", "video/webm"].find((m) =>
+          MediaRecorder.isTypeSupported(m)
+        ) || "video/webm";
 
-        const mime =
-          ["video/mp4;codecs=h264,aac", "video/mp4", "video/webm"].find((m) =>
-            MediaRecorder.isTypeSupported(m)
-          ) || "video/webm";
-        const recorder = new MediaRecorder(stream, { mimeType: mime });
-        const chunks: Blob[] = [];
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunks.push(e.data);
-        };
-        recorder.onstop = () => {
-          setRecordedBlob(new Blob(chunks, { type: mime }));
-          setRecordingTime(0);
-          setIsFinalizing(false);
-          setIsReviewing(true);
-        };
-        recorder.start(1000);
-        mediaRecorderRef.current = recorder;
-        recordingIntervalRef.current = window.setInterval(
-          () => setRecordingTime((p) => p + 1),
-          1000
-        );
-      }, 100);
-    } else {
-      // Prompt for confirmation
-      setIsRecordConfirming(true);
-      // Auto-cancel confirmation if not acted upon
-      setTimeout(
-        () => setIsRecordConfirming((prev) => (prev ? false : false)),
-        4000
+      const recorder = new MediaRecorder(stream, { mimeType: mime });
+
+      // 6. Start recorder with delay (IMPORTANT)
+      setTimeout(() => recorder.start(1000), 100);
+
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mime });
+        setRecordedBlob(blob);
+        setReviewVideoUrl(URL.createObjectURL(blob));
+        setRecordingTime(0);
+        setIsFinalizing(false);
+        setIsReviewing(true);
+      };
+      recorder.start(1000);
+      mediaRecorderRef.current = recorder;
+      recordingIntervalRef.current = window.setInterval(
+        () => setRecordingTime((p) => p + 1),
+        1000
       );
+    } else {
+      setIsRecordConfirming(true);
+      setTimeout(() => setIsRecordConfirming(false), 4000);
     }
   };
 
+  // NEW: Securely Export Native OR Web files
   const handleFinalSave = async () => {
+    // 2. Web Fallback (If not using ReplayKit)
     if (!recordedBlob) return;
+    setIsFinalizing(true);
 
-    // If no changes (1x speed, full trim), just save original
-    if (reviewPlaybackRate === 1 && trimRange[0] === 0 && trimRange[1] === 1) {
-      const fileName = `directors-cut-${Date.now()}.mp4`;
-      if (navigator.share && navigator.canShare) {
-        const file = new File([recordedBlob], fileName, {
-          type: recordedBlob.type
-        });
-        if (navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: "My Reaction",
-              text: "Made with Director's Cut"
-            });
-            return;
-          } catch (err) {}
+    try {
+      // Helper function to safely trigger the iOS Share Sheet
+    const saveOrShareBlob = async (targetBlob: Blob, isEdited = false) => {
+      try {
+        const mimeType =
+          targetBlob.type && targetBlob.type !== "application/octet-stream"
+            ? targetBlob.type
+            : "video/mp4";
+
+        const fileExt = mimeType.includes("webm") ? "webm" : "mp4";
+        const fileName = `directors-cut-${isEdited ? "edited-" : ""}${Date.now()}.${fileExt}`;
+
+        const validBlob = new Blob([targetBlob], { type: mimeType });
+        const file = new File([validBlob], fileName, { type: mimeType });
+
+        if (
+          navigator.share &&
+          navigator.canShare &&
+          navigator.canShare({ files: [file] })
+        ) {
+          await navigator.share({
+            files: [file],
+            title: "My Reaction",
+            text: "Made with Director's Cut"
+          });
+
+          setIsFinalizing(false);
+          return;
         }
+
+        const url = URL.createObjectURL(validBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setIsFinalizing(false);
+      } catch (err) {
+        console.error(err);
+        setIsFinalizing(false);
       }
-      const url = URL.createObjectURL(recordedBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      return;
-    }
-
-    // Re-encode logic
-    const video = document.createElement("video");
-    video.src = URL.createObjectURL(recordedBlob);
-    video.muted = false; // We want audio
-    video.playsInline = true;
-    video.crossOrigin = "anonymous";
-    await new Promise((r) => {
-      video.onloadedmetadata = r;
-    });
-
-    const duration = video.duration;
-    const start = trimRange[0] * duration;
-    const end = trimRange[1] * duration;
-    const speed = reviewPlaybackRate;
-
-    // Setup Canvas for recording
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Setup Audio Context for speed adjustment
-    const audioCtx = new (
-      window.AudioContext || (window as any).webkitAudioContext
-    )();
-    const source = audioCtx.createMediaElementSource(video);
-    const dest = audioCtx.createMediaStreamDestination();
-    source.connect(dest);
-
-    video.currentTime = start;
-    video.playbackRate = speed;
-
-    const stream = canvas.captureStream(30);
-    const audioTrack = dest.stream.getAudioTracks()[0];
-    if (audioTrack) stream.addTrack(audioTrack);
-
-    // Try MP4 if supported, otherwise fallback to WebM
-    let mimeType = "video/webm;codecs=vp9";
-    let fileExt = "webm";
-
-    if (MediaRecorder.isTypeSupported("video/mp4")) {
-      mimeType = "video/mp4";
-      fileExt = "mp4";
-    }
-
-    const recorder = new MediaRecorder(stream, { mimeType });
-    const chunks: BlobPart[] = [];
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
     };
 
-    recorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: mimeType });
-      const fileName = `directors-cut-edited-${Date.now()}.${fileExt}`;
-
-      if (navigator.share && navigator.canShare) {
-        const file = new File([blob], fileName, { type: mimeType });
-        if (navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: "My Reaction",
-              text: "Made with Director's Cut"
-            });
-            return;
-          } catch (err) {}
-        }
-      }
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      audioCtx.close();
-    };
-
-    recorder.start();
-    await video.play();
-
-    // Draw loop
-    const draw = () => {
-      if (video.paused || video.ended || video.currentTime >= end) {
-        recorder.stop();
-        video.pause();
+      if (
+        reviewPlaybackRate === 1 &&
+        trimRange[0] === 0 &&
+        trimRange[1] === 1
+      ) {
+        await saveOrShareBlob(recordedBlob, false);
+        setIsFinalizing(false);
         return;
       }
-      ctx.drawImage(video, 0, 0);
-      requestAnimationFrame(draw);
-    };
-    draw();
+
+      const video = document.createElement("video");
+      video.src = URL.createObjectURL(recordedBlob);
+      video.muted = false;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      await new Promise((r) => {
+        video.onloadedmetadata = r;
+      });
+
+      const duration = video.duration;
+      const start = trimRange[0] * duration;
+      const end = trimRange[1] * duration;
+      const speed = reviewPlaybackRate;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        setIsFinalizing(false);
+        return;
+      }
+
+      const audioCtx = new (
+        window.AudioContext || (window as any).webkitAudioContext
+      )();
+      const source = audioCtx.createMediaElementSource(video);
+      const dest = audioCtx.createMediaStreamDestination();
+      source.connect(dest);
+
+      video.currentTime = start;
+      video.playbackRate = speed;
+
+      const stream = canvas.captureStream(30);
+      const audioTrack = dest.stream.getAudioTracks()[0];
+      if (audioTrack) stream.addTrack(audioTrack);
+
+      let mimeType = "video/webm;codecs=vp9";
+      if (MediaRecorder.isTypeSupported("video/mp4")) mimeType = "video/mp4";
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const finalEditedBlob = new Blob(chunks, { type: mimeType });
+        await saveOrShareBlob(finalEditedBlob, true);
+        audioCtx.close();
+        setIsFinalizing(false);
+      };
+
+      recorder.start();
+      await video.play();
+
+      const draw = () => {
+        if (video.paused || video.ended || video.currentTime >= end) {
+          recorder.stop();
+          video.pause();
+          return;
+        }
+        ctx.drawImage(video, 0, 0);
+        requestAnimationFrame(draw);
+      };
+      draw();
+    } catch (error) {
+      console.error("Error finalizing cut:", error);
+      setIsFinalizing(false);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3118,8 +3156,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         v.onloadedmetadata = null;
       };
 
-      v.onerror = () => {
-        console.error("Error loading video for thumbnail");
+      v.onerror = (err) => {
+        console.error("Error loading video for thumbnail", err);
         setAssets((p) => {
           const next: Asset[] = [
             ...p,
@@ -3183,7 +3221,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
   return (
     <div className="flex flex-col h-[100dvh] bg-black text-white overflow-hidden font-sans touch-none select-none outline-none ring-0">
       <section
-        className={`relative w-full flex-1 flex items-center justify-center overflow-hidden z-10 outline-none ring-0 ${
+        className={`relative w-full flex-1 flex items-start justify-center overflow-hidden z-10 outline-none ring-0 pt-[calc(env(safe-area-inset-top)+3rem)] ${
           isReviewing ? "pointer-events-none select-none" : ""
         }`}
         onTouchStart={handleTouchStart}
@@ -3193,7 +3231,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleTouchEnd}
       >
-        <div className="relative aspect-[9/16] h-full max-h-full overflow-hidden bg-[#050505] shadow-2xl rounded-none border-x border-b border-white/10">
+        <div className="relative aspect-[9/16] h-full max-h-full overflow-hidden bg-[#050505] shadow-2xl border border-white/10">
           {magicError && (
             <div
               className="absolute inset-0 z-[999] bg-black/85 flex items-center justify-center"
@@ -3299,7 +3337,7 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           disabled={isFinalizing || isReviewing}
           className="absolute top-4 left-0 z-50 w-8 h-8 flex items-center justify-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full text-white/60 hover:text-white transition-all shadow-xl disabled:opacity-20"
         >
-          <Logo className="w-6 h-6" />
+          <XIcon className="text-xs" />
         </button>
 
         <div className="absolute left-1 top-1/2 -translate-y-1/2 flex flex-col space-y-4 z-30">
@@ -3716,24 +3754,6 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
           </button>
         )}
 
-        {/* 
-            Finalizing Overlay:
-            Now uses pointer-events-auto to strictly block all clicks to the studio behind it.
-        */}
-        {isFinalizing && (
-          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-8 text-center pointer-events-auto">
-            <div className="w-20 h-20 mb-8 bg-red-600 rounded-[2rem] flex items-center justify-center shadow-[0_0_50px_rgba(220,38,38,0.5)]">
-              <LoaderIcon className="text-4xl text-white" />
-            </div>
-            <h2 className="text-2xl font-black tracking-tight mb-2 uppercase italic">
-              Finalizing Cut
-            </h2>
-            <p className="text-white/40 text-sm font-medium tracking-widest">
-              Applying cuts and filters...
-            </p>
-          </div>
-        )}
-
         {/* Review & Choice Screen */}
         {isReviewing && (
           <>
@@ -3741,32 +3761,34 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
             <div className="fixed inset-0 z-[9000] backdrop-blur-lg bg-black/70"></div>
 
             {/* Review Panel */}
-            <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center animate-fade-in pointer-events-auto">
+            <div className="fixed inset-0 z-[9999] flex flex-col animate-fade-in pointer-events-auto bg-black">
               {/* Top Speed Controls */}
-              <div className="absolute top-10 flex space-x-2 z-20 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/10">
-                {[1.5, 2, 2.5].map((speed) => (
-                  <button
-                    key={speed}
-                    onClick={() => togglePlaybackSpeed(speed)}
-                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                      reviewPlaybackRate === speed
-                        ? "bg-emerald-500 text-black shadow-lg"
-                        : "text-white/60 hover:text-white hover:bg-white/10"
-                    }`}
-                  >
-                    {speed}x
-                  </button>
-                ))}
+              <div className="flex justify-center pt-10 pb-4 z-20">
+                <div className="flex space-x-2 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/10">
+                  {[1.5, 2, 2.5].map((speed) => (
+                    <button
+                      key={speed}
+                      onClick={() => togglePlaybackSpeed(speed)}
+                      className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                        reviewPlaybackRate === speed
+                          ? "bg-emerald-500 text-black shadow-lg"
+                          : "text-white/60 hover:text-white hover:bg-white/10"
+                      }`}
+                    >
+                      {speed}x
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Video Preview - Full Screen */}
-              <div className="absolute inset-0 w-full h-full flex items-center justify-center bg-black">
+              {/* Video Preview - Flex 1 to fill available space */}
+              <div className="flex-1 flex items-center justify-center overflow-hidden">
                 {reviewVideoUrl && (
-                  <div className="relative w-full h-full">
+                  <div className="relative w-full h-full flex items-center justify-center">
                     <video
                       ref={reviewVideoRef}
                       src={reviewVideoUrl}
-                      className="w-full h-full object-contain"
+                      className="max-w-full max-h-full object-contain"
                       playsInline
                       loop={false}
                       controls={false}
@@ -3777,9 +3799,25 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                         const video = reviewVideoRef.current;
                         if (!video) return;
 
-                        const duration = video.duration || 1;
-                        const start = trimRange[0] * duration;
-                        const end = trimRange[1] * duration;
+                        // Apply the same safe duration logic here
+                        let safeDuration = video.duration;
+                        if (
+                          !safeDuration ||
+                          safeDuration === Infinity ||
+                          isNaN(safeDuration)
+                        ) {
+                          safeDuration =
+                            video.buffered.length > 0
+                              ? video.buffered.end(video.buffered.length - 1)
+                              : 100;
+                        }
+
+                        const start =
+                          trimRange[0] === 0 ? 0 : trimRange[0] * safeDuration;
+                        const end =
+                          trimRange[1] === 1
+                            ? safeDuration
+                            : trimRange[1] * safeDuration;
 
                         if (video.paused) {
                           // If finished or out of bounds, restart from trim start
@@ -3789,21 +3827,22 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                           ) {
                             video.currentTime = start;
                           }
-                          video.play();
+                          video
+                            .play()
+                            .catch((e) => console.warn("Playback failed:", e));
                         } else {
                           video.pause();
                         }
                       }}
                     />
-                    {/* Play Overlay */}
                   </div>
                 )}
               </div>
 
               {/* Bottom Controls Area */}
-              <div className="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent pb-safe pt-12 px-6 z-30">
+              <div className="w-full bg-gradient-to-t from-black via-black/80 to-transparent pb-safe pt-12 px-6 z-30">
                 {/* Timeline / Trim Slider */}
-                <div className="relative w-full h-16 mb-6 select-none touch-none">
+                <div className="relative w-full h-12 mb-6 select-none touch-none">
                   {/* Thumbnails Background */}
                   <div className="absolute inset-0 flex overflow-hidden rounded-lg opacity-80 border border-white/10">
                     {thumbnails.map((src, i) => (
@@ -3815,6 +3854,16 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                       />
                     ))}
                   </div>
+
+                  {/* Red Playhead */}
+                  {reviewVideoRef.current?.duration && (
+                    <div
+                      className="absolute top-2 bottom-2 w-0.5 bg-red-500 z-30 pointer-events-none"
+                      style={{
+                        left: `${(Math.max(trimRange[0] * reviewVideoRef.current.duration, Math.min(currentTime, trimRange[1] * reviewVideoRef.current.duration)) / reviewVideoRef.current.duration) * 100}%`
+                      }}
+                    />
+                  )}
 
                   {/* Dimmed Overlays */}
                   <div
@@ -3957,9 +4006,13 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                   {/* Export Button */}
                   <button
                     onClick={handleFinalSave}
-                    className="flex-[2] bg-emerald-500 text-white py-3 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all hover:bg-emerald-400"
+                    disabled={isFinalizing}
+                    className="flex-[2] bg-emerald-400 text-white py-3 rounded-full font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all hover:bg-emerald-300 flex items-center justify-center gap-2"
                   >
                     Export
+                    {isFinalizing && (
+                      <LoaderIcon className="animate-spin w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -4169,8 +4222,8 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
               Reaction Assembly Studio
             </p>
           </div>
-          <div className="w-full max-w-xs pt-4 space-y-4">
-            <label className="block w-full bg-white text-black py-5 rounded-3xl font-black cursor-pointer active:scale-95 text-center text-sm tracking-widest  shadow-2xl">
+          <div className="w-full max-w-xs pt-4 flex flex-col gap-3">
+            <label className="block w-full bg-white text-black py-4 rounded-2xl font-black cursor-pointer active:scale-95 text-center text-[10px] tracking-widest shadow-2xl uppercase">
               Import Media
               <input
                 type="file"
@@ -4179,15 +4232,33 @@ const DirectorsCut: React.FC<DirectorsCutProps> = ({
                 accept="image/*,video/*"
               />
             </label>
-
-            {/* ENTER STUDIO BUTTON */}
-            <button
-              onClick={() => (window.location.href = "/")}
-              className="w-full bg-white/10 border border-white/20 text-white py-4 rounded-3xl font-black text-xs tracking-[0.3em] uppercase hover:bg-white/20 active:scale-95 transition-all"
+            <a
+              href="https://thetoriai.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-transparent border border-white/20 text-white py-4 rounded-2xl font-black text-[10px] tracking-widest uppercase hover:bg-white/10 active:scale-95 transition-all shadow-2xl text-center flex flex-col items-center justify-center"
             >
+              <span className="text-[8px] opacity-70 mb-0.5">Visit</span>
               ThetoriAi
-            </button>
+            </a>
           </div>
+        </div>
+      )}
+
+      {isSimulatedRecording && (
+        <div className="fixed inset-0 bg-black/90 z-[100] flex flex-col items-center justify-center p-8 text-center space-y-8">
+          <div className="text-white text-2xl font-black animate-pulse">
+            RECORDING SCREEN...
+          </div>
+          <button
+            onClick={() => {
+              handleExternalRecordingToggle(false);
+              navigate("/export");
+            }}
+            className="w-32 h-32 bg-red-600 rounded-full flex items-center justify-center text-white font-black text-sm active:scale-95 shadow-[0_0_40px_#ef444480]"
+          >
+            STOP
+          </button>
         </div>
       )}
 

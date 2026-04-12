@@ -102,6 +102,16 @@ interface StoryboardProps {
   initialTab?: "quickFootage" | "storybook";
 }
 
+type SceneItem = {
+  sceneId: string;
+  src?: string;
+  prompt?: string;
+  storyScript?: string; // ✅ THIS FIXES YOUR ERROR
+  videoState?: any;
+  aspectRatio?: string;
+  originSection?: string;
+};
+
 export const Storyboard = React.memo(
   (props: StoryboardProps) => {
     const { history, savedItems, storybook, videoLength } = props;
@@ -260,7 +270,7 @@ export const Storyboard = React.memo(
       const fromHistory = history
         .filter((h) => h.type === "storybook")
         .flatMap((h) =>
-          (h.imageSet || []).map((s: any, idx: number) => ({
+          (h.imageSet || []).map((s: SceneItem, idx: number) => ({
             ...s,
             genId: h.id,
             videoState: h.videoStates ? h.videoStates[idx] : null,
@@ -408,7 +418,11 @@ export const Storyboard = React.memo(
                         status={
                           scene.status || (scene.src ? "complete" : "pending")
                         }
-                        draftScript={scene.videoState?.draftScript || ""}
+                        draftScript={
+                          scene.videoState?.draftScript ||
+                          scene.storyScript ||
+                          ""
+                        }
                         draftMovement={
                           scene.videoState?.draftCameraMovement ||
                           "Zoom In (Focus In)"
@@ -485,15 +499,15 @@ export const Storyboard = React.memo(
                         }
                         onAddToTimeline={props.onAddToTimeline}
                         onImportScript={() => {
-                          if (scene.storyScript) {
+                          if (scene.script) {
                             props.onUpdateVideoDraft(
                               scene.genId || scene.originSessionId,
                               scene.sceneId,
-                              { draftScript: scene.storyScript }
+                              { draftScript: scene.script }
                             );
                           }
                         }}
-                        hasScriptToImport={!!scene.storyScript}
+                        hasScriptToImport={!!scene.script}
                         videoModel={props.videoModel}
                         videoResolution={props.videoResolution || "720p"}
                         setVideoModel={props.setVideoModel}

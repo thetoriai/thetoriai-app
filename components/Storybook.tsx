@@ -45,7 +45,9 @@ interface StorybookCreatorProps {
   selectedCountry: string;
   creditBalance: number;
   onClose: () => void;
-  onGenerateFromStorybook: (scenes: string[]) => void;
+  onGenerateFromStorybook: (
+    scenes: (string | { prompt: string; script: string })[]
+  ) => void;
   onGenerateSingleStorybookScene?: (index: number, model: string) => void;
   onSwapOutfit?: (sceneIndex: number, outfit: Outfit) => Promise<void>;
   onAddAudioToTimeline?: (url: string, duration: number) => void;
@@ -240,9 +242,10 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
     number | null
   >(null);
 
-  const [sceneAudioAddedIdx, setSceneAudioAddedIdx] = useState<number | null>(
-    null
-  );
+  const [sceneAudioAddedMap, setSceneAudioAddedMap] = useState<
+    Record<number, boolean>
+  >({});
+
   const [confirmingSceneAudioIdx, setConfirmingSceneAudioIdx] = useState<
     number | null
   >(null);
@@ -689,7 +692,10 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
 
     setConfirmingBatch(false);
 
-    const scenes = storybookContent.scenes.map((s) => s.imageDescription);
+   const scenes = storybookContent.scenes.map((s) => ({
+     prompt: s.imageDescription,
+     script: s.script
+   }));
 
     onGenerateFromStorybook(scenes);
   };
@@ -1309,19 +1315,36 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                                   </button>
                                   <button
                                     onClick={() => {
+                                      // FIRST update UI immediately
+                                      setSceneAudioAddedMap((prev) => ({
+                                        ...prev,
+                                        [index]: true
+                                      }));
+
+                                      // THEN run the logic
                                       handleAddSceneAudioToTimeline(index);
-                                      setSceneAudioAddedIdx(index);
                                     }}
-                                    disabled={sceneAudioAddedIdx === index}
-                                    className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[8px] font-black tracking-widest shadow-lg active:scale-95 ${
-                                      sceneAudioAddedIdx === index
+                                    disabled={
+                                      !!scene.audioSrc &&
+                                      sceneAudioAddedMap[index]
+                                    }
+                                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[8px] font-black tracking-widest shadow-inner transition-all disabled:opacity-30 ${
+                                      sceneAudioAddedMap[index]
                                         ? "bg-green-600 text-white"
-                                        : "bg-indigo-600 text-white hover:bg-indigo-500"
+                                        : "bg-indigo-600 text-white hover:bg-indigo-500 active:scale-95"
                                     }`}
                                   >
-                                    {sceneAudioAddedIdx === index
-                                      ? "Added"
-                                      : "+ DECK"}
+                                    {sceneAudioAddedMap[index] ? (
+                                      <>
+                                        <CheckIcon className="w-3 h-3" />
+                                        Added
+                                      </>
+                                    ) : (
+                                      <>
+                                        <PlusIcon className="w-3 h-3" />
+                                        Deck
+                                      </>
+                                    )}
                                   </button>
                                 </div>
                               ) : (
@@ -1337,12 +1360,10 @@ export const StorybookCreator: React.FC<StorybookCreatorProps> = ({
                                       handleGenerateSceneAudio(index)
                                     }
                                     disabled={!scene.script.trim()}
-                                    className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[8px] font-black tracking-widest transition-all ${
-                                      sceneAudioCreditErrorIdx === index
-                                        ? "bg-red-600 text-white border-red-500 animate-pulse"
-                                        : confirmingSceneAudioIdx === index
-                                          ? "bg-green-600 text-white border-green-500"
-                                          : "bg-white/5 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-white/10"
+                                    className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[8px] font-black tracking-widest shadow-lg transition-all ${
+                                      sceneAudioAddedMap[index]
+                                        ? "bg-green-600 text-white opacity-40 cursor-not-allowed"
+                                        : "bg-indigo-600 text-white hover:bg-indigo-500 active:scale-95"
                                     }`}
                                   >
                                     {generatingSceneAudioIdx === index ? (

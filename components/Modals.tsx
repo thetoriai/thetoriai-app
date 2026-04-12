@@ -238,8 +238,6 @@ const VideoExporter: React.FC<{
   const [exportBlob, setExportBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  
-
   const hexToRgba = (hex: string, alpha: number) => {
     let r = 0,
       g = 0,
@@ -299,13 +297,13 @@ const VideoExporter: React.FC<{
             typeof clip.url !== "string"
               ? URL.createObjectURL(clip.url)
               : clip.url;
-            if (clip.type === "video") {
-              const v = document.createElement("video");
-              v.src = url;
-              v.crossOrigin = "anonymous";
+          if (clip.type === "video") {
+            const v = document.createElement("video");
+            v.src = url;
+            v.crossOrigin = "anonymous";
             v.muted = false;
-              v.playsInline = true;
-              v.preload = "auto";
+            v.playsInline = true;
+            v.preload = "auto";
             await new Promise((res) => {
               v.oncanplaythrough = res;
               v.load();
@@ -313,10 +311,10 @@ const VideoExporter: React.FC<{
             const source = audioCtx.createMediaElementSource(v);
             source.connect(masterGain);
             mediaMap.set(clip.id, v);
-            } else {
-              const img = new Image();
-              img.src = url;
-              img.crossOrigin = "anonymous";
+          } else {
+            const img = new Image();
+            img.src = url;
+            img.crossOrigin = "anonymous";
             await new Promise((res) => {
               img.onload = res;
             });
@@ -952,6 +950,8 @@ export const Modals: React.FC<ModalsProps> = ({
         onResetStorybook={onResetStorybook}
         storySeed={storySeed}
         setStorySeed={setStorySeed}
+
+        
       />
     );
   }
@@ -1085,7 +1085,7 @@ export const Modals: React.FC<ModalsProps> = ({
       </ModalWrapper>
     );
   }
-  
+
   if (activeModal === "camera-angles") {
     return (
       <CameraAngleEditor
@@ -1097,8 +1097,6 @@ export const Modals: React.FC<ModalsProps> = ({
       />
     );
   }
-
- 
 
   return null;
 };

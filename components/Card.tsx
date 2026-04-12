@@ -32,7 +32,7 @@ import {
   type Character
 } from "../services/geminiService";
 import { PAYPAL_LINK } from "../utils/constants";
-
+ 
 
 
 interface SceneProgressOverlayProps {
@@ -190,6 +190,14 @@ export const SceneCard: React.FC<SceneCardProps> = (props) => {
       setIsPortrait(false);
     }
   };
+
+  useEffect(() => {
+    if (scene.storyScript && !props.draftScript && !videoState?.draftScript) {
+      props.onUpdateDraft({
+        draftScript: scene.storyScript
+      });
+    }
+  }, [scene.storyScript]);
 
   useEffect(() => {
     setWithAudio(props.draftScript.trim().length > 0);

@@ -12,6 +12,7 @@ import {
 import type { Character } from "../services/geminiService";
 import { fileToBase64 } from "../utils/fileUtils";
 
+
 interface ActorRosterProps {
   characters: Character[];
   setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
@@ -49,10 +50,13 @@ const HeroStarIcon = ({
 );
 
 export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
+ 
   const studioFileInputRef = useRef<HTMLInputElement>(null);
   const newEntryUploadRef = useRef<HTMLInputElement>(null);
   const replacementUploadRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
 
   const [activeStudioId, setActiveStudioId] = useState<number | null>(null);
   const [studioUploadKey, setStudioUploadKey] = useState<string | null>(null);
@@ -68,9 +72,19 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
         setShowRefineId(null);
       }
     };
+
+  
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showRefineId]);
+
+    useEffect(() => {
+      if (confirmingId !== null) {
+        const timer = setTimeout(() => setConfirmingId(null), 2000);
+        return () => clearTimeout(timer);
+      }
+    }, [confirmingId]);
+    
 
   const runAnalysis = (char: Character) => {
     if (
@@ -189,10 +203,7 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
     const isAnySafetyBlock =
       char.detectedImageStyle === "BLOCK_MINOR" ||
       char.detectedImageStyle === "BLOCK_SAFETY_GENERAL";
-    const styleLabel = (props.visualStyle || "3D")
-      .replace(" Render", "")
-      .toUpperCase();
-
+   
     return (
       <div
         className={`group bg-[#0f172a] border relative transition-all shadow-20xl overflow-hidden flex flex-col refine-zone ${isLead ? "border-amber-500/20 rounded-[2rem]" : "border-white/5 rounded-xl"} ${isRefining ? "themed-artline" : ""} ${isAnySafetyBlock ? "border-amber-500/50 animate-pulse-amber" : ""}`}
@@ -203,11 +214,21 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
           className="relative aspect-[3/4] bg-black overflow-hidden cursor-pointer flex flex-col items-center justify-center"
         >
           {hasImage && !isAnySafetyBlock ? (
-            <div className="w-full h-full relative">
-              <img
-                src={char.imagePreview!}
-                className={`w-full h-full object-cover transition-all duration-700 ${isProcessing ? "opacity-30" : "opacity-100"}`}
-              />
+           <div className="w-full h-full relative">
+  <img
+    src={char.imagePreview!}
+    className={`w-full h-full object-cover transition-all duration-700 ${
+      isProcessing
+        ? "opacity-30 blur-[6px] scale-105"
+        : "opacity-100 blur-0 scale-100"
+    }`}
+  />
+
+  {isProcessing && (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <LoaderIcon className="w-10 h-10 text-indigo-500 animate-spin" />
+    </div>
+  )}
               {char.description && !isProcessing && (
                 <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/100 via-black/80 to-transparent pointer-events-none">
                   <p className="text-[10px] font-black text-white  tracking-widest line-clamp-2 drop-shadow-md">
@@ -229,12 +250,25 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  props.updateCharacter(char.id, {
-                    imagePreview: null,
-                    detectedImageStyle: null,
-                    description: null
-                  });
-                  setShowRefineId(char.id);
+
+                  // ❌ NO CREDIT → show error
+                  if (props.creditBalance < 1) {
+                    setCreditErrorId(char.id);
+                    setConfirmingId(null);
+                    setTimeout(() => setCreditErrorId(null), 2000);
+                    return;
+                  }
+
+                  // 🟢 FIRST CLICK → confirm
+                  if (confirmingId !== char.id) {
+                    setConfirmingId(char.id);
+                    return;
+                  }
+
+                  // 🚀 SECOND CLICK → execute
+                  setConfirmingId(null);
+                  props.handleBuildCharacterVisual(char.id);
+                  setShowRefineId(null);
                 }}
                 className="px-4 py-1.5 bg-amber-600 text-black text-[8px] font-black  tracking-widest rounded transition-all active:scale-95"
               >
@@ -366,12 +400,14 @@ export const ActorRoster: React.FC<ActorRosterProps> = (props) => {
                   }`}
                 >
                   {creditErrorId === char.id
-                    ? "INSUFFICIENT CREDITS"
-                    : hasName
-                      ? hasImage
-                        ? `REFINE`
-                        : `CREATE`
-                      : "NAME REQ"}
+                    ? "INSUFFICIENT"
+                    : confirmingId === char.id
+                      ? "CONFIRM"
+                      : hasName
+                        ? hasImage
+                          ? "REFINE (1C)"
+                          : "CREATE (1C)"
+                        : "NAME REQ"}
                 </button>
               </div>
             </div>
