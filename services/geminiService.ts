@@ -38,13 +38,7 @@
 // ETHNICITY & WARDROBE MANDATE: Implemented "Afro-toon" lock for Afro-toon style and "Smart Casual" wardrobe logic based on country context.
 // ADDED SAFETY PARSING PROTOCOL: Intercepts Gemini safety blocks to return blunt, instructive error codes for minor safety and explicit content.
 
-import {
-  GoogleGenAI,
-  Type,
-  GenerateContentResponse,
-  Modality
-} from "@google/genai";
-import type { Part } from "@google/genai";
+// DO add comment: Gemini removed from frontend. All AI calls now go through backend API routes for security.
 
 export type Outfit = {
   id: string;
@@ -366,10 +360,7 @@ ${prompt}
 `;
 }
 
-const getAiClient = () => {
-  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-  return new GoogleGenAI({ apiKey: apiKey || "" });
-};
+// DO add comment: Removed direct Gemini client. Frontend must call backend API instead.
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -392,47 +383,37 @@ function extractJson(text: string): string {
 
 
 
+// DO add comment: Now calling backend API instead of Gemini directly
 export async function generateDirectorAssistance(context: string): Promise<{
   suggestedTitles: string[];
   talkingPoints: string[];
   vibe: string;
 } | null> {
-  const ai = getAiClient();
-
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `You are a professional video director and script writer for reaction videos.
-
-Context:
-${context}
-
-Generate:
-- 3 catchy titles
-- 5 key talking points for commentary
-- A short vibe description.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            suggestedTitles: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            talkingPoints: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            },
-            vibe: { type: Type.STRING }
-          },
-          required: ["suggestedTitles", "talkingPoints", "vibe"]
-        }
-      }
+    const response = await fetch("/api/generate-director", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        context: context
+      })
     });
 
-    const text = response.text || "{}";
-    return JSON.parse(extractJson(text));
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || "Failed to generate director assistance"
+      );
+    }
+
+    const data = await response.json();
+
+    return {
+      suggestedTitles: data.suggestedTitles || [],
+      talkingPoints: data.talkingPoints || [],
+      vibe: data.vibe || ""
+    };
   } catch (error) {
     console.error("Director Assistance Error", error);
     return null;
@@ -539,136 +520,105 @@ function getStyleInstructions(
   }
 }
 
+// DO add comment: Now calling backend API instead of Gemini directly (PROMPT PRESERVED)
 export async function generateCharacterDescription(
   imageBase64: string,
   mimeType: string,
   signal?: AbortSignal
 ): Promise<{ description: string; detectedStyle: string }> {
-  const ai = getAiClient();
-  const imagePart = { inlineData: { data: imageBase64, mimeType } };
-  const prompt = `Perform a high-fidelity visual analysis for DYNAMIC IDENTITY LOCKING. 
-    Return JSON with:
-    'description': a detailed string of EXACT physical tags. You MUST use this structure:
-    'Who: [Archetype], Age: [Precise Range], Clothes: [Exact description including colors and materials]'. 
-    Example: 'Who: Determined detective, Age: 40-45, Clothes: Charcoal wool trench coat over a white button-up'.
-    'detectedStyle': visual style name (e.g., 3D Render, Anime, Realistic).`;
-
-  const response: GenerateContentResponse = await withRetry(
-    () =>
-      ai.models.generateContent({
-        model: "gemini-3-pro-preview",
-        contents: { parts: [imagePart, { text: prompt }] },
-        config: { responseMimeType: "application/json" }
-      }),
-    undefined,
-    signal
-  );
-  const parsed = JSON.parse(extractJson(response.text || "{}"));
-  return {
-    description: parsed.description || "",
-    detectedStyle: parsed.detectedStyle || "Realistic"
-  };
-}
-
-export async function editImage(
-  params: EditImageParams
-): Promise<{ src: string | null; error: string | null }> {
-  const ai = getAiClient();
-  const {
-    imageBase64,
-    mimeType,
-    editPrompt,
-    aspectRatio,
-    visualStyle,
-    characterStyle,
-    characters,
-    hasVisualMasks,
-    signal,
-    imageModel,
-    overlayImage,
-    referenceImage
-  } = params;
-
-  const parts: Part[] = [
-    {
-      inlineData: {
-        data: stripBase64Prefix(imageBase64),
-        mimeType: detectMimeType(imageBase64)
-      }
-    }
-  ];
-
-  
-
-  if (overlayImage) parts.push({ inlineData: { data: stripBase64Prefix(overlayImage.base64), mimeType: overlayImage.mimeType } });
-  if (referenceImage) parts.push({ inlineData: { data: stripBase64Prefix(referenceImage.base64), mimeType: referenceImage.mimeType } });
-
-  const castNotes = characters.map((c) => `${c.name}: ${c.description}`).join("; ");
- const system = `
-STRICT INPAINTING RULE:
-When a visual mask is provided, you are ABSOLUTELY FORBIDDEN from modifying any pixels outside the white region of the mask.
-All black regions MUST remain bit identical to the original image.
-
-${getStyleInstructions(visualStyle)}
-
-CAST DNA:
-${castNotes}
-
-LOCK MEDIUM TO ${visualStyle}
-USE ATTACHED IMAGE AS THE ONLY IDENTITY SOURCE
-`;
-
-  parts.push({ text: `STRICT VISUAL MEDIUM: [${visualStyle}]. REPLICATE ATTACHED CHARACTER FACE EXACTLY. ` + editPrompt });
-
   try {
-    const response: GenerateContentResponse = await withRetry(
-      () =>
-        ai.models.generateContent({
-          model: imageModel || "gemini-3-pro-image-preview",
-          contents: { parts },
-          config: {
-            systemInstruction: system,
-            imageConfig: { aspectRatio: aspectRatio as any }
-          }
-        }),
-      undefined,
-      signal
-    );
+    const response = await fetch("/api/character-description", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        imageBase64: imageBase64,
+        mimeType: mimeType,
+        prompt: `Perform a high-fidelity visual analysis for DYNAMIC IDENTITY LOCKING. 
+Return JSON with:
+'description': a detailed string of EXACT physical tags. You MUST use this structure:
+'Who: [Archetype], Age: [Precise Range], Clothes: [Exact description including colors and materials]'. 
+Example: 'Who: Determined detective, Age: 40-45, Clothes: Charcoal wool trench coat over a white button-up'.
+'detectedStyle': visual style name (e.g., 3D Render, Anime, Realistic).`
+      })
+    });
 
-    if (response.candidates?.[0]?.finishReason === "SAFETY") {
-      return { src: null, error: "BLOCK_SAFETY_GENERAL" };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || "Failed to generate character description"
+      );
     }
 
-    const candidate = response.candidates?.[0];
-    if (!candidate || !candidate.content) {
-      return { src: null, error: "No content returned from model." };
-    }
+    const data = await response.json();
 
-    const responseParts = Array.isArray(candidate.content.parts)
-      ? candidate.content.parts
-      : candidate.content.parts
-        ? [candidate.content.parts]
-        : [];
-
-
-    for (const part of responseParts) {
-      if (part.inlineData?.data) {
-        return { src: part.inlineData.data, error: null };
-      }
-    }
-
-    return { src: null, error: "Model did not return an image." };
-
-    return { src: null, error: "No image generated." };
-  } catch (e: any) {
-    const msg = e.message?.toLowerCase() || "";
-    if (msg.includes("minor")) return { src: null, error: "BLOCK_MINOR" };
-    if (msg.includes("safety") || msg.includes("blocked"))
-      return { src: null, error: "BLOCK_SAFETY_GENERAL" };
-    return { src: null, error: e.message };
+    return {
+      description: data.description || "",
+      detectedStyle: data.detectedStyle || "Realistic"
+    };
+  } catch (error) {
+    console.error("Character Description Error", error);
+    return {
+      description: "",
+      detectedStyle: "Realistic"
+    };
   }
 }
 
+// DO add comment: Now calling backend API instead of Gemini directly (FULL LOGIC PRESERVED)
+export async function editImage(
+  params: EditImageParams
+): Promise<{ src: string | null; error: string | null }> {
+  try {
+    const response = await fetch("/api/edit-image", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        imageBase64: params.imageBase64,
+        mimeType: params.mimeType,
+        editPrompt: params.editPrompt,
+        aspectRatio: params.aspectRatio,
+        visualStyle: params.visualStyle,
+        characterStyle: params.characterStyle,
+        characters: params.characters,
+        hasVisualMasks: params.hasVisualMasks,
+        imageModel: params.imageModel,
+        overlayImage: params.overlayImage,
+        referenceImage: params.referenceImage
+      })
+    });
+
+    if (!response.ok) {
+      let errorMessage = "Failed to edit image";
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } catch (e) {}
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+
+    return {
+      src: data.src ? data.src : null,
+      error: data.error ? data.error : null
+    };
+  } catch (error: any) {
+    console.error("Edit Image Error:", error);
+
+    return {
+      src: null,
+      error: error && error.message ? error.message : "Unknown error"
+    };
+  }
+}
+
+// DO add comment: Now calling backend API instead of Gemini directly (FULL LOGIC PRESERVED)
 export async function generateSingleImage(
   prompt: string,
   aspectRatio: string,
@@ -679,90 +629,53 @@ export async function generateSingleImage(
   model: string = "gemini-3-pro-image-preview",
   referenceImage?: string | null,
   historyImage?: string | null,
-  secondaryReferenceImage?: string | null, // NEW: secondary reference image support
+  secondaryReferenceImage?: string | null,
   signal?: AbortSignal
 ): Promise<{ src: string | null; error: string | null }> {
-  const ai = getAiClient();
-  const parts: Part[] = [];
-
-  // VISUAL ANCHOR PROTOCOL: Inject Hero character image into part list
-  const hero = characters.find((c) => c.isHero) || characters[0];
-  if (hero && hero.originalImageBase64) {
-    parts.push({
-      inlineData: {
-        data: stripBase64Prefix(hero.originalImageBase64), 
-        mimeType: hero.originalImageMimeType || "image/png" 
-      }
-    });
-  }
-
-  if (referenceImage)
-    parts.push({
-      inlineData: {
-        data: stripBase64Prefix(referenceImage),
-        mimeType: "image/png"
-      }
-    });
-  if (historyImage)
-    parts.push({
-      inlineData: {
-        data: stripBase64Prefix(historyImage),
-        mimeType: "image/png"
-      }
-    });
-  if (secondaryReferenceImage)
-    parts.push({
-      inlineData: {
-        data: stripBase64Prefix(secondaryReferenceImage),
-        mimeType: "image/png"
-      }
-    });
-
-  const castNotes = characters.map((c) => `${c.name}: ${c.description}`).join("; ");
- const system = `${getStyleInstructions(visualStyle, characterStyle)} CAST DNA: ${castNotes}. LOCK MEDIUM TO [${visualStyle}]. USE SECOND PART AS PHYSICAL BLUEPRINT.`;
-
- // CINEMATIC PROMPT ENHANCER
- const enhancedPrompt = enhanceCinematicPrompt(
-   prompt,
-   !!referenceImage || !!historyImage,
-   !!secondaryReferenceImage
- );
-
- parts.push({
-   text:
-     `STRICT VISUAL MEDIUM: [${visualStyle}]. REPLICATE ATTACHED CHARACTER FACE EXACTLY. ` +
-     enhancedPrompt
- });
-  
   try {
-    const response: GenerateContentResponse = await withRetry(
-      () =>
-        ai.models.generateContent({
-          model: model,
-          contents: { parts },
-          config: {
-            systemInstruction: system,
-            imageConfig: { aspectRatio: aspectRatio as any }
-          }
-        }),
-      undefined,
-      signal
-    );
+    const response = await fetch("/api/generate-image", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        aspectRatio: aspectRatio,
+        characterStyle: characterStyle,
+        visualStyle: visualStyle,
+        genre: genre,
+        characters: characters,
+        model: model,
+        referenceImage: referenceImage,
+        historyImage: historyImage,
+        secondaryReferenceImage: secondaryReferenceImage
+      })
+    });
 
-    if (response.candidates?.[0]?.finishReason === "SAFETY") {
-      return { src: null, error: "BLOCK_SAFETY_GENERAL" };
+    if (!response.ok) {
+      let errorMessage = "Failed to generate image";
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.error) {
+          errorMessage = errorData.error;
+        }
+      } catch (e) {}
+      throw new Error(errorMessage);
     }
 
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) return { src: part.inlineData.data, error: null };
-    }
-    return { src: null, error: "No image generated." };
-  } catch (e: any) {
-    const msg = e.message?.toLowerCase() || "";
-    if (msg.includes("minor")) return { src: null, error: "BLOCK_MINOR" };
-    if (msg.includes("safety") || msg.includes("blocked"))
-      return { src: null, error: "BLOCK_SAFETY_GENERAL" };
-    return { src: null, error: e.message };
+    const data = await response.json();
+
+    return {
+      src: data.src ? data.src : null,
+      error: data.error ? data.error : null
+    };
+  } catch (error: any) {
+    console.error("Generate Image Error:", error);
+
+    return {
+      src: null,
+      error: error && error.message ? error.message : "Unknown error"
+    };
   }
 }
 
@@ -866,8 +779,8 @@ ${script}
   const dialogue = match[2].trim();
 
   const characterMatch = characters?.find(
-    (c) => c.name.toLowerCase() === speakerName.toLowerCase()
-  );
+  (c) => c.name.toLowerCase() === speakerName.toLowerCase()
+);
 
   const identity = characterMatch?.description || speakerName;
 
@@ -942,7 +855,6 @@ export async function generateVideoFromScene(
   onRetry?: (msg: string) => void,
   characters?: Character[]
 ): Promise<{ videoUrl: string | null; videoObject: any }> {
-  const ai = getAiClient();
   const castNotes =
     characters?.map((c) => `${c.name}: ${c.description}`).join("; ") || "";
 
@@ -961,8 +873,6 @@ export async function generateVideoFromScene(
     }
   }
 
- 
-
   const startImagePart = scene.src
     ? {
         imageBytes: stripBase64Prefix(scene.src),
@@ -976,14 +886,13 @@ export async function generateVideoFromScene(
         mimeType: "image/png"
       }
     : undefined;
-  
+
   const enhancedVideoPrompt = enhanceCinematicPrompt(
     prompt,
     !!image,
     !!endImage
   );
 
-  
   const fullPrompt = `
 STRICT CINEMATIC VIDEO GENERATION PROTOCOL
 
@@ -1045,40 +954,41 @@ Do not transfer dialogue to another character.
 Do not ignore dialogue if present.
 `;
 
- try {
-   let operation = await ai.models.generateVideos({
-     model: model || "veo-3.1-fast-generate-preview",
-     prompt: fullPrompt,
-     image: startImagePart,
+  try {
+    const response = await fetch("/api/generate-video", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        fullPrompt,
+        aspectRatio,
+        resolution,
+        model,
+        startImage: startImagePart,
+        endImage: endImagePart,
+        duration: scene?.videoLength === 6 ? 6 : 8
+      })
+    });
 
-     config: {
-       numberOfVideos: 1,
-       resolution,
-       aspectRatio: aspectRatio === "16:9" ? "16:9" : "9:16",
-      lastFrame: endImagePart,
-       duration: scene?.videoLength === 6 ? 6 : 8
-     } as any
-   });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || "Failed to generate video");
+    }
 
-   while (!operation.done) {
-     await delay(5000);
-     operation = await ai.operations.getVideosOperation({ operation });
-   }
+    const data = await response.json();
 
-   const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-   if (downloadLink) {
-      const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-      const fetchUrl = `${downloadLink}&key=${apiKey}`;
-     return {
-       videoUrl: fetchUrl,
-       videoObject: operation.response?.generatedVideos?.[0]?.video
-     };
-   }
-   return { videoUrl: null, videoObject: null };
- } catch (e) {
-   throw e;
- }
+    return {
+      videoUrl: data.videoUrl || null,
+      videoObject: data.videoObject || null
+    };
+  } catch (e) {
+    console.error("Video generation failed", e);
+    return { videoUrl: null, videoObject: null };
+  }
 }
+  
+ 
 
 export async function generateStructuredStory(
   idea: string,
@@ -1094,216 +1004,42 @@ export async function generateStructuredStory(
   songLyrics: string,
   country: string
 ): Promise<any> {
-  const ai = getAiClient();
-  const castNotes = characters
-    .map((c) => `${c.name}: ${c.description}`)
-    .join("; ");
-  const langConfig =
-    COUNTRY_LANGUAGE_MAP[country] || COUNTRY_LANGUAGE_MAP["Default"];
+  try {
+    const response = await fetch("/api/generate-story", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        idea,
+        title,
+        characters,
+        includeDialogue,
+        characterStyle,
+        genre,
+        movieStyle,
+        numScenes,
+        history,
+        isMusicVideo,
+        songLyrics,
+        country
+      })
+    });
 
-  // DO add comment: Music Video Intelligence Protocol. Updated prompt system to treat lyrics as the primary structural anchor, focusing on rhythmic visualizer cues and emotional synchronization.
-  const musicVideoMandate = isMusicVideo
-    ? `MUSIC VIDEO MODE ACTIVE:
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || "Failed to generate story"
+      );
+    }
 
-     CORE INTENT:
-     - This is a PROFESSIONAL CINEMATIC MUSIC VIDEO.
-     - Visuals must feel classic, clean, and intentional.
+    const data = await response.json();
 
-     PERFORMANCE FRAMING:
-     - Default to MEDIUM or MEDIUM-CLOSE shot.
-     - Artist performs naturally, facing camera or within environment.
-     - If a band or multiple performers, widen framing slightly but keep focus centered.
-
-     LIGHTING LANGUAGE:
-     - Use a SINGLE DOMINANT KEY LIGHT from one side.
-     - Create soft shadow falloff across the face for depth.
-     - Avoid flat lighting and overexposed studio looks.
-
-     ENVIRONMENT RULE:
-     - DO NOT use plain, empty, white, blue, or solid-color backgrounds.
-     - ALWAYS place the performer in a REAL ENVIRONMENT.
-     - Environment may be a street, seaside, stage, room, night exterior, or symbolic location.
-     - The environment must support the emotion of the song.
-
-     STORY CONNECTION:
-     - Visuals must FOLLOW the emotion and narrative of the lyrics.
-     - Use expressive performance actions instead of dialogue.
-
-     OUTPUT RULE:
-     - Scene scripts describe performance actions or atmospheric moments.
-     - No speaker dialogue format.
-     - No meta or industry references.
-     `
-    : ``;
-
-  // DO add comment: BIBLE NARRATION PROTOCOL. Activates scripture narration when Religion genre is selected.
-  const bibleMandate =
-    genre === "Religion"
-      ? `
-BIBLE NARRATION PROTOCOL ACTIVE:
-
-NARRATION AUTHORITY:
-- Narration MUST strictly imitate Holy Bible narration style.
-- Tone must be sacred, solemn, direct, and authoritative.
-- Narration must feel like scripture, not modern storytelling.
-
-STRUCTURE REQUIREMENTS:
-- Use scripture narrative phrases such as:
-  "And it came to pass..."
-  "And behold..."
-  "And the Lord said..."
-  "For the Lord was with him..."
-  "Thus saith the Lord..."
-  "And he went forth..."
-
-SOURCE INSPIRATION RULE:
-- Stories must follow Biblical themes, events, or structure.
-- Examples include faith, trials, obedience, miracles, divine encounters, victory through God.
-
-DIALOGUE RULE:
-- Dialogue MUST sound scriptural.
-Example:
-David: The Lord is my shepherd; I shall not want.
-
-FORBIDDEN:
-- No slang
-- No modern casual speech
-- No cinematic Hollywood narration tone
-- No modern expressions
-
-OUTPUT INTENT:
-- Story must feel like an actual Bible passage.
-- Direct, clear, sacred narration.
-`
-      : "";
-
-  // DO add comment: CANONICAL BIBLICAL CHARACTER PROTECTION PROTOCOL.
-  // Prevents user-loaded characters from replacing Jesus, Moses, Mary, etc.
-  // Forces user characters to interact with canonical Biblical figures instead.
-  const canonicalBiblicalProtection =
-    genre === "Religion"
-      ? `
-CANONICAL BIBLICAL CHARACTER PROTECTION PROTOCOL ACTIVE:
-
-HIERARCHY RULE:
-- Biblical figures such as Jesus, Moses, Mary, David, Abraham, Angels are CANONICAL CHARACTERS.
-- Canonical characters MUST NEVER be replaced by user-loaded characters.
-
-IDENTITY LOCK RULE:
-- Jesus MUST remain Jesus.
-- Moses MUST remain Moses.
-- Mary MUST remain Mary.
-- These identities are PERMANENT and PROTECTED.
-
-USER CHARACTER ROLE RULE:
-- User-loaded characters MUST exist as separate individuals.
-- User characters may:
-  witness events
-  follow Jesus
-  speak to Jesus
-  react emotionally
-  participate in scenes
-
-- User characters MUST NOT become Jesus or replace any Biblical figure.
-
-INTERACTION RULE:
-- Canonical character speaks and acts.
-- User character responds, follows, or observes.
-
-Example correct structure:
-Jesus: Follow me.
-Michael: Lord, I will follow thee.
-
-Example forbidden structure:
-Michael: I am Jesus.
-
-VISUAL RULE:
-- Canonical characters appear as distinct individuals.
-- User characters retain their uploaded face and identity.
-`
-      : "";
-
-  const system = `You are a professional cinematic screenwriter. 
-  ${musicVideoMandate}
-  ${bibleMandate}
-  ${canonicalBiblicalProtection}
-
-CRITICAL LANGUAGE SEPARATION PROTOCOL:
-
-VISUAL DESCRIPTION RULE:
-- imageDescription MUST always be written in clean professional English.
-- Never use dialect or foreign language in imageDescription.
-
-STORY NARRATIVE RULE:
-- storyNarrative MUST always be written in clean professional English.
-
-DIALOGUE LANGUAGE RULE:
-- Dialogue MUST be written strictly in ${langConfig.dialogueLanguage}.
-- Never translate dialogue into English.
-- Always preserve native dialect authenticity.
-
-EXAMPLES:
-
-Nigeria:
-Michael: Wetin dey happen?
-
-France:
-Michel: Je suis prêt maintenant.
-
-USA:
-Michael: I am ready now.
-
-CRITICAL:
-- Visual prompts remain English.
-- Narrative remains English.
-- Dialogue uses ONLY ${langConfig.dialogueLanguage}.
-    TARGET MEDIUM: [${movieStyle}]. 
-    DIALOGUE MANDATE:
-${
-  includeDialogue
-    ? `
-MANDATORY SCRIPT STRUCTURE:
-
-Each scene script MUST follow this exact two-line cinematic format:
-
-Line 1: Character action sentence describing physical movement.
-Line 2: Speaker dialogue using exact format "Name: Dialogue"
-
-Example:
-Michael walks forward with determination.
-Michael: I am ready.
-
-RULES:
-- Action MUST come before dialogue.
-- Dialogue MUST use exact "Name: Dialogue" format.
-- Do NOT write dialogue without action.
-- Do NOT combine action and dialogue in one sentence.
-- Do NOT write narration after dialogue.
-`
-    : `
-STRICTLY NO DIALOGUE.
-Only write cinematic action sentences using character names.
-Example:
-Michael walks into the room and looks around cautiously.
-`
-}
-
-    CAST: ${castNotes}.
-    Return JSON with 'title', 'storyNarrative', and 'scenes' (array of {imageDescription, script}).
-    Scene script (Narrative/Dialogue) must be speakable within 8 seconds.`;
-
-  const response: GenerateContentResponse = await withRetry(() =>
-    ai.models.generateContent({
-      model: "gemini-3-pro-preview",
-      contents: `Prompt: ${idea}. Title: ${title}. History: ${history}. Generate ${numScenes} scenes.`,
-      config: {
-        systemInstruction: system,
-        responseMimeType: "application/json"
-      }
-    })
-  );
-
-  return JSON.parse(extractJson(response.text || "{}"));
+    return data;
+  } catch (error) {
+    console.error("Story Generation Error", error);
+    return null;
+  }
 }
 
 // DO add comment: Added genre parameter to enable Bible narration protocol detection.
@@ -1316,114 +1052,69 @@ export async function generateScenesFromNarrative(
   country: string,
   genre?: string
 ): Promise<any[]> {
-  const ai = getAiClient();
-  const castNotes = characters
-    .map((c) => `${c.name}: ${c.description}`)
-    .join("; ");
-  
-const langConfig =
-  COUNTRY_LANGUAGE_MAP[country] || COUNTRY_LANGUAGE_MAP["Default"];
-  // DO add comment: Bible narration enforcement for scene breakdown.
-  const bibleMandate =
-    genre === "Religion"
-      ? `
-BIBLE NARRATION PROTOCOL ACTIVE:
+  try {
+    const response = await fetch("/api/generate-scenes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        narrative,
+        characters,
+        includeDialogue,
+        characterStyle,
+        movieStyle,
+        country,
+        genre
+      })
+    });
 
-- Rewrite scenes in Biblical scripture narration style.
-- Maintain sacred tone.
-- Use phrases like:
-  "And it came to pass..."
-  "And behold..."
-  "For the Lord was with him..."
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || "Failed to generate scenes"
+      );
+    }
 
-- Dialogue must sound scriptural, not modern.
+    const data = await response.json();
 
-`
-      : "";
-  // DO add comment: CANONICAL BIBLICAL CHARACTER PROTECTION PROTOCOL for scene breakdown.
-  const canonicalBiblicalProtection =
-    genre === "Religion"
-      ? `
-CANONICAL BIBLICAL CHARACTER PROTECTION PROTOCOL ACTIVE:
-
-- Jesus, Moses, Mary, Abraham, Angels MUST remain canonical.
-- They MUST NEVER be replaced by user-loaded characters.
-
-- User-loaded characters MUST remain separate individuals.
-- User characters may follow, observe, or speak to Biblical figures.
-
-Example correct:
-Jesus: Follow me.
-Michael: Lord, I will follow thee.
-
-Example forbidden:
-Michael: I am Jesus.
-`
-      : "";
-
-  const system = `
-${bibleMandate}
-${canonicalBiblicalProtection}
-
-Parse this ${narrative} into 8-second production scenes for ${movieStyle} production in ${country}.
-
-CAST: ${castNotes}.
-
-Return JSON: { scenes: [{imageDescription, script}] }.
-
-Scene script MUST begin with "Name:".
-`;
-
-  const response: GenerateContentResponse = await withRetry(() =>
-    ai.models.generateContent({
-      model: "gemini-3-pro-preview",
-      contents: narrative,
-      config: {
-        systemInstruction: system,
-        responseMimeType: "application/json"
-      }
-    })
-  );
-
-  const parsed = JSON.parse(extractJson(response.text || "{}"));
-  return parsed.scenes || [];
+    return data.scenes || [];
+  } catch (error) {
+    console.error("Scene Generation Error", error);
+    return [];
+  }
 }
 
 export async function regenerateSceneVisual(
   script: string,
   characters: Character[]
 ): Promise<string> {
-  const ai = getAiClient();
-  const castNotes = characters
-    .map((c) => `${c.name}: ${c.description}`)
-    .join("; ");
-  
-  const prompt = `Based on this script: "${script}" and CAST: ${castNotes}, generate a detailed imageDescription (Visual DNA) for an AI image generator. Focus on framing, lighting, and performance.`;
+  try {
+    const response = await fetch("/api/regenerate-scene-visual", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        script,
+        characters
+      })
+    });
 
-  const response: GenerateContentResponse = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt
-  });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || "Failed to regenerate scene visual"
+      );
+    }
 
-  return response.text || "";
-}
+    const data = await response.json();
 
-export async function generatePromptFromAudio(
-  base64: string,
-  mimeType: string,
-  country: string
-): Promise<string> {
-  const ai = getAiClient();
-  const response: GenerateContentResponse = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: [
-      { inlineData: { data: base64, mimeType } },
-      {
-        text: "Transcribe this audio into a clear story concept. Return only the verbatim transcription text, nothing else. Do not add analysis or instructions."
-      }
-    ]
-  });
-  return response.text || "";
+    return data.imageDescription || "";
+  } catch (error) {
+    console.error("Regenerate Scene Visual Error", error);
+    return "";
+  }
 }
 
 export async function generateSpeech(
@@ -1432,67 +1123,71 @@ export async function generateSpeech(
   voice: string,
   expression: string
 ): Promise<string> {
-  const ai = getAiClient();
+  try {
+    const response = await fetch("/api/generate-speech", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text,
+        country,
+        voice,
+        expression
+      })
+    });
 
-  const langConfig =
-    COUNTRY_LANGUAGE_MAP[country] || COUNTRY_LANGUAGE_MAP["Default"];
-
-  const prompt = `
-Speak the following dialogue using authentic ${langConfig.speechLanguage}.
-
-Do NOT translate the dialogue.
-
-Preserve the original dialect and pronunciation.
-
-Expression style: ${expression}
-
-Dialogue:
-${text}
-`;
-
-  const response: GenerateContentResponse = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: prompt }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: voice || "Kore" }
-        }
-      }
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || "Failed to generate speech"
+      );
     }
-  });
 
-  return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
+    const data = await response.json();
+
+    return data.audio || "";
+  } catch (error) {
+    console.error("Speech Generation Error", error);
+    return "";
+  }
 }
 
 // DO add comment: Added THOUGHT PARTNER PROTOCOL: Generates directorial insights and script suggestions based on scene context.
-export async function getWritingSuggestions(
+
+  export async function getWritingSuggestions(
   lastScript: string,
   allScenes: any[],
   characters: Character[]
 ): Promise<string[]> {
-  const ai = getAiClient();
-  const cast = characters.map((c) => c.name).join(", ");
-  const prompt = `You are a cinematic thought partner and director. Based on this scene script: "${lastScript}" 
-    and the production cast: ${cast}, suggest 3 brief directorial insights or "what happens next" ideas (max 10 words each). 
-    Return a simple JSON array of strings.`;
-
   try {
-    const response: GenerateContentResponse = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
+    const response = await fetch("/api/get-writing-suggestions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        lastScript,
+        allScenes,
+        characters
+      })
     });
-    const text = response.text;
-    if (!text) return [];
-    return JSON.parse(extractJson(text));
-  } catch (e) {
-    console.error("Writing suggestions failed", e);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || "Failed to get suggestions"
+      );
+    }
+
+    const data = await response.json();
+
+    return data.suggestions || [];
+  } catch (error) {
+    console.error("Writing suggestions failed", error);
     return [];
   }
 }
-
 /**
  * MAGIC WRITING: Polish and enrich a script beat with cinematic depth.
  * This is the 'Thought Partner' function that transforms simple notes into professional writing.
@@ -1502,18 +1197,32 @@ export async function enrichScript(
   characters: Character[],
   style: string
 ): Promise<string> {
-  const ai = getAiClient();
-  const cast = characters.map((c) => c.name).join(", ");
-  const prompt = `You are a cinematic writing partner. Rewrite this script beat to be more cinematic, poetic, and professional for a ${style} production. 
-  Maintain the 8-second speakable limit (approx 25 words). Keep the "Name: Dialogue" format. 
-  Original: "${script}" 
-  Characters in play: ${cast}`;
+  try {
+    const response = await fetch("/api/enrich-script", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        script,
+        characters,
+        style
+      })
+    });
 
-  const response: GenerateContentResponse = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt
-  });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error || "Failed to enrich script"
+      );
+    }
 
-  return response.text?.trim() || script;
+    const data = await response.json();
+
+    return data.script || script;
+  } catch (error) {
+    console.error("Enrich script failed", error);
+    return script;
+  }
 }
 

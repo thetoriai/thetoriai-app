@@ -1,0 +1,57 @@
+APP PURPOSE:
+This app generates stories, images, and videos using character identity locking.
+
+CORE IDEA:
+Characters have DNA (description).
+That DNA is reused across image → scene → video.
+
+MAIN FLOWS:
+
+1. CHARACTER
+- Upload image
+- generateCharacterDescription
+- stores description (DNA)
+
+2. IMAGE
+- generateSingleImage → creates scene
+- editImage → modifies scene
+
+3. STORY
+- generateStructuredStory → creates full story
+- generateScenesFromNarrative → splits into scenes
+
+4. VIDEO
+- generateVideoFromScene
+  - parsePerformance → gets speaker/dialogue
+  - enhanceCinematicPrompt → improves visuals
+  - builds fullPrompt
+  - sends to backend
+
+5. AUDIO
+- generateSpeech → voice generation
+
+MIGRATION STATE:
+
+Goal:
+Move all AI logic from frontend → backend API
+
+Status:
+- Some functions converted to fetch (/api/...)
+- Some old Gemini logic still exists
+- Prompts moved out of frontend
+- Errors present in:
+  - Gemini service
+  - Card component
+  - generateImage.ts
+
+Known Issues:
+- Missing or broken imports (getAiClient)
+- Duplicate or unfinished functions
+- Response shape mismatch from backend
+- Some logic removed but not yet rebuilt in backend
+
+Next Phase Plan:
+1. Fix all TypeScript errors first (no logic yet)
+2. Ensure every function ONLY uses fetch (no Gemini)
+3. Then rebuild prompts inside backend routes
+4. Then reconnect full logic
